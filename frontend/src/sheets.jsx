@@ -11,12 +11,13 @@ import { starterRoutines } from './lib/starter.js'
 import Media, { Thumb } from './components/Media.jsx'
 import Stepper from './components/Stepper.jsx'
 import Icon from './components/Icon.jsx'
-import { Button, Slider, Switch, Segmented, SelectRow, Row } from './components/ui.jsx'
+import { Button, Slider, Switch, Segmented, SelectRow, Row, TextArea } from './components/ui.jsx'
 import { glyphOf, GLYPH_GROUPS, DEFAULT_GLYPH } from './lib/glyphs.js'
 import BodyMap from './components/BodyMap.jsx'
 import { loadOfWorkouts } from './lib/muscles.js'
 import { parseImport, mergeImport } from './lib/import-csv.js'
 import { buildPlanBundle, parsePlan, mergePlan, printPlan } from './lib/plan-share.js'
+import { parseProgram, PROGRAM_SPEC } from './lib/plan-import.js'
 import { estimate1RM, best1RM, is1RMRecord, REP_CAP } from './lib/onerm.js'
 import { nextPrescription, applyPrescription, policyFor, defaultIncrement, POLICIES_FOR, POLICY_NAME, POLICY_DESC, MAX_BW_SETS } from './lib/progression.js'
 import { MOBILE, shareExport } from './lib/mobile.js'
@@ -764,12 +765,15 @@ function PlanTools({ close }) {
     <h4 className="sec">{t('Got a plan from a friend?')}</h4>
     <Button variant="ghost" icon="folder" onClick={() => fileRef.current?.click()}>{t('Import a plan file')}</Button>
     <input ref={fileRef} type="file" accept="application/json,.json" onChange={pickFile} hidden />
+    <div style={{ height: 10 }} />
+    <Button variant="ghost" icon="sparkles" onClick={() => { close(); programImportSheet() }}>{t('Paste a program')}</Button>
+    <div className="dim small" style={{ margin: '7px 2px 0', lineHeight: 1.4 }}>{t('A program written somewhere else, in ordinary exercise names.')}</div>
   </>
 }
 
-export const planImportSheet = bundle => ui().openSheet(close => <PlanImport bundle={bundle} close={close} />)
+export const planImportSheet = (bundle, report) => ui().openSheet(close => <PlanImport bundle={bundle} report={report} close={close} />)
 
-function PlanImport({ bundle, close }) {
+function PlanImport({ bundle, report, close }) {
   const [schedule, setSchedule] = useState(false)
   const apply = () => {
     update(s => mergePlan(s, bundle, { schedule }))
@@ -787,6 +791,20 @@ function PlanImport({ bundle, close }) {
         : ''}
     </div>
     <div className="dim small" style={{ marginBottom: 14, lineHeight: 1.4 }}>{t('These are added as new routines — nothing you already have is changed.')}</div>
+    {/* How every name resolved, before anything is written. A program from outside the app
+        speaks in names, and which exercise each one became is the thing worth checking —
+        an unrecognised lift is kept as your own rather than dropped, so the count that
+        matters is how many need pointing at the right exercise afterwards. */}
+    {report && <div className="small" style={{ marginBottom: 14, lineHeight: 1.5 }}>
+      <div className="muted">{t('{0} exercises matched your library', report.matched.length)}</div>
+      {report.created.length > 0 && <div style={{ color: 'var(--yellow)', marginTop: 4 }}>
+        {t(report.created.length === 1
+          ? '{0} name wasn’t recognised and is kept as your own exercise:'
+          : '{0} names weren’t recognised and are kept as your own exercises:', report.created.length)}
+        {' '}{report.created.map(c => c.name).join(', ')}
+      </div>}
+      {report.warnings.map((w, i) => <div key={i} className="dim" style={{ marginTop: 4 }}>{w}</div>)}
+    </div>}
     {bundle.dropped > 0 && <div className="small" style={{ color: 'var(--yellow)', marginBottom: 14, lineHeight: 1.4 }}>
       {t(bundle.dropped === 1
         ? '{0} exercise in the file isn’t in your library and was left out.'
@@ -803,6 +821,48 @@ function PlanImport({ bundle, close }) {
 }
 
 /* ============================ day override / assign ============================ */
+/* ============================ import a written program ============================ */
+// A program that came from outside openGym — a conversation, a coach, another app — speaks
+// in exercise names rather than catalogue ids. Pasting is the whole interface: the text can
+// arrive fenced in ``` or wrapped in a sentence, because that is how a reply arrives, and
+// asking someone to trim it first is the step where this stops being used.
+function ProgramImport({ close }) {
+  const [text, setText] = useState('')
+  const [err, setErr] = useState(null)
+  const [spec, setSpec] = useState(false)
+
+  const run = () => {
+    try {
+      const { bundle, report } = parseProgram(text)
+      close()
+      planImportSheet(bundle, report)
+    } catch (e) { setErr(e.message) }
+  }
+  const copySpec = async () => {
+    try { await navigator.clipboard.writeText(PROGRAM_SPEC); toast(t('Format copied — paste it into your conversation')) }
+    catch (e) { setSpec(true) }   // clipboard blocked: show it to select by hand instead
+  }
+
+  return <>
+    <h3>{t('Paste a program')}</h3>
+    <div className="muted small" style={{ marginBottom: 12, lineHeight: 1.45 }}>
+      {t('Paste the whole reply — openGym finds the program inside it and matches every exercise name against your library.')}
+    </div>
+    <TextArea rows={8} value={text} placeholder={'{ "routines": [ … ] }'}
+      onChange={e => { setText(e.target.value); setErr(null) }} />
+    {err && <div className="small" style={{ color: 'var(--red)', margin: '8px 2px 0', lineHeight: 1.4 }}>{err}</div>}
+    <div style={{ height: 12 }} />
+    <Button variant="primary" icon="download" disabled={!text.trim()} onClick={run}>{t('Read the program')}</Button>
+    <h4 className="sec">{t('Writing the program')}</h4>
+    <div className="dim small" style={{ marginBottom: 10, lineHeight: 1.45 }}>
+      {t('Hand this format to whatever writes your programs, and its answers will import straight in.')}
+    </div>
+    <Button variant="ghost" icon="clipboard" onClick={copySpec}>{t('Copy the format')}</Button>
+    {spec && <TextArea rows={10} readOnly value={PROGRAM_SPEC} style={{ marginTop: 10 }} />}
+  </>
+}
+export const programImportSheet = () => ui().openSheet(close => <ProgramImport close={close} />)
+
 function DayOverride({ iso, close }) {
   const st = useStore(s => s.S)
   const wd = new Date(iso + 'T12:00:00').getDay()

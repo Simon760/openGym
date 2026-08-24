@@ -582,4 +582,26 @@ export default {
   'average per logged day': 'в среднем за записанный день',
   '{0} day logged': 'записан {0} день',
   '{0} days logged': 'записано дней: {0}',
+  // Importing a written program — untranslated placeholders.
+  // check-locales.mjs requires every locale to hold the same key set, so these
+  // carry the English source until someone translates them.
+  'no program found in that text': 'no program found in that text',
+  'that program is cut off — the closing brace is missing': 'that program is cut off — the closing brace is missing',
+  'that program has no routines in it': 'that program has no routines in it',
+  'that program has no exercises in it': 'that program has no exercises in it',
+  '“{0}” is not a progression rule openGym knows — left on the routine’s default.': '“{0}” is not a progression rule openGym knows — left on the routine’s default.',
+  '“{0}” is not a weekday — that day was skipped.': '“{0}” is not a weekday — that day was skipped.',
+  'The week points at “{0}”, which is not one of the routines.': 'The week points at “{0}”, which is not one of the routines.',
+  'Routine {0}': 'Routine {0}',
+  'Paste a program': 'Paste a program',
+  'Paste the whole reply — openGym finds the program inside it and matches every exercise name against your library.': 'Paste the whole reply — openGym finds the program inside it and matches every exercise name against your library.',
+  'Read the program': 'Read the program',
+  'Writing the program': 'Writing the program',
+  'Hand this format to whatever writes your programs, and its answers will import straight in.': 'Hand this format to whatever writes your programs, and its answers will import straight in.',
+  'Copy the format': 'Copy the format',
+  'Format copied — paste it into your conversation': 'Format copied — paste it into your conversation',
+  'A program written somewhere else, in ordinary exercise names.': 'A program written somewhere else, in ordinary exercise names.',
+  '{0} exercises matched your library': '{0} exercises matched your library',
+  '{0} name wasn’t recognised and is kept as your own exercise:': '{0} name wasn’t recognised and is kept as your own exercise:',
+  '{0} names weren’t recognised and are kept as your own exercises:': '{0} names weren’t recognised and are kept as your own exercises:',
 }
