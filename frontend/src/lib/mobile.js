@@ -60,6 +60,13 @@ export async function syncReminder(S, interactive = false) {
 
 // WKWebView can't do blob-URL downloads, so the backup goes out through the OS share sheet
 // (Files, AirDrop, mail, …) from a temp file instead.
+// Hand text to the OS share sheet, so a digest can go straight into whichever app holds
+// the conversation. shareExport's file is the wrong shape here — a chat wants the text.
+export async function shareText(text, title) {
+  const { Share } = await import('@capacitor/share')
+  await Share.share({ title, text })
+}
+
 export async function shareExport(json, filename) {
   const { Filesystem, Directory, Encoding } = await import('@capacitor/filesystem')
   const { Share } = await import('@capacitor/share')

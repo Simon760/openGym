@@ -156,7 +156,10 @@ export function buildDemoState() {
       }
       if (w > (best[cfg.id] || 0)) { best[cfg.id] = w; prs.push(cfg.id) }
       exWeights[cfg.id] = { w: Math.max(w, exWeights[cfg.id]?.w || 0), d: iso }
-      return { id: cfg.id, sets, topW: w || null }
+      // What the session prescribed, kept beside the sets exactly as a finished workout
+      // does. Without it nothing can say whether the session hit its reps, and a demo
+      // that reads its old sessions against today's config is not showing what the app does.
+      return { id: cfg.id, sets, topW: w || null, target: { ...cfg, weight: w } }
     })
 
     const bw = bodyweight.length ? bodyweight[bodyweight.length - 1].w : BW_FROM

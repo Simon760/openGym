@@ -18,9 +18,10 @@ import { loadOfWorkouts } from './lib/muscles.js'
 import { parseImport, mergeImport } from './lib/import-csv.js'
 import { buildPlanBundle, parsePlan, mergePlan, printPlan } from './lib/plan-share.js'
 import { parseProgram, PROGRAM_SPEC } from './lib/plan-import.js'
+import { dailyDigest, trainingDigest } from './lib/digest.js'
 import { estimate1RM, best1RM, is1RMRecord, REP_CAP } from './lib/onerm.js'
 import { nextPrescription, applyPrescription, policyFor, defaultIncrement, POLICIES_FOR, POLICY_NAME, POLICY_DESC, MAX_BW_SETS } from './lib/progression.js'
-import { MOBILE, shareExport } from './lib/mobile.js'
+import { MOBILE, shareExport, shareText } from './lib/mobile.js'
 import { entryFor, hasMacros, kcalFromMacros, derivedMismatch, remainingOf, putEntry, MACROS, MACRO_NAME } from './lib/nutrition.js'
 
 const S = () => useStore.getState().S
@@ -821,6 +822,47 @@ function PlanImport({ bundle, report, close }) {
 }
 
 /* ============================ day override / assign ============================ */
+/* ============================ digest ============================ */
+// Everything the log knows about a period, as text to hand to something that coaches you.
+// Two shapes because two conversations want different things — see lib/digest.js.
+//
+// The text is on screen before any button is pressed. It is about to be pasted into a
+// conversation, which makes it worth reading first, and a copy button that hands over
+// something unseen is one you stop trusting.
+function Digest({ close }) {
+  const st = useStore(s => s.S)
+  const [kind, setKind] = useState('daily')
+  const [days, setDays] = useState(7)
+  const text = kind === 'training' ? trainingDigest(st, days) : dailyDigest(st)
+
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(text); toast(t('Copied — paste it into your conversation')) }
+    catch (e) { toast(t('Couldn’t copy — select the text and copy it by hand')) }
+  }
+  const share = async () => {
+    try { await shareText(text, 'openGym') } catch (e) { /* share sheet dismissed */ }
+  }
+
+  return <>
+    <h3>{t('Send to your coach')}</h3>
+    <div className="muted small" style={{ marginBottom: 12, lineHeight: 1.45 }}>
+      {t('A plain-text summary built from your log, to paste into whichever conversation follows you.')}
+    </div>
+    <Segmented value={kind} onChange={setKind} options={[
+      { value: 'daily', label: t('Today') },
+      { value: 'training', label: t('Training') }
+    ]} />
+    {kind === 'training' && <Segmented className="seg-range" value={days} onChange={setDays}
+      options={[{ value: 7, label: '7d' }, { value: 14, label: '14d' }, { value: 30, label: '30d' }]} />}
+    <TextArea readOnly rows={12} value={text} style={{ marginTop: 10, fontVariantNumeric: 'tabular-nums' }} />
+    <div style={{ height: 12 }} />
+    <Button variant="primary" icon="clipboard" onClick={copy}>{t('Copy')}</Button>
+    {MOBILE && <><div style={{ height: 8 }} />
+      <Button variant="tinted" icon="link" onClick={share}>{t('Share…')}</Button></>}
+  </>
+}
+export const digestSheet = () => ui().openSheet(close => <Digest close={close} />)
+
 /* ============================ import a written program ============================ */
 // A program that came from outside openGym — a conversation, a coach, another app — speaks
 // in exercise names rather than catalogue ids. Pasting is the whole interface: the text can
