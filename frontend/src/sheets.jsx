@@ -20,6 +20,7 @@ import { buildPlanBundle, parsePlan, mergePlan, printPlan } from './lib/plan-sha
 import { estimate1RM, best1RM, is1RMRecord, REP_CAP } from './lib/onerm.js'
 import { nextPrescription, applyPrescription, policyFor, defaultIncrement, POLICIES_FOR, POLICY_NAME, POLICY_DESC, MAX_BW_SETS } from './lib/progression.js'
 import { MOBILE, shareExport } from './lib/mobile.js'
+import { entryFor, hasMacros, kcalFromMacros, derivedMismatch, remainingOf, putEntry, MACROS, MACRO_NAME } from './lib/nutrition.js'
 
 const S = () => useStore.getState().S
 const update = (...a) => useStore.getState().update(...a)
@@ -250,6 +251,105 @@ function GoalSheet({ close }) {
   </>
 }
 export const goalSheet = () => ui().openSheet(close => <GoalSheet close={close} />)
+
+/* ============================ daily intake ============================ */
+// Calories and macros for one day. Four numbers, one screen, no meal breakdown — see
+// lib/nutrition.js for why the day is the unit.
+function NutriSheet({ close }) {
+  const st = S()
+  const iso = todayISO()
+  const [v, setV] = useState(() => {
+    const e = entryFor(st, iso)
+    return { kcal: e?.kcal || 0, p: e?.p || 0, c: e?.c || 0, f: e?.f || 0 }
+  })
+  const set = (k, n) => setV(o => ({ ...o, [k]: n || 0 }))
+  const derived = kcalFromMacros(v)
+  const mismatch = derivedMismatch(v)
+  const left = remainingOf(v, st.nutriGoal)
+  const save = () => {
+    update(s => { s.nutrition = putEntry(s.nutrition, { d: iso, ...v }) })
+    close()
+    toast(v.kcal || derived ? t('Intake saved') : t('Intake cleared'))
+  }
+  const recent = [...(st.nutrition || [])].reverse().slice(0, 3)
+  const delEntry = d => update(s => { s.nutrition = (s.nutrition || []).filter(e => e.d !== d) })
+
+  return <>
+    <h3>{t('Log intake')}</h3>
+    <div className="muted small">{t('Today') + ', ' + fmtDate(iso, true)}</div>
+    <div style={{ height: 12 }} />
+    <Stepper label={t('Calories')} unit="kcal" value={v.kcal} step={50} decimal={false} onChange={n => set('kcal', n)} />
+    {MACROS.map(m => <Stepper key={m} label={t(MACRO_NAME[m])} unit="g" value={v[m]} step={5} decimal={false} onChange={n => set(m, n)} />)}
+
+    {/* Macros logged but no calorie figure: the macros already say what it is, so offer it
+        rather than making someone do the 4/4/9 arithmetic on their phone. */}
+    {!v.kcal && derived > 0 && <>
+      <div style={{ height: 8 }} />
+      <Button size="sm" icon="bolt" onClick={() => set('kcal', Math.round(derived))}>
+        {t('Use {0} kcal from macros', Math.round(derived))}
+      </Button>
+    </>}
+    {/* Both logged and they disagree by more than a rounding: said once, never applied.
+        Alcohol and fibre are real calories no field here captures, so both numbers can
+        be right — but a fat entry typed as 600 instead of 60 shows up here first. */}
+    {mismatch != null && <div className="small dim" style={{ marginTop: 8 }}>
+      {t('Your macros add up to {0} kcal.', mismatch)}
+    </div>}
+    {left && <div className="small" style={{ marginTop: 8, color: left.kcal < 0 ? 'var(--orange)' : 'var(--label-2)' }}>
+      {left.kcal < 0 ? t('{0} kcal over target', fmtNum(-left.kcal)) : t('{0} kcal left today', fmtNum(left.kcal))}
+    </div>}
+
+    <div style={{ height: 14 }} />
+    <Button variant="primary" onClick={save}>{t('Save')}</Button>
+
+    {recent.length > 0 && <>
+      <h4 className="sec">{t('Recent days')}</h4>
+      <div className="list" style={{ gap: 0 }}>
+        {recent.map(e => <div key={e.d} className="row between" style={{ padding: '9px 2px', borderBottom: '1px solid var(--sep)' }}>
+          <span className="small muted">{fmtDate(e.d, true)}</span>
+          <span className="row" style={{ gap: 12 }}>
+            <b>{e.kcal ? fmtNum(e.kcal) + ' kcal' : fmtNum(kcalFromMacros(e)) + ' kcal'}</b>
+            {hasMacros(e) && <span className="small dim">{MACROS.map(m => (e[m] || 0) + 'g').join(' · ')}</span>}
+            <button className="iconbtn" style={{ width: 32, height: 30, borderRadius: 8, fontSize: 15, color: 'var(--red)' }} onClick={() => delEntry(e.d)} aria-label="delete"><Icon name="trash" /></button>
+          </span>
+        </div>)}
+      </div>
+    </>}
+  </>
+}
+export const nutriSheet = () => ui().openSheet(close => <NutriSheet close={close} />)
+
+function NutriGoalSheet({ close }) {
+  const st = S()
+  const [v, setV] = useState(() => ({
+    kcal: st.nutriGoal?.kcal || 0, p: st.nutriGoal?.p || 0, c: st.nutriGoal?.c || 0, f: st.nutriGoal?.f || 0
+  }))
+  const set = (k, n) => setV(o => ({ ...o, [k]: n || 0 }))
+  const derived = kcalFromMacros(v)
+  return <>
+    <h3>{t('Daily targets')}</h3>
+    <div className="muted small">{t('Only the targets you set are counted down — calories alone is a complete setup.')}</div>
+    <div style={{ height: 12 }} />
+    <Stepper label={t('Calories')} unit="kcal" value={v.kcal} step={50} decimal={false} onChange={n => set('kcal', n)} />
+    {MACROS.map(m => <Stepper key={m} label={t(MACRO_NAME[m])} unit="g" value={v[m]} step={5} decimal={false} onChange={n => set(m, n)} />)}
+    {!v.kcal && derived > 0 && <>
+      <div style={{ height: 8 }} />
+      <Button size="sm" icon="bolt" onClick={() => set('kcal', Math.round(derived))}>
+        {t('Use {0} kcal from macros', Math.round(derived))}
+      </Button>
+    </>}
+    <div style={{ height: 14 }} />
+    <Button variant="primary" onClick={() => {
+      const goal = {}
+      for (const k of ['kcal', ...MACROS]) if (v[k] > 0) goal[k] = v[k]
+      if (!Object.keys(goal).length) { toast(t('Set at least one target')); return }
+      update(s => { s.nutriGoal = goal }); close(); toast(t('Targets set'))
+    }}>{t('Save targets')}</Button>
+    {st.nutriGoal && <><div style={{ height: 8 }} />
+      <Button variant="danger" onClick={() => { update(s => { s.nutriGoal = null }); close(); toast(t('Targets removed')) }}>{t('Remove targets')}</Button></>}
+  </>
+}
+export const nutriGoalSheet = () => ui().openSheet(close => <NutriGoalSheet close={close} />)
 
 /* ============================ exercise detail ============================ */
 // Estimated 1RM for one exercise (issue #18): what the log already implies, plus a calculator

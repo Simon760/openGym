@@ -4,7 +4,8 @@ import { useStore } from '../store/useStore.js'
 import { effectiveRoutine, effectiveRoutineId, streakWeeks, lastBW, setsDoneActive } from '../lib/history.js'
 import { fmtNum, fmtDate, todayISO, isoOf, weekKey, DAYS } from '../lib/format.js'
 import { t, dateLocale } from '../lib/i18n.js'
-import { bwSheet, goalSheet, dayOverrideSheet, calendarSheet, startFlow, loadStarterPlan, bwDeltaColor } from '../sheets.jsx'
+import { bwSheet, goalSheet, dayOverrideSheet, calendarSheet, startFlow, loadStarterPlan, bwDeltaColor, nutriSheet, nutriGoalSheet } from '../sheets.jsx'
+import { entryFor, kcalFromMacros, macroSplit, remainingOf, MACROS, MACRO_NAME, MACRO_COLOR } from '../lib/nutrition.js'
 import LineChart from '../components/LineChart.jsx'
 import Icon from '../components/Icon.jsx'
 import { Button } from '../components/ui.jsx'
@@ -41,6 +42,10 @@ export default function Home() {
   const wThisWeek = S.workouts.filter(w => weekKey(w.d) === weekKey(todayISO())).length
   const plannedPerWeek = Object.keys(S.week).filter(k => S.week[k]).length
   const bwPoints = S.bodyweight.slice(-30).map(b => ({ t: b.t || new Date(b.d).getTime(), y: b.w, d: b.d }))
+
+  const todayNutri = entryFor(S, todayISO())
+  const nutriLeft = remainingOf(todayNutri, S.nutriGoal)
+  const macroSplitToday = macroSplit(todayNutri)
 
   // today's session shown right under the week strip
   const onToday = () => { if (S.active) nav('/workout'); else if (routine) startFlow(routine.id); else dayOverrideSheet(todayISO()) }
@@ -114,6 +119,41 @@ export default function Home() {
         )}
         <div className="chart" style={{ marginTop: 8 }}><LineChart points={bwPoints} h={130} unit={S.unit} goal={S.targetW} /></div>
       </> : <div className="muted small">{t("No entries yet — log your weight to start the curve. It's also asked before every workout.")}</div>}
+    </div>
+
+    <div className="card">
+      <div className="row between" style={{ marginBottom: 6 }}>
+        <h2 style={{ margin: 0 }}>{t('Nutrition')}</h2>
+        <div className="row" style={{ gap: 8 }}>
+          <Button size="sm" icon="target" style={S.nutriGoal ? { color: 'var(--yellow)' } : undefined} onClick={nutriGoalSheet}>
+            {S.nutriGoal?.kcal ? fmtNum(S.nutriGoal.kcal) : t('Goal')}
+          </Button>
+          <Button size="sm" icon="plus" onClick={nutriSheet}>{t('Log')}</Button>
+        </div>
+      </div>
+      {todayNutri ? <>
+        <div className="row" style={{ gap: 8, alignItems: 'baseline' }}>
+          <div className="big">{fmtNum(todayNutri.kcal || kcalFromMacros(todayNutri))} <span className="muted" style={{ fontSize: '1rem' }}>kcal</span></div>
+          {/* The actionable half of the card: what is left decides tonight's meal, so it
+              sits next to the total rather than under the chart. Over target is orange
+              and stated as such — never a negative number the reader has to decode. */}
+          {nutriLeft && <span className="small" style={{ marginLeft: 'auto', fontWeight: 500, color: nutriLeft.kcal < 0 ? 'var(--orange)' : 'var(--acc)' }}>
+            {nutriLeft.kcal < 0 ? t('{0} over', fmtNum(-nutriLeft.kcal)) : t('{0} left', fmtNum(nutriLeft.kcal))}
+          </span>}
+        </div>
+        {macroSplitToday && <>
+          <div style={{ display: 'flex', height: 8, borderRadius: 4, overflow: 'hidden', background: 'var(--surface-3)', marginTop: 10 }}>
+            {MACROS.map(m => <div key={m} style={{ flex: macroSplitToday[m], background: MACRO_COLOR[m] }} />)}
+          </div>
+          <div className="row small" style={{ gap: 12, marginTop: 7, flexWrap: 'wrap' }}>
+            {MACROS.map(m => <span key={m} className="row" style={{ gap: 5 }}>
+              <i style={{ width: 8, height: 8, borderRadius: 2, background: MACRO_COLOR[m], display: 'inline-block' }} />
+              <span className="muted">{t(MACRO_NAME[m])}</span>
+              <b>{fmtNum(todayNutri[m] || 0)} g</b>
+            </span>)}
+          </div>
+        </>}
+      </> : <div className="muted small">{t('Nothing logged today — add your calories to keep the picture complete.')}</div>}
     </div>
 
     <div className="card tappable" style={{ cursor: 'pointer' }} onClick={() => calendarSheet()}>

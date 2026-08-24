@@ -5,7 +5,7 @@ import { EXIDX } from '../lib/exercises.js'
 import { lastBW, streakWeeks, setLabel, modeOf, effortOf } from '../lib/history.js'
 import { fmtNum, fmtDate, fmtVol, todayISO, weekKey } from '../lib/format.js'
 import { t } from '../lib/i18n.js'
-import { bwSheet, goalSheet, calendarSheet, workoutDetailSheet, WorkoutRow, bwDeltaColor } from '../sheets.jsx'
+import { bwSheet, goalSheet, calendarSheet, workoutDetailSheet, WorkoutRow, bwDeltaColor, nutriSheet, nutriGoalSheet } from '../sheets.jsx'
 import LineChart from '../components/LineChart.jsx'
 import Heatmap from '../components/Heatmap.jsx'
 import Icon from '../components/Icon.jsx'
@@ -16,6 +16,7 @@ import {
   hasEffort, displayScale, scaleName, toScale, avgRir, effortSummary, effortWeeks,
   effortHistogram, isHardSet, HARD_RIR
 } from '../lib/effort.js'
+import { avgOver, seriesOf, MACROS, MACRO_NAME, MACRO_COLOR } from '../lib/nutrition.js'
 import { Button, Segmented, SelectRow } from '../components/ui.jsx'
 
 // Which muscles the training in a window actually hit — and, the point of the card,
@@ -129,6 +130,57 @@ function EffortCard({ S }) {
   </div>
 }
 
+// What was eaten over a window. Every average carries the number of days behind it, for the
+// same reason the effort card does: intake is logged by hand and a missed day is a gap, not a
+// fast. An average that quietly divided by the length of the window would report a steady
+// 2 400 kcal week as 1 700 because two days were never filled in — and read as a deficit that
+// was never eaten.
+function NutritionCard({ S }) {
+  const [win, setWin] = useState(30)
+  const avg = avgOver(S, win)
+  const pts = seriesOf(S, win)
+  const goal = S.nutriGoal
+
+  return <div className="card">
+    <div className="row between" style={{ marginBottom: 8 }}>
+      <h2 style={{ margin: 0 }}>{t('Nutrition')}</h2>
+      <div className="row" style={{ gap: 8 }}>
+        <Button size="sm" icon="target" style={goal ? { color: 'var(--yellow)' } : undefined} onClick={nutriGoalSheet}>
+          {goal?.kcal ? fmtNum(goal.kcal) : t('Goal')}
+        </Button>
+        <Button size="sm" icon="plus" onClick={nutriSheet}>{t('Log')}</Button>
+      </div>
+    </div>
+    <Segmented className="seg-range" value={win} onChange={setWin}
+      options={[{ value: 7, label: '7d' }, { value: 30, label: '30d' }, { value: 90, label: '90d' }, { value: 0, label: t('All') }]} />
+    {!avg.logged ? <div className="muted small">{t('Nothing logged in this period.')}</div> : <>
+      <div className="row between" style={{ alignItems: 'flex-end', gap: 12 }}>
+        <div>
+          <div className="stat-v">{avg.kcal == null ? '—' : fmtNum(avg.kcal) + ' kcal'}</div>
+          <div className="small dim">{t('average per logged day')}</div>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div className="stat-v" style={{ color: 'var(--blue)' }}>{avg.kcalDays}</div>
+          <div className="small dim">{t(avg.kcalDays === 1 ? '{0} day logged' : '{0} days logged', avg.kcalDays)}</div>
+        </div>
+      </div>
+      <div className="row small" style={{ gap: 14, marginTop: 10, flexWrap: 'wrap' }}>
+        {MACROS.map(m => avg[m] != null && <span key={m} className="row" style={{ gap: 5 }}>
+          <i style={{ width: 8, height: 8, borderRadius: 2, background: MACRO_COLOR[m], display: 'inline-block' }} />
+          <span className="muted">{t(MACRO_NAME[m])}</span>
+          <b>{fmtNum(avg[m])} g</b>
+          {/* Macros are optional on top of calories, so their coverage can differ from the
+              kcal one — spelled out only when it actually does. */}
+          {avg[m + 'Days'] !== avg.kcalDays && <span className="dim">({avg[m + 'Days']})</span>}
+        </span>)}
+      </div>
+      {pts.length > 1 && <div className="chart" style={{ marginTop: 10 }}>
+        <LineChart points={pts} h={150} unit="kcal" color="var(--orange)" goal={goal?.kcal || null} />
+      </div>}
+    </>}
+  </div>
+}
+
 // Stats = the analytics hub: all charts, progress and history live here.
 export default function Stats() {
   const nav = useNavigate()
@@ -212,6 +264,7 @@ export default function Stats() {
 
     {S.workouts.length > 0 && <MuscleBalance S={S} />}
     {anyEffort && <EffortCard S={S} />}
+    <NutritionCard S={S} />
 
     <div className="cols">
       <div className="card">

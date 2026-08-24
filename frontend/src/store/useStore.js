@@ -15,7 +15,13 @@ export const DEF = {
   // that a profile which never chose (loaded state is overlaid on DEF, on every path: local,
   // server pull, backup import) still falls back to the `showRir` boolean this replaced and
   // keeps the column it had. See effortOf.
-  reminder: { on: false, time: '08:00', tz: null }, effort: null
+  reminder: { on: false, time: '08:00', tz: null }, effort: null,
+  // Daily intake, one entry per day: { d, kcal, p, c, f, t } — see lib/nutrition.js.
+  // nutriGoal holds the daily targets, or null while none are set; a target the goal
+  // leaves out simply isn't counted down, so kcal-only is a complete setup rather than
+  // a half-finished one. Both absent on every profile written before they existed, and
+  // absent reads as "never logged", so nothing needs migrating.
+  nutrition: [], nutriGoal: null
 }
 const clone = o => JSON.parse(JSON.stringify(o))
 

@@ -15,6 +15,17 @@ const WEEKS = 12                       // how much history to fabricate
 const BW_FROM = 82.4, BW_TO = 78.3     // body-weight trend across those weeks
 const TARGET_W = 77
 
+// --- Intake -----------------------------------------------------------------------------
+// A cut that matches the weight trend above: eating a little under maintenance, a bit more
+// on training days. The gaps matter as much as the numbers — a hand-kept food log is never
+// complete, and the stats card exists partly to show an average that says how many days it
+// speaks for. So some days carry nothing, and some carry calories without macros.
+const NUTRI_GOAL = { kcal: 2200, p: 165, c: 200, f: 70 }
+const NUTRI_BASE = 2080                // kcal on a rest day
+const NUTRI_TRAINING_BONUS = 170       // …and on a day with a session in it
+const NUTRI_SKIPPED = 0.12             // share of days never logged at all
+const NUTRI_KCAL_ONLY = 0.15           // …plus this share logged without macros
+
 // --- Effort -----------------------------------------------------------------------------
 // The demo has to show the effort stats, not just the volume ones, so the history carries
 // ratings. Flat ratings would draw a flat trend and prove nothing, so this fabricates the
@@ -70,6 +81,7 @@ export function buildDemoState() {
 
   const workouts = []
   const bodyweight = []
+  const nutrition = []
   const exWeights = {}
   const best = {}
 
@@ -83,6 +95,27 @@ export function buildDemoState() {
     if (day.getDay() === 1 || day.getDay() === 4) {
       const w = BW_FROM + (BW_TO - BW_FROM) * p + (rnd() - 0.5) * 0.7
       bodyweight.push({ d: iso, w: Math.round(w * 10) / 10, t: at(day, 7, 30) })
+    }
+
+    // Intake, before the rest-day early-out below: eating happens on rest days too, and a
+    // food log that only existed on training days would draw a false weekly pattern.
+    const trains = !!byWeekday[day.getDay()]
+    const isToday = iso === isoOf(today)
+    if (rnd() > NUTRI_SKIPPED) {
+      const kcal = Math.round(NUTRI_BASE + (trains ? NUTRI_TRAINING_BONUS : 0) + (rnd() - 0.5) * 420)
+      // Today is logged as a day in progress rather than a finished one — the reading that
+      // actually changes what you eat tonight is what is still left, and a day already at
+      // its target would never show it.
+      const part = isToday ? 0.62 : 1
+      const e = { d: iso, kcal: Math.round(kcal * part), t: at(day, isToday ? nowH : 21, 15) }
+      // Today always carries macros: it is the day the Home card shows, and the macro
+      // split is half of what that card is for.
+      if (isToday || rnd() > NUTRI_KCAL_ONLY) {
+        e.p = Math.round((NUTRI_GOAL.p + (rnd() - 0.5) * 34) * part)
+        e.c = Math.round((NUTRI_GOAL.c + (rnd() - 0.5) * 70) * part)
+        e.f = Math.round((NUTRI_GOAL.f + (rnd() - 0.5) * 22) * part)
+      }
+      nutrition.push(e)
     }
 
     const routine = byWeekday[day.getDay()]
@@ -152,8 +185,9 @@ export function buildDemoState() {
     routines: [push, pull, legs],
     week: { 1: push.id, 3: pull.id, 5: legs.id },
     dayPlan,
-    workouts, bodyweight, exWeights,
+    workouts, bodyweight, exWeights, nutrition,
     targetW: TARGET_W,
+    nutriGoal: NUTRI_GOAL,
     // The history is rated, so the demo turns the column on and the stats get a scale to
     // label their aggregates with instead of guessing one (see displayScale).
     effort: 'rir'
