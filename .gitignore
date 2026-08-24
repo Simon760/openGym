@@ -15,10 +15,9 @@ Thumbs.db
 *.swp
 
 # Runtime data — per-user state, passkeys, session secret and push keys.
-# NOTE: data/ and media/ are currently still TRACKED in this fork (they were
-# committed before this file existed). Ignoring them here only stops *new*
-# files from being added; untracking the existing ones needs an explicit
-# `git rm -r --cached data media` — and data/secret + data/vapid.json should
-# be regenerated afterwards, since they are private keys.
+# Both of these were committed by mistake when this fork was imported and have
+# since been untracked. They still exist in the git history, so data/secret and
+# data/vapid.json must be regenerated (delete them; the API writes fresh ones on
+# next start) rather than treated as private.
 data/
 media/
