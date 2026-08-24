@@ -118,8 +118,11 @@ function readExercise(raw, report) {
   }
 
   const cfg = { id, sets: Math.max(1, Math.round(sets)) }
-  if (speed != null && (min != null || !reps)) {
-    cfg.mode = 'cardio'; cfg.min = min || 20; cfg.speed = speed
+  const kmOnly = num(pick(raw, 'km', 'distance', 'kilometers', 'kilometres'))
+  if ((speed != null || kmOnly != null) && (min != null || kmOnly != null || !reps)) {
+    cfg.mode = 'cardio'; cfg.min = min || 20; cfg.speed = speed != null ? speed : 0
+    const km = num(pick(raw, 'km', 'distance', 'kilometers', 'kilometres'))
+    if (km) cfg.km = km
   } else if (sec != null) {
     cfg.mode = 'time'; cfg.sec = sec
     if (weight) cfg.weight = weight

@@ -23,6 +23,7 @@ import { estimate1RM, best1RM, is1RMRecord, REP_CAP } from './lib/onerm.js'
 import { nextPrescription, applyPrescription, policyFor, defaultIncrement, POLICIES_FOR, POLICY_NAME, POLICY_DESC, MAX_BW_SETS } from './lib/progression.js'
 import { MOBILE, shareExport, shareText, canShareText } from './lib/mobile.js'
 import { entryFor, hasMacros, kcalFromMacros, derivedMismatch, remainingOf, putEntry, MACROS, MACRO_NAME } from './lib/nutrition.js'
+import { validBodyFat, composition, sleepFor, putSleep, validSleep, BF_MIN, BF_MAX, SLEEP_MIN, SLEEP_MAX } from './lib/body.js'
 
 const S = () => useStore.getState().S
 const update = (...a) => useStore.getState().update(...a)
@@ -92,13 +93,27 @@ function BwSheet({ required, onDone, close }) {
   const unit = st.unit
   const bw = lastBW(st)
   const [v, setV] = useState(bw ? bw.w : 70)
+  // Body fat rides on the weigh-in because that is how a scale reports it — one reading,
+  // one entry. Optional: leaving it at zero writes a weigh-in exactly as before.
+  const [bf, setBf] = useState(() => {
+    const todays = st.bodyweight.find(b => b.d === todayISO())
+    return validBodyFat(todays && todays.bf) ?? validBodyFat(bw && bw.bf) ?? 0
+  })
+  const comp = composition({ w: v, bf })
   const save = () => {
     const n = Math.round((v || 0) * 10) / 10
     if (!n || n <= 0) { toast(t('Enter a valid weight')); return }
+    const pct = validBodyFat(bf)
     update(s => {
       const iso = todayISO()
       const ex = s.bodyweight.find(b => b.d === iso)
-      if (ex) { ex.w = n; ex.t = Date.now() } else s.bodyweight.push({ d: iso, w: n, t: Date.now() })
+      const target = ex || { d: iso }
+      target.w = n
+      target.t = Date.now()
+      // Cleared rather than left behind: a percentage from a previous weigh-in silently
+      // riding on today's would make the lean-mass curve move without a measurement.
+      if (pct != null) target.bf = pct; else delete target.bf
+      if (!ex) s.bodyweight.push(target)
       s.bodyweight.sort((a, b) => (a.d < b.d ? -1 : 1))
     })
     close()
@@ -110,6 +125,17 @@ function BwSheet({ required, onDone, close }) {
     <h3>{required ? t('Quick check-in') : t('Log body weight')}</h3>
     <div className="muted small">{required ? t('Slide or tap to set your weight — tracked before every workout so your curve stays honest.') : t('Today') + ', ' + fmtDate(todayISO(), true)}</div>
     <WeightInput value={v} setValue={setV} unit={unit} />
+    <div style={{ height: 10 }} />
+    <Stepper label={t('Body fat (%)')} unit="%" value={bf} step={0.1} onChange={setBf} />
+    {/* Lean mass is what a cut is actually judged on — losing weight is easy, losing weight
+        that is all fat is the exercise — so it is shown the moment there is a percentage
+        to derive it from, rather than waiting for a chart. */}
+    {comp && <div className="small dim" style={{ marginTop: 6 }}>
+      {t('{0} fat · {1} lean', fmtNum(comp.fat) + ' ' + unit, fmtNum(comp.lean) + ' ' + unit)}
+    </div>}
+    {bf > 0 && !comp && <div className="small" style={{ color: 'var(--yellow)', marginTop: 6 }}>
+      {t('A body-fat reading sits between {0} and {1} %.', BF_MIN, BF_MAX)}
+    </div>}
     <div style={{ height: 14 }} />
     <Button variant="primary" onClick={save}>{required ? t('Save & start workout') : t('Save')}</Button>
     {required && <>
@@ -822,6 +848,48 @@ function PlanImport({ bundle, report, onApplied, close }) {
 }
 
 /* ============================ day override / assign ============================ */
+/* ============================ sleep ============================ */
+// Filed under the day you woke up, not the day you went to bed: that is the day it affects,
+// and the day the weigh-in and the intake are already filed under. See lib/body.js.
+function SleepSheet({ close }) {
+  const st = S()
+  const iso = todayISO()
+  const existing = sleepFor(st, iso)
+  const [h, setH] = useState(existing ? existing.h : 0)
+  const [q, setQ] = useState(existing && existing.q ? existing.q : 0)
+  const goal = st.sleepGoal
+  const short = goal && h > 0 ? Math.round((goal - h) * 10) / 10 : null
+
+  const save = () => {
+    update(s => { s.sleep = putSleep(s.sleep, { d: iso, h, q }) })
+    close()
+    toast(validSleep(h) != null ? t('Sleep saved') : t('Sleep cleared'))
+  }
+  return <>
+    <h3>{t('Last night')}</h3>
+    <div className="muted small">{t('Logged against {0}, the day it carries you through.', fmtDate(iso, true))}</div>
+    <div style={{ height: 12 }} />
+    <Stepper label={t('Hours slept')} unit="h" value={h} step={0.25} onChange={setH} />
+    <Stepper label={t('How it felt (1–5)')} value={q} step={1} decimal={false} onChange={n => setQ(Math.min(5, n || 0))} />
+    {h > 0 && validSleep(h) == null && <div className="small" style={{ color: 'var(--yellow)', marginTop: 8 }}>
+      {t('A night sits between {0} and {1} hours.', SLEEP_MIN, SLEEP_MAX)}
+    </div>}
+    {/* Landing exactly on the target is its own answer — negating a zero to fill the
+        "over" phrasing printed "-0 h over your target". */}
+    {short != null && validSleep(h) != null && <div className="small" style={{ marginTop: 8, color: short > 0 ? 'var(--orange)' : 'var(--acc)' }}>
+      {short === 0 ? t('Right on your target')
+        : short > 0 ? t('{0} h short of your target', fmtNum(short))
+          : t('{0} h over your target', fmtNum(Math.abs(short)))}
+    </div>}
+    <div style={{ height: 14 }} />
+    <Button variant="primary" onClick={save}>{t('Save')}</Button>
+    <h4 className="sec">{t('Target')}</h4>
+    <Stepper label={t('Hours per night')} unit="h" value={goal || 0} step={0.25}
+      onChange={n => update(s => { s.sleepGoal = validSleep(n) })} />
+  </>
+}
+export const sleepSheet = () => ui().openSheet(close => <SleepSheet close={close} />)
+
 /* ============================ digest ============================ */
 // Everything the log knows about a period, as text to hand to something that coaches you.
 // Two shapes because two conversations want different things — see lib/digest.js.

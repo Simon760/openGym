@@ -26,6 +26,17 @@ const NUTRI_TRAINING_BONUS = 170       // …and on a day with a session in it
 const NUTRI_SKIPPED = 0.12             // share of days never logged at all
 const NUTRI_KCAL_ONLY = 0.15           // …plus this share logged without macros
 
+// --- Body composition & sleep -----------------------------------------------------------
+// The percentage falls faster than the weight, which is the picture a cut is supposed to
+// draw: lean mass roughly held while the fat came off. Sleep has gaps and unrated nights for
+// the same reason the food log does — a hand-kept record is never complete, and the stats
+// exist partly to say how much of the window they actually speak for.
+const BF_FROM = 22.4, BF_TO = 18.6
+const SLEEP_GOAL = 8
+const SLEEP_BASE = 7.2
+const SLEEP_SKIPPED = 0.18             // share of nights never logged
+const SLEEP_UNRATED = 0.35             // …plus this share logged without a feel rating
+
 // --- Effort -----------------------------------------------------------------------------
 // The demo has to show the effort stats, not just the volume ones, so the history carries
 // ratings. Flat ratings would draw a flat trend and prove nothing, so this fabricates the
@@ -82,6 +93,7 @@ export function buildDemoState() {
   const workouts = []
   const bodyweight = []
   const nutrition = []
+  const sleep = []
   const exWeights = {}
   const best = {}
 
@@ -94,7 +106,18 @@ export function buildDemoState() {
     // weigh-ins: Monday and Thursday mornings
     if (day.getDay() === 1 || day.getDay() === 4) {
       const w = BW_FROM + (BW_TO - BW_FROM) * p + (rnd() - 0.5) * 0.7
-      bodyweight.push({ d: iso, w: Math.round(w * 10) / 10, t: at(day, 7, 30) })
+      const bf = BF_FROM + (BF_TO - BF_FROM) * p + (rnd() - 0.5) * 0.6
+      bodyweight.push({ d: iso, w: Math.round(w * 10) / 10, bf: Math.round(bf * 10) / 10, t: at(day, 7, 30) })
+    }
+
+    // sleep, filed under the day you woke up
+    if (rnd() > SLEEP_SKIPPED) {
+      const h = Math.round((SLEEP_BASE + (rnd() - 0.5) * 2.2) * 4) / 4
+      const e = { d: iso, h: Math.max(4, Math.min(10, h)), t: at(day, 8, 0) }
+      // Feel tracks the hours loosely — a short night rarely feels good, but a long one is
+      // not automatically a 5 either.
+      if (rnd() > SLEEP_UNRATED) e.q = Math.max(1, Math.min(5, Math.round(e.h - 3.5 + (rnd() - 0.5))))
+      sleep.push(e)
     }
 
     // Intake, before the rest-day early-out below: eating happens on rest days too, and a
@@ -188,9 +211,10 @@ export function buildDemoState() {
     routines: [push, pull, legs],
     week: { 1: push.id, 3: pull.id, 5: legs.id },
     dayPlan,
-    workouts, bodyweight, exWeights, nutrition,
+    workouts, bodyweight, exWeights, nutrition, sleep,
     targetW: TARGET_W,
     nutriGoal: NUTRI_GOAL,
+    sleepGoal: SLEEP_GOAL,
     // The history is rated, so the demo turns the column on and the stats get a scale to
     // label their aggregates with instead of guessing one (see displayScale).
     effort: 'rir'

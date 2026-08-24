@@ -5,7 +5,7 @@ import { EXIDX } from '../lib/exercises.js'
 import { lastBW, streakWeeks, setLabel, modeOf, effortOf } from '../lib/history.js'
 import { fmtNum, fmtDate, fmtVol, todayISO, weekKey } from '../lib/format.js'
 import { t } from '../lib/i18n.js'
-import { bwSheet, goalSheet, calendarSheet, workoutDetailSheet, WorkoutRow, bwDeltaColor, nutriSheet, nutriGoalSheet } from '../sheets.jsx'
+import { bwSheet, goalSheet, calendarSheet, workoutDetailSheet, WorkoutRow, bwDeltaColor, nutriSheet, nutriGoalSheet, sleepSheet } from '../sheets.jsx'
 import LineChart from '../components/LineChart.jsx'
 import Heatmap from '../components/Heatmap.jsx'
 import Icon from '../components/Icon.jsx'
@@ -17,6 +17,7 @@ import {
   effortHistogram, isHardSet, HARD_RIR
 } from '../lib/effort.js'
 import { avgOver, seriesOf, MACROS, MACRO_NAME, MACRO_COLOR } from '../lib/nutrition.js'
+import { bodyFatSeries, compositionTrend, sleepSeries, sleepAverage, sleepDebt, lastComposition } from '../lib/body.js'
 import { Button, Segmented, SelectRow } from '../components/ui.jsx'
 
 // Which muscles the training in a window actually hit — and, the point of the card,
@@ -181,11 +182,53 @@ function NutritionCard({ S }) {
   </div>
 }
 
+// How much sleep there was, and how short of the target it fell. The nights it speaks for
+// travel with the average for the same reason the intake ones do: a night nobody logged is a
+// gap, and dividing by the length of the window would report a solid week as insomnia.
+function SleepCard({ S }) {
+  const [win, setWin] = useState(30)
+  const avg = sleepAverage(S, win)
+  const debt = sleepDebt(S, win, S.sleepGoal)
+  const pts = sleepSeries(S, win)
+
+  return <div className="card">
+    <div className="row between" style={{ marginBottom: 8 }}>
+      <h2 style={{ margin: 0 }}>{t('Sleep')}</h2>
+      <Button size="sm" icon="plus" onClick={sleepSheet}>{t('Log')}</Button>
+    </div>
+    <Segmented className="seg-range" value={win} onChange={setWin}
+      options={[{ value: 7, label: '7d' }, { value: 30, label: '30d' }, { value: 90, label: '90d' }, { value: 0, label: t('All') }]} />
+    {!avg.nights ? <div className="muted small">{t('Nothing logged in this period.')}</div> : <>
+      <div className="row between" style={{ alignItems: 'flex-end', gap: 12 }}>
+        <div>
+          <div className="stat-v">{fmtNum(avg.hours)} h</div>
+          <div className="small dim">{t('average per logged night')}</div>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div className="stat-v" style={{ color: 'var(--indigo)' }}>{avg.nights}</div>
+          <div className="small dim">{t(avg.nights === 1 ? '{0} night logged' : '{0} nights logged', avg.nights)}</div>
+        </div>
+      </div>
+      {debt && <div className="small" style={{ marginTop: 8, color: debt.hours > 0 ? 'var(--orange)' : 'var(--acc)' }}>
+        {debt.hours > 0 ? t('{0} h short of target across those nights', fmtNum(debt.hours))
+          : t('{0} h over target across those nights', fmtNum(-debt.hours))}
+      </div>}
+      {avg.quality != null && <div className="small dim" style={{ marginTop: 4 }}>
+        {t('felt {0}/5 over {1} rated nights', fmtNum(avg.quality), avg.ratedNights)}
+      </div>}
+      {pts.length > 1 && <div className="chart" style={{ marginTop: 10 }}>
+        <LineChart points={pts} h={150} unit="h" color="var(--indigo)" goal={S.sleepGoal || null} />
+      </div>}
+    </>}
+  </div>
+}
+
 // Stats = the analytics hub: all charts, progress and history live here.
 export default function Stats() {
   const nav = useNavigate()
   const S = useStore(s => s.S)
   const [range, setRange] = useState(90)
+  const [bodyMetric, setBodyMetric] = useState('w')
   const [exId, setExId] = useState(null)
   const [exMetric, setExMetric] = useState('top')
   const now = Date.now()
@@ -195,6 +238,13 @@ export default function Stats() {
 
   const bwPts = S.bodyweight.filter(b => range === 0 || (b.t || new Date(b.d).getTime()) > now - range * 86400000)
     .map(b => ({ t: b.t || new Date(b.d).getTime(), y: b.w, d: b.d }))
+  const bfPts = bodyFatSeries(S, range, now)
+  const leanPts = bfPts.map(p => {
+    const b = S.bodyweight.find(x => x.d === p.d)
+    return { t: p.t, d: p.d, y: Math.round((b.w - b.w * p.y / 100) * 10) / 10 }
+  })
+  const hasBf = !!lastComposition(S)
+  const compTrend = compositionTrend(S, range, now)
   const bw30 = S.bodyweight.filter(b => (b.t || new Date(b.d).getTime()) > now - 30 * 86400000)
   const bwDelta30 = bw30.length > 1 ? bw30[bw30.length - 1].w - bw30[0].w : null
   const monthW = S.workouts.filter(w => w.d.slice(0, 7) === todayISO().slice(0, 7)).length
@@ -265,6 +315,7 @@ export default function Stats() {
     {S.workouts.length > 0 && <MuscleBalance S={S} />}
     {anyEffort && <EffortCard S={S} />}
     <NutritionCard S={S} />
+    <SleepCard S={S} />
 
     <div className="cols">
       <div className="card">
@@ -277,7 +328,26 @@ export default function Stats() {
         </div>
         <Segmented className="seg-range" value={range} onChange={setRange}
           options={[{ value: 30, label: '1M' }, { value: 90, label: '3M' }, { value: 365, label: '1Y' }, { value: 0, label: t('All') }]} />
-        <div className="chart"><LineChart points={bwPts} h={160} unit={S.unit} goal={S.targetW} /></div>
+        {/* Offered only once the scale has reported a percentage — a switch to an empty
+            curve is a control that lies about what the app knows. */}
+        {hasBf && <Segmented className="seg-range" value={bodyMetric} onChange={setBodyMetric} options={[
+          { value: 'w', label: t('Weight') }, { value: 'bf', label: '% ' + t('fat') }, { value: 'lean', label: t('Lean') }
+        ]} />}
+        <div className="chart">
+          {hasBf && bodyMetric !== 'w'
+            ? <LineChart points={bodyMetric === 'bf' ? bfPts : leanPts} h={160}
+                unit={bodyMetric === 'bf' ? '%' : S.unit} color="var(--teal)" />
+            : <LineChart points={bwPts} h={160} unit={S.unit} goal={S.targetW} />}
+        </div>
+        {/* The reading a cut is actually judged on: two kilos gone means one thing if the
+            lean mass held and another if it went with them. */}
+        {compTrend && <div className="small dim" style={{ marginTop: 8, lineHeight: 1.5 }}>
+          {t('Over these {0} readings: {1} {2} · {3} pts fat · {4} {5} lean',
+            compTrend.readings,
+            (compTrend.weight > 0 ? '+' : '') + fmtNum(compTrend.weight), S.unit,
+            (compTrend.bf > 0 ? '+' : '') + fmtNum(compTrend.bf),
+            (compTrend.lean > 0 ? '+' : '') + fmtNum(compTrend.lean), S.unit)}
+        </div>}
       </div>
 
       <div className="card">

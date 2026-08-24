@@ -21,7 +21,12 @@ export const DEF = {
   // leaves out simply isn't counted down, so kcal-only is a complete setup rather than
   // a half-finished one. Both absent on every profile written before they existed, and
   // absent reads as "never logged", so nothing needs migrating.
-  nutrition: [], nutriGoal: null
+  nutrition: [], nutriGoal: null,
+  // Nights slept, filed under the day you woke up: { d, h, q?, t } — see lib/body.js.
+  // Body fat rides on the weigh-in itself (an optional `bf` on a bodyweight entry) rather
+  // than living here, because that is how a scale reports it. Both absent on every profile
+  // written before they existed, and absent reads as never logged.
+  sleep: [], sleepGoal: null
 }
 const clone = o => JSON.parse(JSON.stringify(o))
 

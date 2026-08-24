@@ -4,8 +4,9 @@ import { useStore } from '../store/useStore.js'
 import { effectiveRoutine, effectiveRoutineId, streakWeeks, lastBW, setsDoneActive } from '../lib/history.js'
 import { fmtNum, fmtDate, todayISO, isoOf, weekKey, DAYS } from '../lib/format.js'
 import { t, dateLocale } from '../lib/i18n.js'
-import { bwSheet, goalSheet, dayOverrideSheet, calendarSheet, startFlow, loadStarterPlan, bwDeltaColor, nutriSheet, nutriGoalSheet, digestSheet, openPendingProgram, discardPendingProgram } from '../sheets.jsx'
+import { bwSheet, goalSheet, dayOverrideSheet, calendarSheet, startFlow, loadStarterPlan, bwDeltaColor, nutriSheet, nutriGoalSheet, digestSheet, openPendingProgram, discardPendingProgram, sleepSheet } from '../sheets.jsx'
 import { entryFor, kcalFromMacros, macroSplit, remainingOf, MACROS, MACRO_NAME, MACRO_COLOR } from '../lib/nutrition.js'
+import { composition, todaySleep, lastSleep } from '../lib/body.js'
 import LineChart from '../components/LineChart.jsx'
 import Icon from '../components/Icon.jsx'
 import { Button } from '../components/ui.jsx'
@@ -43,6 +44,9 @@ export default function Home() {
   const plannedPerWeek = Object.keys(S.week).filter(k => S.week[k]).length
   const bwPoints = S.bodyweight.slice(-30).map(b => ({ t: b.t || new Date(b.d).getTime(), y: b.w, d: b.d }))
 
+  const comp = composition(bw)
+  const sleptToday = todaySleep(S)
+  const lastNight = sleptToday || lastSleep(S)
   const todayNutri = entryFor(S, todayISO())
   const nutriLeft = remainingOf(todayNutri, S.nutriGoal)
   const macroSplitToday = macroSplit(todayNutri)
@@ -131,6 +135,14 @@ export default function Home() {
           )}
           <span className="dim small" style={{ marginLeft: 'auto' }}>{fmtDate(bw.d, true)}</span>
         </div>
+        {/* What the weight is made of, when the scale said so. Lean mass is the number a
+            cut is judged on — the weight curve alone cannot tell muscle from fat. */}
+        {comp && (
+          <div className="small row" style={{ color: 'var(--label-2)', marginTop: 4, gap: 5 }}>
+            <Icon name="figureStrength" style={{ fontSize: 13 }} />
+            <span>{fmtNum(comp.bf)} % · {t('{0} fat · {1} lean', fmtNum(comp.fat) + ' ' + S.unit, fmtNum(comp.lean) + ' ' + S.unit)}</span>
+          </div>
+        )}
         {S.targetW && (
           <div className="small row" style={{ color: 'var(--yellow)', marginTop: 4, gap: 5 }}>
             <Icon name="target" style={{ fontSize: 13 }} />
@@ -139,6 +151,21 @@ export default function Home() {
         )}
         <div className="chart" style={{ marginTop: 8 }}><LineChart points={bwPoints} h={130} unit={S.unit} goal={S.targetW} /></div>
       </> : <div className="muted small">{t("No entries yet — log your weight to start the curve. It's also asked before every workout.")}</div>}
+
+      {/* Sleep lives on this card rather than its own: it is the other thing your body did
+          overnight, and a card holding a single number would push everything else down. */}
+      <div className="today-row" style={{ marginTop: 12 }} onClick={sleepSheet}>
+        <div className="row" style={{ gap: 9, minWidth: 0 }}>
+          <span className="lrow-i" style={{ background: sleptToday ? 'var(--indigo)' : 'var(--surface-3)' }}><Icon name="moon" /></span>
+          <div style={{ minWidth: 0 }}>
+            <div className="lbl2">{t('Last night')}</div>
+            <div className="ttl">{lastNight
+              ? fmtNum(lastNight.h) + ' h' + (lastNight.q ? ' · ' + lastNight.q + '/5' : '') + (sleptToday ? '' : ' · ' + fmtDate(lastNight.d, true))
+              : t('Not logged')}</div>
+          </div>
+        </div>
+        {sleptToday ? <Icon name="chevronRight" className="chev" /> : <span className="tag acc">{t('Log')}</span>}
+      </div>
     </div>
 
     <div className="card">
