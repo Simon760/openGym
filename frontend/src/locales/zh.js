@@ -638,4 +638,5 @@ export default {
   'This program couldn’t be read': 'This program couldn’t be read',
   'Discard this program?': 'Discard this program?',
   'It was sent to your instance and will not come back unless it is sent again.': 'It was sent to your instance and will not come back unless it is sent again.',
+  'Straight into the app holding your conversation — no copy-paste.': 'Straight into the app holding your conversation — no copy-paste.',
 }

@@ -21,7 +21,7 @@ import { parseProgram, PROGRAM_SPEC } from './lib/plan-import.js'
 import { dailyDigest, trainingDigest } from './lib/digest.js'
 import { estimate1RM, best1RM, is1RMRecord, REP_CAP } from './lib/onerm.js'
 import { nextPrescription, applyPrescription, policyFor, defaultIncrement, POLICIES_FOR, POLICY_NAME, POLICY_DESC, MAX_BW_SETS } from './lib/progression.js'
-import { MOBILE, shareExport, shareText } from './lib/mobile.js'
+import { MOBILE, shareExport, shareText, canShareText } from './lib/mobile.js'
 import { entryFor, hasMacros, kcalFromMacros, derivedMismatch, remainingOf, putEntry, MACROS, MACRO_NAME } from './lib/nutrition.js'
 
 const S = () => useStore.getState().S
@@ -857,8 +857,11 @@ function Digest({ close }) {
     <TextArea readOnly rows={12} value={text} style={{ marginTop: 10, fontVariantNumeric: 'tabular-nums' }} />
     <div style={{ height: 12 }} />
     <Button variant="primary" icon="clipboard" onClick={copy}>{t('Copy')}</Button>
-    {MOBILE && <><div style={{ height: 8 }} />
-      <Button variant="tinted" icon="link" onClick={share}>{t('Share…')}</Button></>}
+    {canShareText() && <><div style={{ height: 8 }} />
+      <Button variant="tinted" icon="link" onClick={share}>{t('Share…')}</Button>
+      <div className="dim small" style={{ margin: '7px 2px 0', lineHeight: 1.4 }}>
+        {t('Straight into the app holding your conversation — no copy-paste.')}
+      </div></>}
   </>
 }
 export const digestSheet = () => ui().openSheet(close => <Digest close={close} />)

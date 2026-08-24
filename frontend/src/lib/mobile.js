@@ -60,9 +60,21 @@ export async function syncReminder(S, interactive = false) {
 
 // WKWebView can't do blob-URL downloads, so the backup goes out through the OS share sheet
 // (Files, AirDrop, mail, …) from a temp file instead.
-// Hand text to the OS share sheet, so a digest can go straight into whichever app holds
-// the conversation. shareExport's file is the wrong shape here — a chat wants the text.
+// Hand text to the OS share sheet, so a digest can go straight into whichever app holds the
+// conversation. shareExport's file is the wrong shape here — a chat wants the text.
+//
+// Not native-build-only: the Web Share API covers this in mobile browsers and in an
+// installed PWA, which is the flavor someone running openGym without a server is most
+// likely to be on. Sharing a digest into a conversation in one tap is the whole point, and
+// making it depend on a native build would have withheld it from exactly that person.
+export const canShareText = () =>
+  MOBILE || (typeof navigator !== 'undefined' && typeof navigator.share === 'function')
+
 export async function shareText(text, title) {
+  if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+    await navigator.share({ title, text })
+    return
+  }
   const { Share } = await import('@capacitor/share')
   await Share.share({ title, text })
 }
