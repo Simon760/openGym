@@ -4,3 +4,22 @@ services:
     env: docker
     dockerfilePath: ./Dockerfile
     dockerContext: .
+
+    # Profiles, passkeys and every user's training history live here. Without a
+    # persistent disk this is container-local storage and each deploy wipes it —
+    # including the passkeys people signed up with.
+    disk:
+      name: opengym-data
+      mountPath: /data
+      sizeGB: 1
+
+    envVars:
+      # Passkeys are bound to a hostname, so these must match the URL the app is
+      # actually served from — your Render subdomain or a custom domain. Set them
+      # in the Render dashboard: RP_ID is the bare host, ORIGIN the full https URL.
+      # Getting them wrong is the one thing that breaks login, and changing RP_ID
+      # later invalidates every passkey already registered.
+      - key: RP_ID
+        sync: false
+      - key: ORIGIN
+        sync: false
