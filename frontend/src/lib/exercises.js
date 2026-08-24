@@ -29,10 +29,16 @@ export const allExercises = st => [...(st.customEx || []), ...EXDB]
 // Media normally sits next to the app (img/ and gif/, mounted into the web container).
 // A build can point them somewhere else — the demo build pulls them off a CDN instead of
 // shipping ~140 MB of images into the deployment.
+// A build can also carry its media inside the bundle rather than fetching it: if
+// __OG_MEDIA__ is defined it maps a media filename to an inline data: URI, and
+// anything missing from it still falls through to the base above. That is what
+// makes a single-file offline build possible (scripts/build-preview.mjs); in a
+// normal build the global is undefined and this costs one lookup that misses.
 const IMG_BASE = import.meta.env.VITE_IMG_BASE || 'img/'
 const GIF_BASE = import.meta.env.VITE_GIF_BASE || 'gif/'
-export const imgSrc = ex => IMG_BASE + ex.img
-export const gifSrc = ex => GIF_BASE + ex.gif
+const embedded = file => globalThis.__OG_MEDIA__?.[file]
+export const imgSrc = ex => embedded(ex.img) || IMG_BASE + ex.img
+export const gifSrc = ex => embedded(ex.gif) || GIF_BASE + ex.gif
 
 // Cardio exercises log time + speed instead of weight × reps.
 export const isCardio = idOrEx => (typeof idOrEx === 'string' ? EXIDX[idOrEx] : idOrEx)?.bp === 'cardio'

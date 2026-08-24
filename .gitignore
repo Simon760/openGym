@@ -21,3 +21,6 @@ Thumbs.db
 # next start) rather than treated as private.
 data/
 media/
+
+# Preview build output (scripts/build-preview.mjs)
+preview/
