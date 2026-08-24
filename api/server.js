@@ -9,6 +9,7 @@ import {
   generateAuthenticationOptions, verifyAuthenticationResponse
 } from '@simplewebauthn/server';
 import webpush from 'web-push';
+import { handleMcp, mcpPath, mcpEnabled } from './mcp.js';
 
 const PORT = +(process.env.PORT || 3000);
 const DATA = process.env.DATA_DIR || '/data';
@@ -51,6 +52,13 @@ const stateFile = uid => path.join(DATA, 'state-' + uid.replace(/[^a-zA-Z0-9_-]/
 function readState(uid) {
   try { return JSON.parse(fs.readFileSync(stateFile(uid), 'utf8')); } catch { return null; }
 }
+function writeState(uid, S) { atomicWrite(stateFile(uid), JSON.stringify(S)); }
+
+// Which profile the MCP endpoint speaks for. Named explicitly, or inferred when the
+// instance holds exactly one profile — which is the case it is built for. With several and
+// none named it stays off rather than guessing whose training log to hand out.
+const MCP_UID = process.env.MCP_UID || '';
+const mcpUid = () => (MCP_UID || (db.users.length === 1 ? db.users[0].id : ''));
 
 /* ---------- push notifications (Web Push / VAPID) ---------- */
 const vapidFile = path.join(DATA, 'vapid.json');
@@ -545,10 +553,18 @@ http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   const key = req.method + ' ' + url.pathname;
   const handler = routes[key];
+  // The MCP token rides in the path, so it cannot match the exact-path table above.
+  if (!handler && req.method === 'POST') {
+    const tok = mcpPath(url.pathname);
+    if (tok !== null) {
+      try { return await handleMcp(req, res, tok, { readState, writeState, uid: mcpUid(), readBody, json }); }
+      catch (e) { console.error('mcp', e); return json(res, 500, { error: 'server error' }); }
+    }
+  }
   if (!handler) return json(res, 404, { error: 'not found' });
   try { await handler(req, res); }
   catch (e) {
     console.error(key, e);
     if (!res.headersSent) json(res, 500, { error: 'server error' });
   }
-}).listen(PORT, () => console.log(`gym-api on :${PORT} (rpID=${RP_ID}, origin=${ORIGIN})`));
+}).listen(PORT, () => console.log(`gym-api on :${PORT} (rpID=${RP_ID}, origin=${ORIGIN}${mcpEnabled() ? ', mcp on' : ''})`));

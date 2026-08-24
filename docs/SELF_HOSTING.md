@@ -167,3 +167,63 @@ downloaded media are untouched.
 | Day reminder fires at the wrong time | Toggle it off and on in Settings so it re-detects your browser's timezone (also happens automatically on every app load — see section 6). |
 | Want to reset a stuck login | Delete the cookie in your browser; sessions are just signed cookies. |
 | `docker compose pull` fails with "denied" / "unauthorized" | The prebuilt images aren't published yet, or need to be, or the GHCR package is still private — build from source instead (`docker compose up -d --build`). |
+
+## Connect a Claude conversation (MCP)
+
+openGym can expose your log to a Claude conversation as a **custom connector**, so a
+conversation that coaches you reads your real training and intake instead of what you
+remember to paste — and can send programs back.
+
+**1. Turn it on.** Generate a token, put it in `.env`, restart:
+
+```bash
+openssl rand -hex 32        # copy the output
+```
+
+```bash
+# .env
+MCP_TOKEN=<the value you just generated>
+```
+
+**2. Add the connector.** In claude.ai → Settings → Connectors → *Add custom connector*:
+
+```
+https://gym.example.com/api/mcp/<MCP_TOKEN>
+```
+
+Leave the OAuth fields empty. Your instance has to be reachable over HTTPS from the
+internet — the same requirement passkeys already impose, so if login works from your
+phone this does too.
+
+**3. Use it.** Ask the conversation for your last two weeks, or to log what you ate.
+
+### What the connector can do
+
+| Tool | |
+| --- | --- |
+| `get_training_log` | Workouts, body weight and intake over a window. Every exercise carries what the session prescribed beside what was actually done. |
+| `get_plan` | The weekly plan, and every exercise's sets, reps, weight and progression rule. |
+| `log_intake` | Record a day's calories and macros. |
+| `log_weight` | Record a weigh-in. |
+| `propose_program` | Send a program. It is **not** applied here: it waits in the app, where exercise names are matched against the library and the whole resolution is shown before anything is written. |
+
+### The URL is the credential
+
+A custom connector is configured with a URL and nothing else, so the token rides in the
+path. That makes the URL a secret:
+
+- Anyone holding it can read your entire log and write to it. Don't paste it anywhere
+  you wouldn't paste a password.
+- openGym's nginx doesn't log this path, but check any proxy or CDN in front of it
+  doesn't either.
+- To rotate: change `MCP_TOKEN` and re-add the connector.
+
+OAuth avoids all of this and is the right answer for anything shared with other people.
+This is the simplest thing that isn't "no auth at all", for your own instance.
+
+### One caveat about writes
+
+The app takes the server's copy when its timestamp is newer, so a connector write shows
+up the next time the app syncs. If the app is holding unsynced local changes it keeps its
+own copy and pushes over the write. In practice: don't log the same day from the
+conversation and from the app at the same moment.

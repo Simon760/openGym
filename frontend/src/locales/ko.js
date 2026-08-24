@@ -630,4 +630,12 @@ export default {
   'Copied — paste it into your conversation': 'Copied — paste it into your conversation',
   'Couldn’t copy — select the text and copy it by hand': 'Couldn’t copy — select the text and copy it by hand',
   'Share…': 'Share…',
+  // A program proposed over MCP — untranslated placeholders.
+  // check-locales.mjs requires every locale to hold the same key set.
+  'A program is waiting': 'A program is waiting',
+  'Untitled program': 'Untitled program',
+  'Review it': 'Review it',
+  'This program couldn’t be read': 'This program couldn’t be read',
+  'Discard this program?': 'Discard this program?',
+  'It was sent to your instance and will not come back unless it is sent again.': 'It was sent to your instance and will not come back unless it is sent again.',
 }

@@ -626,4 +626,11 @@ export default {
   'Copied — paste it into your conversation': 'Copié — colle-le dans ta conversation',
   'Couldn’t copy — select the text and copy it by hand': 'Copie impossible — sélectionne le texte et copie-le à la main',
   'Share…': 'Partager…',
+  // A program proposed over MCP
+  'A program is waiting': 'Un programme t’attend',
+  'Untitled program': 'Programme sans titre',
+  'Review it': 'L’examiner',
+  'This program couldn’t be read': 'Ce programme n’a pas pu être lu',
+  'Discard this program?': 'Abandonner ce programme ?',
+  'It was sent to your instance and will not come back unless it is sent again.': 'Il a été envoyé à ton instance et ne reviendra pas tant qu’il ne sera pas renvoyé.',
 }

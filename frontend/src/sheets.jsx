@@ -772,12 +772,12 @@ function PlanTools({ close }) {
   </>
 }
 
-export const planImportSheet = (bundle, report) => ui().openSheet(close => <PlanImport bundle={bundle} report={report} close={close} />)
+export const planImportSheet = (bundle, report, onApplied) => ui().openSheet(close => <PlanImport bundle={bundle} report={report} onApplied={onApplied} close={close} />)
 
-function PlanImport({ bundle, report, close }) {
+function PlanImport({ bundle, report, onApplied, close }) {
   const [schedule, setSchedule] = useState(false)
   const apply = () => {
-    update(s => mergePlan(s, bundle, { schedule }))
+    update(s => { mergePlan(s, bundle, { schedule }); if (onApplied) onApplied(s) })
     close()
     toast(t('Added {0} routines to your plan', bundle.routineCount))
     nav('/plan')
@@ -904,6 +904,33 @@ function ProgramImport({ close }) {
   </>
 }
 export const programImportSheet = () => ui().openSheet(close => <ProgramImport close={close} />)
+
+/* A program that arrived over MCP (api/mcp.js propose_program). It is parked in the state
+   unresolved: matching names against the library needs the catalogue and the matcher, both
+   of which live here, and a program rewriting someone's training deserves a look before it
+   lands. Clearing it on import is what stops the same proposal reappearing forever. */
+export function openPendingProgram() {
+  const pending = S().pendingProgram
+  if (!pending) return
+  try {
+    const { bundle, report } = parseProgram(pending.program)
+    planImportSheet(bundle, report, s => { delete s.pendingProgram })
+  } catch (e) {
+    confirmSheet({
+      title: t('This program couldn’t be read'),
+      message: e.message,
+      confirmText: t('Discard'), danger: true,
+      onConfirm: () => update(s => { delete s.pendingProgram })
+    })
+  }
+}
+export const discardPendingProgram = () => confirmSheet({
+  title: t('Discard this program?'),
+  message: t('It was sent to your instance and will not come back unless it is sent again.'),
+  confirmText: t('Discard'), danger: true,
+  onConfirm: () => update(s => { delete s.pendingProgram })
+})
+
 
 function DayOverride({ iso, close }) {
   const st = useStore(s => s.S)

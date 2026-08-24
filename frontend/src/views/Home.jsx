@@ -4,7 +4,7 @@ import { useStore } from '../store/useStore.js'
 import { effectiveRoutine, effectiveRoutineId, streakWeeks, lastBW, setsDoneActive } from '../lib/history.js'
 import { fmtNum, fmtDate, todayISO, isoOf, weekKey, DAYS } from '../lib/format.js'
 import { t, dateLocale } from '../lib/i18n.js'
-import { bwSheet, goalSheet, dayOverrideSheet, calendarSheet, startFlow, loadStarterPlan, bwDeltaColor, nutriSheet, nutriGoalSheet, digestSheet } from '../sheets.jsx'
+import { bwSheet, goalSheet, dayOverrideSheet, calendarSheet, startFlow, loadStarterPlan, bwDeltaColor, nutriSheet, nutriGoalSheet, digestSheet, openPendingProgram, discardPendingProgram } from '../sheets.jsx'
 import { entryFor, kcalFromMacros, macroSplit, remainingOf, MACROS, MACRO_NAME, MACRO_COLOR } from '../lib/nutrition.js'
 import LineChart from '../components/LineChart.jsx'
 import Icon from '../components/Icon.jsx'
@@ -81,6 +81,23 @@ export default function Home() {
           : <Icon name="plus" className="chev" />}
       </div>
     </div>
+
+    {/* A program sent over MCP is waiting. Above everything else because it is the one
+        thing on this screen the user did not put there themselves. */}
+    {S.pendingProgram && (
+      <div className="card" style={{ borderColor: 'var(--acc)' }}>
+        <div className="row" style={{ gap: 10, marginBottom: 6 }}>
+          <span className="lrow-i" style={{ background: 'var(--acc)' }}><Icon name="sparkles" /></span>
+          <div style={{ minWidth: 0 }}>
+            <div className="lbl2">{t('A program is waiting')}</div>
+            <div className="ttl">{S.pendingProgram.program?.name || t('Untitled program')}</div>
+          </div>
+        </div>
+        <Button variant="primary" icon="download" onClick={openPendingProgram}>{t('Review it')}</Button>
+        <div style={{ height: 8 }} />
+        <Button variant="ghost" className="dim" onClick={discardPendingProgram}>{t('Discard')}</Button>
+      </div>
+    )}
 
     {!S.routines.length && !S.active && (
       <div className="card">
