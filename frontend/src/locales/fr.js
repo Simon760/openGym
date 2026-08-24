@@ -691,4 +691,17 @@ export default {
   'burned': 'brûlées',
   'resting HR {0}': 'FC repos {0}',
   'Activity': 'Activité',
+  // Estimated muscle recovery
+  'estimated': 'estimée',
+  'Nothing trained recently — there is no fatigue to estimate.': 'Rien entraîné récemment — aucune fatigue à estimer.',
+  'Just trained': 'Fraîchement entraîné',
+  'Ready': 'Prêt',
+  'ready': 'prêt',
+  '{0} h': '{0} h',
+  '{0} d': '{0} j',
+  'An estimate from your logged sets, not a measurement.': 'Une estimation à partir de tes séries, pas une mesure.',
+  '{0} of {1} sets were rated for effort; the rest were assumed to be normal working sets.': '{0} séries sur {1} ont un effort noté ; les autres sont supposées être des séries de travail normales.',
+  'Short sleep is slowing it by about {0} %.': 'Le manque de sommeil la ralentit d’environ {0} %.',
+  'Eating under target is slowing it by about {0} %.': 'Manger sous l’objectif la ralentit d’environ {0} %.',
+  'No sleep or intake logged, so neither is being counted.': 'Ni sommeil ni apports enregistrés, donc ni l’un ni l’autre n’est pris en compte.',
 }

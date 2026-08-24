@@ -777,6 +777,12 @@ h4.sec{
 .bm-m.l2{fill:color-mix(in srgb,var(--acc) 56%,var(--bm-base))}
 .bm-m.l3{fill:color-mix(in srgb,var(--acc) 78%,var(--bm-base))}
 .bm-m.l4{fill:var(--acc)}
+/* Recovery shading runs the other way from load: a muscle just trained is the one that
+   should catch the eye, and a recovered one should sit back into the silhouette. */
+.bm-m.r1{fill:color-mix(in srgb,var(--acc) 40%,var(--bm-base))}
+.bm-m.r2{fill:color-mix(in srgb,var(--yellow) 62%,var(--bm-base))}
+.bm-m.r3{fill:color-mix(in srgb,var(--orange) 74%,var(--bm-base))}
+.bm-m.r4{fill:color-mix(in srgb,var(--red) 82%,var(--bm-base))}
 .bm-m.sel{stroke:var(--label);stroke-width:7}
 .bodymap.tappable .bm-m{cursor:pointer}
 /* A hairline in the surface colour separates neighbouring muscles; the artwork has no

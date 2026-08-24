@@ -10,7 +10,8 @@ import LineChart from '../components/LineChart.jsx'
 import Heatmap from '../components/Heatmap.jsx'
 import Icon from '../components/Icon.jsx'
 import BodyMap, { BodyMapLegend } from '../components/BodyMap.jsx'
-import { loadOfWorkouts, rankOf, MUSCLE_NAME } from '../lib/muscles.js'
+import { loadOfWorkouts, rankOf, MUSCLE_NAME, MUSCLES } from '../lib/muscles.js'
+import { recoveryNow, bandOf, BAND_NAME } from '../lib/recovery.js'
 import { e1rmSeries, best1RM } from '../lib/onerm.js'
 import {
   hasEffort, displayScale, scaleName, toScale, avgRir, effortSummary, effortWeeks,
@@ -223,6 +224,58 @@ function SleepCard({ S }) {
   </div>
 }
 
+// Estimated recovery per muscle. An estimate, and the card says so — nothing here measures
+// recovery. See lib/recovery.js for the model and the evidence each constant came from.
+function RecoveryCard({ S }) {
+  const [sel, setSel] = useState(null)
+  const { muscles, basis } = recoveryNow(S)
+  const worked = MUSCLES.filter(m => muscles[m])
+  // Levels run 1 (ready) to 4 (just trained), so the muscle needing attention is the loud one.
+  const levels = {}
+  worked.forEach(m => {
+    const b = bandOf(muscles[m].pct)
+    levels[m] = b === 'ready' ? 1 : b === 'nearly' ? 2 : b === 'working' ? 3 : 4
+  })
+  const fmtLeft = h => h <= 0 ? t('ready') : h < 24 ? t('{0} h', h) : t('{0} d', Math.round(h / 24 * 10) / 10)
+  const sorted = [...worked].sort((a, b) => muscles[a].pct - muscles[b].pct)
+  const detail = sel && muscles[sel] ? { slug: sel, ...muscles[sel] } : null
+
+  return <div className="card">
+    <div className="row between" style={{ marginBottom: 8 }}>
+      <h2 style={{ margin: 0 }}>{t('Recovery')} <span className="dim" style={{ textTransform: 'none', letterSpacing: 0 }}>· {t('estimated')}</span></h2>
+    </div>
+    {!worked.length ? <div className="muted small">{t('Nothing trained recently — there is no fatigue to estimate.')}</div> : <>
+      <BodyMap className="tappable" levels={levels} palette="recovery" body={S.body} selected={sel}
+        onMuscle={m => setSel(x => (x === m ? null : m))} />
+      <div className="hm-legend">
+        {t('Just trained')} <div className="hm-c" style={{ background: 'var(--red)' }} />
+        <div className="hm-c" style={{ background: 'var(--orange)' }} />
+        <div className="hm-c" style={{ background: 'var(--yellow)' }} />
+        <div className="hm-c" style={{ background: 'var(--acc)' }} /> {t('Ready')}
+      </div>
+
+      {detail ? <div className="mrow" style={{ borderTop: 'var(--hair) solid var(--sep)', marginTop: 4, paddingTop: 10 }}>
+        <span className="nm"><b>{t(MUSCLE_NAME[detail.slug])}</b></span>
+        <span className="v">{detail.pct} % · {t('{0} sets', detail.sets)} · {fmtLeft(detail.hoursLeft)}</span>
+      </div> : sorted.slice(0, 5).map(m => <div key={m} className="mrow">
+        <span className="nm">{t(MUSCLE_NAME[m])}</span>
+        <span className="bar"><i style={{ width: muscles[m].pct + '%', background: `var(--${bandOf(muscles[m].pct) === 'ready' ? 'acc' : bandOf(muscles[m].pct) === 'nearly' ? 'yellow' : bandOf(muscles[m].pct) === 'working' ? 'orange' : 'red'})` }} /></span>
+        <span className="v">{muscles[m].pct} % · {fmtLeft(muscles[m].hoursLeft)}</span>
+      </div>)}
+
+      {/* What the number rests on. A recovery figure with no stated basis is the kind you
+          believe for six weeks before realising it was invented. */}
+      <div className="small dim" style={{ marginTop: 12, lineHeight: 1.5 }}>
+        {t('An estimate from your logged sets, not a measurement.')}{' '}
+        {basis.ratedSets < basis.totalSets && t('{0} of {1} sets were rated for effort; the rest were assumed to be normal working sets.', basis.ratedSets, basis.totalSets) + ' '}
+        {basis.sleepFactor > 1.02 && t('Short sleep is slowing it by about {0} %.', Math.round((basis.sleepFactor - 1) * 100)) + ' '}
+        {basis.energyFactor > 1.02 && t('Eating under target is slowing it by about {0} %.', Math.round((basis.energyFactor - 1) * 100)) + ' '}
+        {!basis.known && t('No sleep or intake logged, so neither is being counted.')}
+      </div>
+    </>}
+  </div>
+}
+
 // Stats = the analytics hub: all charts, progress and history live here.
 export default function Stats() {
   const nav = useNavigate()
@@ -312,6 +365,7 @@ export default function Stats() {
       <Heatmap S={S} onDay={iso => { const ws = S.workouts.filter(w => w.d === iso); if (ws.length === 1) workoutDetailSheet(ws[0]); else if (ws.length) calendarSheet(iso) }} />
     </div>
 
+    {S.workouts.length > 0 && <RecoveryCard S={S} />}
     {S.workouts.length > 0 && <MuscleBalance S={S} />}
     {anyEffort && <EffortCard S={S} />}
     <NutritionCard S={S} />

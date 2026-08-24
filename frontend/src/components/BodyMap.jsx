@@ -26,7 +26,7 @@ function useBodyPaths() {
   return paths
 }
 
-function View({ view, levels, onMuscle, selected }) {
+function View({ view, levels, palette, onMuscle, selected }) {
   return (
     <svg className="bm-v" viewBox={view.vb} role="img">
       {INERT.map(slug => (view.p[slug] || []).map((d, i) =>
@@ -34,7 +34,7 @@ function View({ view, levels, onMuscle, selected }) {
       {MUSCLES.map(slug => (view.p[slug] || []).map((d, i) =>
         <path
           key={slug + i}
-          className={'bm-m l' + (levels[slug] || 0) + (selected === slug ? ' sel' : '')}
+          className={'bm-m ' + (palette === 'load' ? 'l' : 'r') + (levels[slug] || 0) + (selected === slug ? ' sel' : '')}
           d={d}
           onClick={onMuscle ? () => onMuscle(slug) : undefined}
         >
@@ -49,15 +49,17 @@ function View({ view, levels, onMuscle, selected }) {
  * `load` is effective sets per muscle (see lib/muscles.js); shading is relative to
  * the hardest-worked muscle in that same load, so it always reads as a balance.
  */
-export default function BodyMap({ load = {}, body = 'male', onMuscle, selected, className = '' }) {
+export default function BodyMap({ load = {}, levels: given, palette = 'load', body = 'male', onMuscle, selected, className = '' }) {
   const paths = useBodyPaths()
-  const levels = levelsOf(load)
+  // `given` lets a caller shade something other than relative load — recovery, say, which
+  // is not relative to anything and needs its own scale and colours.
+  const levels = given || levelsOf(load)
   const g = paths && (paths[body] || paths.male)
   return (
     <div className={'bodymap ' + className}>
       {g ? <>
-        <View view={g.front} levels={levels} onMuscle={onMuscle} selected={selected} />
-        <View view={g.back} levels={levels} onMuscle={onMuscle} selected={selected} />
+        <View view={g.front} levels={levels} palette={palette} onMuscle={onMuscle} selected={selected} />
+        <View view={g.back} levels={levels} palette={palette} onMuscle={onMuscle} selected={selected} />
       </> : <div className="bm-ph" aria-hidden="true" />}
     </div>
   )

@@ -715,4 +715,18 @@ export default {
   'burned': 'burned',
   'resting HR {0}': 'resting HR {0}',
   'Activity': 'Activity',
+  // Estimated muscle recovery — untranslated placeholders.
+  // check-locales.mjs requires every locale to hold the same key set.
+  'estimated': 'estimated',
+  'Nothing trained recently — there is no fatigue to estimate.': 'Nothing trained recently — there is no fatigue to estimate.',
+  'Just trained': 'Just trained',
+  'Ready': 'Ready',
+  'ready': 'ready',
+  '{0} h': '{0} h',
+  '{0} d': '{0} d',
+  'An estimate from your logged sets, not a measurement.': 'An estimate from your logged sets, not a measurement.',
+  '{0} of {1} sets were rated for effort; the rest were assumed to be normal working sets.': '{0} of {1} sets were rated for effort; the rest were assumed to be normal working sets.',
+  'Short sleep is slowing it by about {0} %.': 'Short sleep is slowing it by about {0} %.',
+  'Eating under target is slowing it by about {0} %.': 'Eating under target is slowing it by about {0} %.',
+  'No sleep or intake logged, so neither is being counted.': 'No sleep or intake logged, so neither is being counted.',
 }
