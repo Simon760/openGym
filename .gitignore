@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Build output
+frontend/dist/
+dist/
+
+# Local environment
+.env
+.env.local
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+*.swp
+
+# Runtime data — per-user state, passkeys, session secret and push keys.
+# NOTE: data/ and media/ are currently still TRACKED in this fork (they were
+# committed before this file existed). Ignoring them here only stops *new*
+# files from being added; untracking the existing ones needs an explicit
+# `git rm -r --cached data media` — and data/secret + data/vapid.json should
+# be regenerated afterwards, since they are private keys.
+data/
+media/
