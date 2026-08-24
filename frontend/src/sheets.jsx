@@ -24,6 +24,7 @@ import { nextPrescription, applyPrescription, policyFor, defaultIncrement, POLIC
 import { MOBILE, shareExport, shareText, canShareText } from './lib/mobile.js'
 import { entryFor, hasMacros, kcalFromMacros, derivedMismatch, remainingOf, putEntry, MACROS, MACRO_NAME } from './lib/nutrition.js'
 import { validBodyFat, composition, sleepFor, putSleep, validSleep, BF_MIN, BF_MAX, SLEEP_MIN, SLEEP_MAX } from './lib/body.js'
+import { parseHealth, applyHealth, SHORTCUT_RECIPE } from './lib/health.js'
 
 const S = () => useStore.getState().S
 const update = (...a) => useStore.getState().update(...a)
@@ -848,6 +849,65 @@ function PlanImport({ bundle, report, onApplied, close }) {
 }
 
 /* ============================ day override / assign ============================ */
+/* ============================ health data from a watch ============================ */
+// What an Apple Shortcut collected from Health. The watch measures what openGym cannot —
+// how long the session really lasted, what it cost, the heart, the steps, the sleep — and
+// openGym measures what the watch cannot. See lib/health.js for why a payload annotates the
+// logged session rather than creating one.
+function HealthImport({ close }) {
+  const [text, setText] = useState('')
+  const [err, setErr] = useState(null)
+  const [recipe, setRecipe] = useState(false)
+  const [done, setDone] = useState(null)
+
+  const run = () => {
+    let payload
+    try { payload = parseHealth(text) } catch (e) { setErr(e.message); return }
+    let report
+    update(s => { report = applyHealth(s, payload) })
+    // The outcome stays on screen rather than going out as a toast: what was skipped is the
+    // part worth reading, and a toast is gone before it has been.
+    setDone(report)
+  }
+  const copyRecipe = async () => {
+    try { await navigator.clipboard.writeText(SHORTCUT_RECIPE); toast(t('Recipe copied')) }
+    catch (e) { setRecipe(true) }
+  }
+
+  if (done) return <>
+    <h3>{done.wrote.length ? t('Imported') : t('Nothing was imported')}</h3>
+    <div className="muted small" style={{ marginBottom: 10 }}>{fmtDate(done.date, true)}</div>
+    {done.wrote.map((w, i) => <div key={i} className="row small" style={{ gap: 7, padding: '3px 0' }}>
+      <Icon name="check" style={{ color: 'var(--acc)', fontSize: 14 }} />{w}
+    </div>)}
+    {done.skipped.length > 0 && <>
+      <h4 className="sec">{t('Left out')}</h4>
+      {done.skipped.map((w, i) => <div key={i} className="small" style={{ color: 'var(--yellow)', padding: '3px 0', lineHeight: 1.4 }}>{w}</div>)}
+    </>}
+    <div style={{ height: 14 }} />
+    <Button variant="primary" onClick={close}>{t('Done')}</Button>
+  </>
+
+  return <>
+    <h3>{t('Import from your watch')}</h3>
+    <div className="muted small" style={{ marginBottom: 12, lineHeight: 1.45 }}>
+      {t('Paste what your Shortcut produced. Session details are added to the workout you logged that day — never as a second one.')}
+    </div>
+    <TextArea rows={7} value={text} placeholder={'{ "steps": 9420, "sleep_hours": 7.25 }'}
+      onChange={e => { setText(e.target.value); setErr(null) }} />
+    {err && <div className="small" style={{ color: 'var(--red)', margin: '8px 2px 0', lineHeight: 1.4 }}>{err}</div>}
+    <div style={{ height: 12 }} />
+    <Button variant="primary" icon="download" disabled={!text.trim()} onClick={run}>{t('Import')}</Button>
+    <h4 className="sec">{t('Building the Shortcut')}</h4>
+    <div className="dim small" style={{ marginBottom: 10, lineHeight: 1.45 }}>
+      {t('Run it automatically when a workout ends, or force it any time from the Home Screen or your watch.')}
+    </div>
+    <Button variant="ghost" icon="clipboard" onClick={copyRecipe}>{t('Copy the recipe')}</Button>
+    {recipe && <TextArea rows={12} readOnly value={SHORTCUT_RECIPE} style={{ marginTop: 10 }} />}
+  </>
+}
+export const healthImportSheet = () => ui().openSheet(close => <HealthImport close={close} />)
+
 /* ============================ sleep ============================ */
 // Filed under the day you woke up, not the day you went to bed: that is the day it affects,
 // and the day the weigh-in and the intake are already filed under. See lib/body.js.

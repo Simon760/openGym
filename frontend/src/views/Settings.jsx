@@ -10,7 +10,7 @@ import { wakeLockSupported } from '../lib/wakelock.js'
 import { t, LANGS, INSTR_LANGS } from '../lib/i18n.js'
 import { DEMO, REPO } from '../lib/demo.js'
 import { MOBILE, shareExport, syncReminder } from '../lib/mobile.js'
-import { loadStarterPlan, confirmSheet, importFromApp } from '../sheets.jsx'
+import { loadStarterPlan, confirmSheet, importFromApp, healthImportSheet } from '../sheets.jsx'
 import Icon from '../components/Icon.jsx'
 import { Section, Row, SelectRow, Switch, Segmented, Button, TextField } from '../components/ui.jsx'
 
@@ -175,6 +175,9 @@ export default function Settings() {
     {/* ---------- data: fill it, bring things over, back it up, wipe it ---------- */}
     <Section title={t('Data')}>
       <Row icon="sparkles" iconTint="var(--acc)" title={t('Load starter plan (PPL)')} accessory="chevron" onClick={loadStarterPlan} />
+      <Row icon="heart" iconTint="var(--red)" title={t('Import from your watch')}
+        subtitle={t('Steps, energy, sleep and session details, via an Apple Shortcut.')}
+        accessory="chevron" onClick={healthImportSheet} />
       <Row icon="shuffle" iconTint="var(--teal)" title={t('Import from another app')}
         subtitle={t('FitNotes, Strong, Hevy — or body weight from Apple Health')}
         accessory="chevron" onClick={() => importRef.current.click()} />

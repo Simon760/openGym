@@ -19,6 +19,8 @@ import { setLabel, modeOf, effectiveRoutineId, workoutVolume } from './history.j
 import { readSession, nextPrescription, policyFor } from './progression.js'
 import { effortSummary, displayScale, scaleName, toScale } from './effort.js'
 import { entryFor, avgOver, MACROS, MACRO_NAME } from './nutrition.js'
+import { sleepFor } from './body.js'
+import { healthFor } from './health.js'
 import { fmtNum, fmtDate, todayISO, isoOf } from './format.js'
 import { t } from './i18n.js'
 
@@ -73,6 +75,16 @@ function sessionBlock(w, { targets = true } = {}) {
     lines.push(parts.join('  '))
   })
   if (w.prs && w.prs.length) lines.push('  ' + t('PR:') + ' ' + w.prs.map(exName).join(', '))
+  // The watch's reading of the same session. Kept on its own line and labelled, because it
+  // measured something different from the sets above and merging them would blur which
+  // number came from where.
+  if (w.watch) {
+    const b = []
+    if (w.watch.kcal) b.push(fmtNum(w.watch.kcal) + ' kcal')
+    if (w.watch.hrAvg) b.push(t('HR {0} avg', w.watch.hrAvg) + (w.watch.hrMax ? ' / ' + w.watch.hrMax + ' max' : ''))
+    if (w.watch.km) b.push(fmtNum(w.watch.km) + ' km')
+    if (b.length) lines.push('  ' + t('watch:') + ' ' + b.join(' · '))
+  }
   return lines.join('\n')
 }
 
@@ -104,6 +116,17 @@ export function dailyDigest(S, iso = todayISO(), now = Date.now()) {
 
   const intake = intakeLine(S, iso)
   out.push(t('Intake') + ' ' + (intake || t('nothing logged')))
+
+  const sl = sleepFor(S, iso)
+  if (sl) out.push(t('Sleep') + ' ' + fmtNum(sl.h) + ' h' + (sl.q ? ' · ' + t('felt {0}/5', sl.q) : ''))
+  const hd = healthFor(S, iso)
+  if (hd) {
+    const b = []
+    if (hd.steps) b.push(fmtNum(hd.steps) + ' ' + t('steps'))
+    if (hd.kcal) b.push(fmtNum(hd.kcal) + ' kcal ' + t('burned'))
+    if (hd.rhr) b.push(t('resting HR {0}', hd.rhr))
+    if (b.length) out.push(t('Activity') + ' ' + b.join(' · '))
+  }
 
   const w = (S.workouts || []).find(x => x.d === iso)
   if (w) {

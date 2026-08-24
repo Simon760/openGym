@@ -102,3 +102,42 @@ that would simply install. Your free options:
 - The app requests notification permission only when the workout-day reminder is switched
   on, and (on Android) declares `SCHEDULE_EXACT_ALARM` so the reminder fires to the minute
   where the user allows it.
+
+## Getting Apple Watch data in, without building an iOS app
+
+HealthKit needs a native iOS build, which needs a Mac and Xcode — and a paid Apple Developer
+membership ($99/yr) for anything beyond a provisioning profile that expires every 7 days.
+There is a free path that gets you more: an **Apple Shortcut**.
+
+Shortcuts reads Health natively (steps, active energy, sleep, workouts, heart rate) and can
+be triggered *by the watch finishing a session*. No Mac, no developer account, no App Store.
+
+**The shortcut.** Settings → Import from your watch → *Copy the recipe* gives you the exact
+actions. In outline:
+
+1. `Find Health Samples` · Steps · Today · Calculate Sum
+2. `Find Health Samples` · Active Energy · Today · Calculate Sum
+3. `Find Health Samples` · Sleep Analysis · **yesterday 18:00 → now** · Calculate Sum
+4. `Find Workouts` · Sort by End Date · Latest 1
+5. A `Text` action assembling them into JSON
+6. `Copy to Clipboard` — or `Get Contents of URL` (POST) once your instance is online
+
+> Never query sleep on "Today". A night starts yesterday and ends today, so the obvious
+> filter cuts it in half. openGym files a night under the day you woke up, for the same
+> reason — the two agree without anything having to be negotiated.
+
+**Two ways to fire it, one shortcut:**
+
+- **Automation → Workout → Ends.** Your watch finishes the session, your iPhone runs the
+  shortcut. Nothing to remember.
+- **Home Screen icon, Back Tap, or the Shortcuts app on the watch**, to force it whenever
+  you want — a missed sync, or a session you trained without starting one on the watch.
+
+**What lands where.** Steps, active energy and resting heart rate become the day's activity
+figures; sleep goes to the sleep log; a weight (and body fat, if your scale reports it)
+becomes a weigh-in. The workout's duration, energy and heart rate are **added to the session
+you already logged in openGym that day** — never as a second session. Two records of one
+training session have to stay one session, or every count in the app doubles. If nothing was
+logged that day, the import says the session details had nowhere to go and keeps the rest.
+
+Every field is optional. A shortcut that only ever sends steps is a complete shortcut.

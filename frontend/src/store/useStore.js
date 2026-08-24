@@ -26,7 +26,11 @@ export const DEF = {
   // Body fat rides on the weigh-in itself (an optional `bf` on a bodyweight entry) rather
   // than living here, because that is how a scale reports it. Both absent on every profile
   // written before they existed, and absent reads as never logged.
-  sleep: [], sleepGoal: null
+  sleep: [], sleepGoal: null,
+  // Daily figures a watch measured and openGym cannot: { d, steps, kcal, rhr, exerciseMin }.
+  // A watch's reading of a *session* is not here — it annotates the workout already logged
+  // that day (w.watch), because two records of one session must stay one session.
+  health: []
 }
 const clone = o => JSON.parse(JSON.stringify(o))
 
