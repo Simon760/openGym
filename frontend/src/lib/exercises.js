@@ -1,5 +1,6 @@
 import { EXDB } from './exercises-data.js'
-import { t } from './i18n.js'
+import { t, ONLY_LANG } from './i18n.js'
+import EX_FR from '../names/fr.js'
 
 export { EXDB }
 export const EXIDX = {}
@@ -13,6 +14,32 @@ export function equipmentOf(list) {
   const c = {}
   list.forEach(e => { if (e.eq) c[e.eq] = (c[e.eq] || 0) + 1 })
   return Object.keys(c).sort((a, b) => c[b] - c[a] || (a < b ? -1 : 1))
+}
+
+/**
+ * The catalogue's names, in the build's language.
+ *
+ * Upstream translates the instruction steps into ten languages and the names into none, so
+ * these are generated — see scripts/build-exercise-fr.mjs, which composes them from a table
+ * of movement heads, modifiers and equipment rather than word by word, because French does
+ * not order them the way English does. It only emits a name when every word of the English
+ * was accounted for: about six in ten of the catalogue today, and the rest keep their English
+ * name rather than arriving half translated.
+ *
+ * A custom exercise is whatever its owner typed and is never touched.
+ */
+const NAMES = ONLY_LANG === 'fr' ? EX_FR : null
+
+export const exName = ex => (ex && (ex.custom ? ex.n : (NAMES && NAMES[ex.id]) || ex.n)) || ''
+
+/**
+ * What to match a search against: both names, so the French name is findable by the English
+ * one it came from. Someone who learned "bench press" should not have to know that this build
+ * files it under "développé couché".
+ */
+export const exSearchText = ex => {
+  const fr = NAMES && NAMES[ex.id]
+  return (fr ? fr + ' ' + ex.n : ex.n).toLowerCase()
 }
 
 // Custom (user-created) exercises live in synced state S.customEx (issue #11) and are

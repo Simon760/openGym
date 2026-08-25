@@ -153,6 +153,12 @@ button,.chip,.tile,.item,.wday,.cal-d,.swatch,.hm-c,.lrow,.seg button,.stp butto
 .small{font-size:13px;line-height:1.38}
 .accent{color:var(--acc)}
 .capitalize{text-transform:capitalize}
+/* An exercise name, as opposed to a category. English names arrive lower case and want a
+   capital on every word, which is what .capitalize is for and why the tags and chips keep it.
+   French names want a capital on the first word and nothing else — "Développé incliné
+   haltères", never "Développé Incliné Haltères" — so a name gets this instead. */
+.exn{text-transform:none}
+.exn::first-letter{text-transform:uppercase}
 /* exercise names and body-part/equipment terms arrive lowercase from the dataset,
    so tags and chips capitalise by default. Anything that is a unit or a sentence opts
    back out — blanket-capitalising turned "60 kg" into "60 Kg" and a whole hint into
@@ -651,8 +657,9 @@ h4.sec{
 #timer.working{border:var(--hair) solid var(--acc)}
 #timer.working .t{color:var(--acc)}
 #timer.working .grow{flex:1;min-width:0}
+#timer.working .lbl::first-letter{text-transform:uppercase}
 #timer.working .lbl{
-  font-size:12px;color:var(--label-2);margin-bottom:5px;text-transform:capitalize;
+  font-size:12px;color:var(--label-2);margin-bottom:5px;text-transform:none;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
 
@@ -909,8 +916,9 @@ h4.sec{
 }
 .today-row:active{background:var(--surface-3)}
 .today-row .lbl2{font-size:11px;font-weight:500;letter-spacing:.03em;text-transform:uppercase;color:var(--label-3)}
+.today-row .ttl::first-letter{text-transform:uppercase}
 .today-row .ttl{
-  font-weight:500;font-size:17px;line-height:1.25;text-transform:capitalize;
+  font-weight:500;font-size:17px;line-height:1.25;text-transform:none;
   letter-spacing:-.012em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;
 }
 
@@ -940,3 +948,14 @@ h4.sec{
   .exmedia img{height:380px}
   .hm-wrap{display:flex;flex-direction:column;align-items:center}
 }
+
+/* What a set or a session trains, muscle by muscle. Three columns so the names line up on
+   the left and the figures on the right; the bar in the middle takes whatever is left, which
+   is what keeps it readable on a 320 px screen and on a two-column tablet layout alike. */
+.mshare{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.mshare-r{display:grid;grid-template-columns:minmax(72px,auto) 1fr 40px;align-items:center;gap:9px;font-size:13px}
+.mshare-n{color:var(--label);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mshare-b{height:6px;border-radius:99px;background:var(--surface-2);overflow:hidden}
+.mshare-b>i{display:block;height:100%;border-radius:99px;background:var(--acc)}
+.mshare-v{text-align:right;color:var(--label-2);font-variant-numeric:tabular-nums}
+.mshare-r.dim .mshare-n,.mshare-r.dim .mshare-v{color:var(--label-3)}

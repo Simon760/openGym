@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { muscleSlug, musclesOf, MUSCLES } from './muscles.js'
+import { muscleSlug, musclesOf, sharesOf, sharesOfExercise, MUSCLES } from './muscles.js'
 
 describe('muscleSlug', () => {
   it('still reads every spelling the dataset itself uses', () => {
@@ -60,5 +60,52 @@ describe('musclesOf', () => {
   it('falls back to the body part when nothing resolved', () => {
     expect(musclesOf({ tg: 'posterior chain', bp: 'upper legs' }))
       .toEqual({ quadriceps: 0.4, hamstring: 0.35, gluteal: 0.25 })
+  })
+})
+
+describe('sharesOf — how much of a set goes where', () => {
+  const sum = parts => parts.reduce((n, p) => n + p.pct, 0)
+
+  it('turns a compound lift into percentages that add to 100', () => {
+    expect(sharesOfExercise({ tg: 'chest', sm: ['triceps', 'front delts'], bp: 'chest' }))
+      .toEqual([{ slug: 'chest', pct: 56 }, { slug: 'deltoids', pct: 22 }, { slug: 'triceps', pct: 22 }])
+  })
+
+  it('always adds to exactly 100, whatever the rounding', () => {
+    // Independent rounding gives 99 or 101 here; largest remainder does not. A reader who
+    // adds the column up has to get 100 or the number is not a percentage.
+    for (const load of [
+      { chest: 1, triceps: 0.4, deltoids: 0.4 },
+      { quadriceps: 1, gluteal: 0.4, hamstring: 0.4, 'lower-back': 0.4 },
+      { biceps: 1, forearm: 0.4 },
+      { chest: 12, triceps: 4.8, deltoids: 3.2, 'upper-back': 8, biceps: 3.2 },
+      { abs: 7 }
+    ]) expect(sum(sharesOf(load))).toBe(100)
+  })
+
+  it('orders by how hard the muscle worked', () => {
+    const p = sharesOf({ 'upper-back': 8, chest: 12, biceps: 3.2 })
+    expect(p.map(x => x.slug)).toEqual(['chest', 'upper-back', 'biceps'])
+    expect(p[0].pct).toBeGreaterThan(p[1].pct)
+  })
+
+  it('drops a sliver rather than printing 0 %, and still reaches 100', () => {
+    const p = sharesOf({ chest: 100, forearm: 0.3 })
+    expect(p.map(x => x.slug)).toEqual(['chest'])
+    expect(sum(p)).toBe(100)
+  })
+
+  it('has nothing to say about nothing', () => {
+    expect(sharesOf({})).toEqual([])
+    expect(sharesOf({ chest: 0 })).toEqual([])
+    expect(sharesOfExercise(null)).toEqual([])
+  })
+
+  it('reads a session, not just an exercise', () => {
+    // four sets of bench, three of curls: the shares weigh the sets, not the exercises
+    const load = { chest: 4, triceps: 1.6, deltoids: 1.6, biceps: 3, forearm: 1.2 }
+    const p = sharesOf(load)
+    expect(p[0].slug).toBe('chest')
+    expect(sum(p)).toBe(100)
   })
 })

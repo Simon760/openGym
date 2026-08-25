@@ -188,6 +188,43 @@ export function levelsOf(load) {
   return lv
 }
 
+/**
+ * A load — or one exercise's own weights — as whole percentages that add to 100.
+ *
+ * Rounded by largest remainder rather than independently: three muscles at 55.6 / 22.2 / 22.2
+ * round to 56 / 22 / 22 and sum to 100, where rounding each on its own gives 56 / 22 / 22 in
+ * one case and 55 / 22 / 22 in another, and a reader who adds them up finds 99. The share is
+ * what is worth showing over the raw figure: "chest 56 %" says what a set of bench press
+ * *is*, where "chest 1.0" needs the scale explained before it means anything.
+ *
+ * Muscles under one percent are dropped rather than shown as 0 %, and their share goes back
+ * into the rounding, so the total still reads 100.
+ */
+export function sharesOf(load, min = 1) {
+  const raw = MUSCLES.map(m => ({ slug: m, v: load[m] || 0 })).filter(x => x.v > 0)
+  const total = raw.reduce((n, x) => n + x.v, 0)
+  if (!total) return []
+
+  const scaled = raw.map(x => ({ slug: x.slug, exact: x.v / total * 100 }))
+    .filter(x => x.exact >= min)
+    .sort((a, b) => b.exact - a.exact)
+  if (!scaled.length) return []
+
+  // Renormalise over what survived the floor, then hand the leftover percent to whoever
+  // lost the most to rounding — the largest-remainder method.
+  const kept = scaled.reduce((n, x) => n + x.exact, 0)
+  const parts = scaled.map(x => {
+    const exact = x.exact / kept * 100
+    return { slug: x.slug, pct: Math.floor(exact), rem: exact - Math.floor(exact) }
+  })
+  let left = 100 - parts.reduce((n, x) => n + x.pct, 0)
+  parts.slice().sort((a, b) => b.rem - a.rem).forEach(p => { if (left-- > 0) p.pct++ })
+  return parts.map(({ slug, pct }) => ({ slug, pct }))
+}
+
+/** The same, for a single exercise: what one set of it is, muscle by muscle. */
+export const sharesOfExercise = ex => sharesOf(musclesOf(ex))
+
 /** Muscles sorted hardest-worked first; untrained ones last, in body order. */
 export function rankOf(load) {
   const worked = MUSCLES.filter(m => (load[m] || 0) > 0).sort((a, b) => load[b] - load[a])
