@@ -994,14 +994,27 @@ const healthFieldLabel = () => ({
   intake: t('Calories eaten'), protein: t('Protein'), carbs: t('Carbs'), fat: t('Fat')
 })
 
-function HealthImport({ close }) {
+function HealthImport({ close, arrived }) {
   const [text, setText] = useState('')
   const [err, setErr] = useState(null)
   const [recipe, setRecipe] = useState(false)
   const [spec, setSpec] = useState(false)
   const [review, setReview] = useState(null)
+  const [pending, setPending] = useState(null)
   const [done, setDone] = useState(null)
   const fileRef = useRef(null)
+
+  // A payload that arrived through a link rather than a paste — the Shortcut opened the app
+  // instead of asking someone to copy something into it. It is shown and confirmed rather
+  // than written on sight: a URL is whatever opened it, and this one writes to the log.
+  useEffect(() => {
+    if (!arrived) return
+    try {
+      if (typeof arrived === 'object') setPending(parseHealth(arrived))
+      else if (arrived.includes('{')) setPending(parseHealth(arrived))
+      else setReview(parseHealthCSV(arrived))
+    } catch (e) { setErr(e.message) }
+  }, [arrived])
 
   // A Shortcut hands over JSON; a tracker hands over a CSV. No CSV contains a brace, so the
   // two never have to be told apart by the person pasting.
@@ -1017,6 +1030,11 @@ function HealthImport({ close }) {
       return
     }
     try { setReview(parseHealthCSV(text)) } catch (e) { setErr(e.message) }
+  }
+  const confirmPending = () => {
+    let report
+    update(s => { report = applyHealth(s, pending) })
+    setDone(report)
   }
   const confirmCSV = () => {
     let report
@@ -1052,6 +1070,42 @@ function HealthImport({ close }) {
     <div style={{ height: 14 }} />
     <Button variant="primary" onClick={close}>{t('Done')}</Button>
   </>
+
+  if (pending) {
+    const label = healthFieldLabel()
+    const lines = [
+      pending.steps != null && [label.steps, pending.steps],
+      pending.kcal != null && [label.kcal, pending.kcal + ' kcal'],
+      pending.exerciseMin != null && [t('Exercise minutes'), pending.exerciseMin + ' min'],
+      pending.rhr != null && [label.rhr, pending.rhr],
+      pending.bed && pending.wake && [t('Sleep'), pending.bed + ' → ' + pending.wake],
+      pending.sleepHours != null && [t('Sleep'), fmtNum(pending.sleepHours) + ' h'],
+      pending.intake != null && [label.intake, pending.intake + ' kcal'],
+      pending.protein != null && [label.protein, pending.protein + ' g'],
+      pending.carbs != null && [label.carbs, pending.carbs + ' g'],
+      pending.fat != null && [label.fat, pending.fat + ' g'],
+      pending.weight != null && [label.weight, fmtNum(pending.weight)],
+      pending.bodyFat != null && [label.bodyFat, fmtNum(pending.bodyFat) + ' %'],
+      pending.workout && [t('Session'), [
+        pending.workout.minutes != null && pending.workout.minutes + ' min',
+        pending.workout.kcal != null && pending.workout.kcal + ' kcal',
+        pending.workout.km != null && fmtNum(pending.workout.km) + ' km'
+      ].filter(Boolean).join(' · ')]
+    ].filter(Boolean)
+    return <>
+      <h3>{t('Your watch sent this')}</h3>
+      <div className="muted small" style={{ marginBottom: 12, lineHeight: 1.45 }}>
+        {t('{0}. Nothing is written until you confirm.', fmtDate(pending.d, true))}
+      </div>
+      {lines.map(([k, v], i) => <div key={i} className="row between small" style={{ padding: '5px 2px', borderBottom: '1px solid var(--sep)' }}>
+        <span className="dim">{k}</span><b>{v}</b>
+      </div>)}
+      <div style={{ height: 14 }} />
+      <Button variant="primary" icon="download" onClick={confirmPending}>{t('Import')}</Button>
+      <div style={{ height: 8 }} />
+      <Button variant="ghost" className="dim" onClick={close}>{t('Cancel')}</Button>
+    </>
+  }
 
   if (review) {
     const label = healthFieldLabel()
@@ -1108,13 +1162,13 @@ function HealthImport({ close }) {
     </div>
     <h4 className="sec">{t('Building the Shortcut')}</h4>
     <div className="dim small" style={{ marginBottom: 10, lineHeight: 1.45 }}>
-      {t('Run it automatically when a workout ends, or force it any time from the Home Screen or your watch.')}
+      {t('Set the automation up once and your watch fills this in by itself — no copying, no pasting.')}
     </div>
     <Button variant="ghost" icon="clipboard" onClick={copyRecipe}>{t('Copy the recipe')}</Button>
     {recipe && <TextArea rows={12} readOnly value={shortcutRecipe()} style={{ marginTop: 10 }} />}
   </>
 }
-export const healthImportSheet = () => ui().openSheet(close => <HealthImport close={close} />)
+export const healthImportSheet = arrived => ui().openSheet(close => <HealthImport close={close} arrived={arrived} />)
 
 /* ============================ sleep ============================ */
 // Filed under the day you woke up, not the day you went to bed: that is the day it affects,

@@ -23,6 +23,9 @@ import { t } from './i18n.js'
 
 export const HEALTH_FMT = 1
 
+/** Where this copy of the app lives, without the route it happens to be showing. */
+export const appURL = () => (typeof location === 'undefined' ? '' : location.origin + location.pathname)
+
 const MACRO_LABEL = { protein: 'Protein', carbs: 'Carbs', fat: 'Fat' }
 
 const num = v => (Number.isFinite(+v) && +v > 0 ? +v : null)
@@ -437,26 +440,58 @@ decimal comma in a comma-separated file: write 84.2, not 84,2.`)
  * The Shortcut, written out as the actions to drop in. Kept beside the parser so the two
  * cannot drift: this is what the app expects, and the parser above is its only reader.
  */
-export const shortcutRecipe = () => t(`Shortcuts → new shortcut, then:
+/**
+ * The Shortcut, written out as the actions to drop in. Kept beside the parser so the two
+ * cannot drift: this is what the app expects, and the parser above is its only reader.
+ *
+ * The instance's own address is substituted in, because a recipe telling someone to type
+ * "your instance URL" is a recipe telling them to go and find it.
+ */
+export const shortcutRecipe = (base = appURL()) => t(`Two shortcuts, not one. The first fires by itself when a workout ends; the second runs once
+a day for steps and sleep. Everything is optional — build only the one you want.
 
-1  Find Health Samples · Steps · Today · Calculate Sum
-2  Find Health Samples · Active Energy · Today · Calculate Sum
-3  Find Health Samples · Sleep Analysis · yesterday 18:00 → now · Calculate Sum
-     (never "Today": a night starts yesterday and ends today)
-4  Find Workouts · Sort by End Date · Latest 1   → duration, active energy, distance
-5  Text, with the numbers from above dropped in:
+The whole handover is a link: no copying, no pasting, no JSON. One action, with your watch's
+values dropped where the numbers are.
 
-{ "date": "<today, formatted yyyy-MM-dd>",
-  "steps": <1>, "active_kcal": <2>, "sleep_hours": <3>,
-  "workout": { "minutes": <4 duration>, "kcal": <4 energy>, "distance_km": <4 distance> } }
+════ 1 · WHEN A WORKOUT ENDS (automatic) ════
 
-6  Copy to Clipboard      → paste it into BodyEvolve
-   …or Get Contents of URL, POST, to your instance once it is online.
+Shortcuts → Automation → + → Workout → Ends → Run Immediately.
+Then, in the shortcut:
 
-Run it two ways, both from the same shortcut:
-· Automation → Workout → Ends → it fires the moment you finish on the watch
-· Add to Home Screen, Back Tap, or the Shortcuts app on the watch, to force it any time
+  1  Find Workouts
+       Sort by End Date · Order Latest First · Limit 1 workout
+  2  Open URL
+       {URL}#/import?sport=&min=
+       Put the cursor right after "sport=" and tap the Variable key above the keyboard →
+       Workouts → Active Energy. Same after "min=" → Duration.
 
-Every field is optional — send only what you care about. Add "intake_kcal", "protein",
-"carbs", "fat" for the day's food, "weight_kg" and "body_fat" for a weigh-in, or "bed" and
-"wake" as HH:MM instead of sleep_hours when you want the two clock times.`)
+That is the whole shortcut. It opens the app, the app shows what arrived, one tap files it
+onto the session you logged that day.
+
+════ 2 · ONCE A DAY (steps, sleep, resting heart rate) ════
+
+Shortcuts → Automation → + → Time of Day → 22:00 → Run Immediately.
+
+  1  Find Health Samples · Steps · Today · Calculate Sum
+  2  Find Health Samples · Active Energy · Today · Calculate Sum
+  3  Find Health Samples · Sleep Analysis · yesterday 18:00 → now · Calculate Sum
+       (never "Today": a night starts yesterday and ends today)
+  4  Open URL
+       {URL}#/import?steps=&kcal=&sleep=
+       and drop the results of 1, 2 and 3 after their own "=".
+
+════ WHAT A LINK CAN CARRY ════
+
+  the session   sport=  kcal · min=  minutes · km=  distance
+  the day       kcal=  active energy · steps= · rhr=  resting heart rate
+  the night     bed=23:14&wake=07:02 · or sleep=7.25 in hours
+  food          intake=  kcal · p=  protein · c=  carbs · f=  fat, in grams
+  the scale     weight=79.5 · bf=22
+  the day it belongs to   date=2026-08-25 — without it, today
+
+Nothing is ever written without showing you first. The session figures annotate the workout
+you logged that day rather than becoming a second one, and the watch's energy figure has the
+usual overcount taken off it before it counts against anything.
+
+Test it now: paste the link into Safari with numbers in it and see what the app does with it.`).replaceAll('{URL}', base)
+
