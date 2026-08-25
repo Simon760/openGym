@@ -79,6 +79,20 @@ describe('applyHealth', () => {
     expect(r.skipped).toHaveLength(1)
   })
 
+  it('merges a day rather than replacing it, whichever source writes first', () => {
+    // Each source knows only its own fields. A Shortcut that only sends steps must not wipe
+    // the session energy typed in by hand that morning, and vice versa.
+    const S = base()
+    applyHealth(S, parseHealth({ date: D, workout: { kcal: 612, minutes: 47 } }))
+    applyHealth(S, parseHealth({ date: D, steps: 9420, resting_hr: 52 }))
+    expect(healthFor(S, D)).toMatchObject({ sport: 612, sportMin: 47, steps: 9420, rhr: 52 })
+
+    const T = base()
+    applyHealth(T, parseHealth({ date: D, steps: 9420 }))
+    applyHealth(T, parseHealth({ date: D, workout: { kcal: 612 } }))
+    expect(healthFor(T, D)).toMatchObject({ steps: 9420, sport: 612 })
+  })
+
   it('prefers the logged session when there is one', () => {
     const S = base({ workouts: [{ d: D, id: 'w', name: 'Push A', entries: [] }] })
     applyHealth(S, parseHealth({ date: D, workout: { minutes: 47, kcal: 612 } }))

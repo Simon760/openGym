@@ -133,8 +133,12 @@ export const healthFor = (S, iso) => (S.health || []).find(e => e.d === iso) || 
 export function applyHealth(S, p) {
   const report = { date: p.d, wrote: [], skipped: [] }
 
+  // Merged into the day rather than replacing it, for the reason intake already is: a
+  // Shortcut that only ever sends steps must not wipe the energy typed in by hand that
+  // morning, and a hand-typed session must not wipe the steps a Shortcut sent at ten. Each
+  // source knows only its own fields, and putHealth keeps exactly the ones it is handed.
   if (p.steps != null || p.kcal != null || p.rhr != null || p.exerciseMin != null) {
-    S.health = putHealth(S.health, p)
+    S.health = putHealth(S.health, { ...(healthFor(S, p.d) || {}), ...p, d: p.d })
     if (p.steps != null) report.wrote.push(t('{0} steps', p.steps))
     if (p.kcal != null) report.wrote.push(t('{0} kcal burned', p.kcal))
     if (p.rhr != null) report.wrote.push(t('resting heart rate {0}', p.rhr))
