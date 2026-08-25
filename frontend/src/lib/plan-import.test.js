@@ -74,6 +74,24 @@ describe('parseProgram — resolving names', () => {
     expect(report.created).toEqual([{ name: 'Coach special press', bp: 'chest', muscles: { chest: 1 } }])
   })
 
+  it('reads minutes alone as cardio — a zone-2 ride names no pace', () => {
+    // demanding a speed or a distance before believing it turned an hour on the bike into
+    // a set of ten reps
+    const e = parseProgram(one({ name: 'Stationary Bike', minutes: 60 })).bundle.routines[0].ex[0]
+    expect(e).toMatchObject({ mode: 'cardio', min: 60 })
+    expect('reps' in e).toBe(false)
+  })
+
+  it('starts a rep range at its bottom, not at the default ten', () => {
+    // double progression works up through the range and only then adds weight, so a 6–10
+    // starting at 10 is already at the top and asks for more load in session one
+    expect(parseProgram(one({ name: 'Cable Curl', repsMin: 6, repsMax: 10 })).bundle.routines[0].ex[0])
+      .toMatchObject({ reps: 6, repsMin: 6, repsMax: 10 })
+    // an explicit reps still wins, and a plain exercise still gets the default
+    expect(parseProgram(one({ name: 'Cable Curl', reps: 8, repsMin: 6, repsMax: 10 })).bundle.routines[0].ex[0].reps).toBe(8)
+    expect(parseProgram(one({ name: 'Cable Curl' })).bundle.routines[0].ex[0].reps).toBe(10)
+  })
+
   it('carries the muscles a program names, so a compound is not read as one muscle', () => {
     // "chest" alone would fatigue the chest and leave the triceps and shoulders reading as
     // fresh — which is exactly the reading a bench press must not produce

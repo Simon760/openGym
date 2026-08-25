@@ -137,24 +137,32 @@ function readExercise(raw, report) {
 
   const cfg = { id, sets: Math.max(1, Math.round(sets)) }
   const kmOnly = num(pick(raw, 'km', 'distance', 'kilometers', 'kilometres'))
-  if ((speed != null || kmOnly != null) && (min != null || kmOnly != null || !reps)) {
-    cfg.mode = 'cardio'; cfg.min = min || 20; cfg.speed = speed != null ? speed : 0
-    const km = num(pick(raw, 'km', 'distance', 'kilometers', 'kilometres'))
-    if (km) cfg.km = km
-  } else if (sec != null) {
-    cfg.mode = 'time'; cfg.sec = sec
-    if (weight) cfg.weight = weight
-  } else {
-    cfg.mode = 'reps'
-    cfg.reps = reps != null ? Math.round(reps) : 10
-    if (weight) cfg.weight = weight
-  }
 
   // A rep range drives double progression; carried only when both ends are there, since one
   // alone is not a range and would leave the policy reading a bound it cannot use.
   const lo = num(pick(raw, 'repsMin', 'reps_min', 'minReps'))
   const hi = num(pick(raw, 'repsMax', 'reps_max', 'maxReps'))
-  if (lo != null && hi != null && hi >= lo) { cfg.repsMin = Math.round(lo); cfg.repsMax = Math.round(hi) }
+  const range = lo != null && hi != null && hi >= lo
+
+  // Minutes are enough to mean cardio. A zone-2 ride is "sixty minutes", full stop — no pace,
+  // no distance, and demanding one of those before believing it is cardio turned an hour on
+  // the bike into a set of ten reps.
+  if (min != null || speed != null || kmOnly != null) {
+    cfg.mode = 'cardio'; cfg.min = min || 20; cfg.speed = speed != null ? speed : 0
+    if (kmOnly) cfg.km = kmOnly
+  } else if (sec != null) {
+    cfg.mode = 'time'; cfg.sec = sec
+    if (weight) cfg.weight = weight
+  } else {
+    cfg.mode = 'reps'
+    // Start a range at its bottom, not at the app's default of ten. Double progression works
+    // up through the range and only then adds weight, so a 6–10 that starts at 10 is already
+    // at the top and asks for more load in session one.
+    cfg.reps = reps != null ? Math.round(reps) : range ? Math.round(lo) : 10
+    if (weight) cfg.weight = weight
+  }
+
+  if (range) { cfg.repsMin = Math.round(lo); cfg.repsMax = Math.round(hi) }
 
   const prog = String(pick(raw, 'progression', 'prog') || '').trim().toLowerCase()
   if (prog) {
