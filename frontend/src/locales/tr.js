@@ -891,4 +891,8 @@ export default {
   '{0} NEAT already in maintenance': '{0} NEAT already in maintenance',
   'counted': 'counted',
   '{0} NEAT, your median across {1} rest days': '{0} NEAT, your median across {1} rest days',
+  'My watch': 'My watch',
+  '{0} kcal active': '{0} kcal active',
+  'Nothing was saved': 'Nothing was saved',
+  'Type today’s figures in': 'Type today’s figures in',
 }

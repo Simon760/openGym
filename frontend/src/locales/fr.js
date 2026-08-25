@@ -883,4 +883,8 @@ export default {
   '{0} NEAT already in maintenance': '{0} de NEAT déjà dans la dépense',
   'counted': 'comptées',
   '{0} NEAT, your median across {1} rest days': '{0} de NEAT, ta médiane sur {1} jours de repos',
+  'My watch': 'Ma montre',
+  '{0} kcal active': '{0} kcal actives',
+  'Nothing was saved': 'Rien n’a été enregistré',
+  'Type today’s figures in': 'Saisir les chiffres du jour',
 }

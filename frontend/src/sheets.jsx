@@ -1005,7 +1005,7 @@ const healthFieldLabel = () => ({
  * Blank means absent, not zero: a day with no steps entered is a day nobody counted, and a
  * zero would drag every average that reads it.
  */
-function ManualEntry({ onDone }) {
+function ManualEntry({ onDone, close }) {
   const [v, setV] = useState({})
   const set = (k, n) => setV(x => ({ ...x, [k]: n }))
   const any = ['sport', 'min', 'steps', 'sleep'].some(k => v[k] > 0)
@@ -1036,6 +1036,7 @@ function ManualEntry({ onDone }) {
   )
 
   return <>
+    {close && <h3>{t('My watch')}</h3>}
     <div className="dim small" style={{ margin: '0 2px 6px', lineHeight: 1.45 }}>
       {t('Read them off your watch and type them in. Leave a field empty when you have nothing for it.')}
     </div>
@@ -1045,6 +1046,29 @@ function ManualEntry({ onDone }) {
     <Row k="sleep" label={t('Sleep')} unit="h" decimal />
     <div style={{ height: 12 }} />
     <Button variant="primary" icon="check" disabled={!any} onClick={save}>{t('Save for today')}</Button>
+    {close && <><div style={{ height: 8 }} />
+      <Button variant="ghost" className="dim" onClick={close}>{t('Cancel')}</Button></>}
+  </>
+}
+
+/**
+ * Typing the day's figures in is the daily gesture, so it opens from the home screen rather
+ * than from the bottom of an import screen in Settings. Two taps and a number.
+ */
+export const watchSheet = () => ui().openSheet(close => <WatchLog close={close} />)
+
+function WatchLog({ close }) {
+  const [done, setDone] = useState(null)
+  if (!done) return <ManualEntry close={close} onDone={setDone} />
+  return <>
+    <h3>{done.wrote.length ? t('Saved') : t('Nothing was saved')}</h3>
+    <div className="muted small" style={{ marginBottom: 10 }}>{fmtDate(done.date, true)}</div>
+    {done.wrote.map((w, i) => <div key={i} className="row small" style={{ gap: 7, padding: '3px 0' }}>
+      <Icon name="check" style={{ color: 'var(--acc)', fontSize: 14, flexShrink: 0 }} />{w}
+    </div>)}
+    {done.skipped.map((w, i) => <div key={i} className="small" style={{ color: 'var(--yellow)', padding: '3px 0', lineHeight: 1.4 }}>{w}</div>)}
+    <div style={{ height: 14 }} />
+    <Button variant="primary" onClick={close}>{t('Done')}</Button>
   </>
 }
 
@@ -1210,7 +1234,7 @@ function HealthImport({ close, arrived }) {
     <div className="muted small" style={{ marginBottom: 12, lineHeight: 1.45 }}>
       {t('Type today’s figures in, or hand them over from a Shortcut. Session details are added to the workout you logged that day — never as a second one.')}
     </div>
-    <ManualEntry onDone={setDone} />
+    <Button variant="tinted" icon="flame" onClick={() => { close(); watchSheet() }}>{t('Type today’s figures in')}</Button>
     <h4 className="sec">{t('From a Shortcut, or a tracker export')}</h4>
     <div className="dim small" style={{ marginBottom: 10, lineHeight: 1.45 }}>
       {t('Paste what your Shortcut produced, or open the CSV your tracker exported.')}

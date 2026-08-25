@@ -4,7 +4,7 @@ import { useStore } from '../store/useStore.js'
 import { effectiveRoutine, effectiveRoutineId, streakWeeks, lastBW, setsDoneActive } from '../lib/history.js'
 import { fmtNum, fmtDate, todayISO, isoOf, weekKey, DAYS } from '../lib/format.js'
 import { t, dateLocale } from '../lib/i18n.js'
-import { bwSheet, goalSheet, dayOverrideSheet, calendarSheet, startFlow, loadStarterPlan, bwDeltaColor, nutriSheet, nutriGoalSheet, digestSheet, openPendingProgram, discardPendingProgram, sleepSheet, tdeeSheet } from '../sheets.jsx'
+import { bwSheet, goalSheet, dayOverrideSheet, calendarSheet, startFlow, loadStarterPlan, bwDeltaColor, nutriSheet, nutriGoalSheet, digestSheet, openPendingProgram, discardPendingProgram, sleepSheet, tdeeSheet, watchSheet } from '../sheets.jsx'
 import { entryFor, kcalFromMacros, macroSplit, remainingOf, MACROS, MACRO_NAME, MACRO_COLOR } from '../lib/nutrition.js'
 import { composition, todaySleep, lastSleep, sleepHours, whenOf } from '../lib/body.js'
 import { dayBalance } from '../lib/energy.js'
@@ -57,6 +57,20 @@ export default function Home() {
   const balance = bal && bal.deficit != null ? bal : null
   const macroSplitToday = macroSplit(todayNutri)
 
+  // What the watch already gave today, as one line. Absent figures stay absent rather than
+  // reading as zero — a day nobody measured is not a day of no movement.
+  const iso = todayISO()
+  const watchLine = (() => {
+    const w = (S.workouts || []).find(x => x.d === iso && x.watch)
+    const h = (S.health || []).find(x => x.d === iso)
+    const bits = []
+    if (w && w.watch.kcal) bits.push(fmtNum(w.watch.kcal) + ' kcal')
+    if (w && w.watch.minutes) bits.push(fmtNum(w.watch.minutes) + ' min')
+    if (h && h.kcal) bits.push(t('{0} kcal active', fmtNum(h.kcal)))
+    if (h && h.steps) bits.push(fmtNum(h.steps) + ' ' + t('steps'))
+    return bits.length ? bits.join(' · ') : null
+  })()
+
   // today's session shown right under the week strip
   const onToday = () => { if (S.active) nav('/workout'); else if (routine) startFlow(routine.id); else dayOverrideSheet(todayISO()) }
 
@@ -89,6 +103,20 @@ export default function Home() {
         {S.active ? <span className="tag" style={{ color: 'var(--orange)', background: 'color-mix(in srgb,var(--orange) 16%,transparent)' }}>{t('Resume')}</span>
           : routine ? <span className="tag acc">{t('Start')}</span>
           : <Icon name="plus" className="chev" />}
+      </div>
+
+      {/* What the watch measured today. It sits here, under the day it belongs to, because
+          it is a daily gesture — buried at the bottom of an import screen in Settings it was
+          a feature nobody would reach twice. */}
+      <div className="today-row" onClick={watchSheet}>
+        <div className="row" style={{ gap: 9, minWidth: 0 }}>
+          <span className="lrow-i" style={{ background: watchLine ? 'var(--red)' : 'var(--surface-3)' }}><Icon name="flame" /></span>
+          <div style={{ minWidth: 0 }}>
+            <div className="lbl2">{t('My watch')}</div>
+            <div className="ttl">{watchLine || t('Not logged')}</div>
+          </div>
+        </div>
+        {watchLine ? <Icon name="chevronRight" className="chev" /> : <span className="tag acc">{t('Log')}</span>}
       </div>
     </div>
 
