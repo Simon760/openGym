@@ -854,4 +854,5 @@ export default {
   'This address is not in the project’s authorised domains.': 'Cette adresse ne fait pas partie des domaines autorisés du projet.',
   'The database refused that write — check the rules are published.': 'La base a refusé l’écriture — vérifie que les règles sont publiées.',
   'Something went wrong.': 'Quelque chose s’est mal passé.',
+  'line {0} has more values than there are columns — a decimal comma splits a row in two. Write 84.2, not 84,2.': 'la ligne {0} a plus de valeurs que de colonnes — une virgule décimale coupe la ligne en deux. Écris 84.2, pas 84,2.',
 }

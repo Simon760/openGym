@@ -879,4 +879,5 @@ export default {
   'This address is not in the project’s authorised domains.': 'This address is not in the project’s authorised domains.',
   'The database refused that write — check the rules are published.': 'The database refused that write — check the rules are published.',
   'Something went wrong.': 'Something went wrong.',
+  'line {0} has more values than there are columns — a decimal comma splits a row in two. Write 84.2, not 84,2.': 'line {0} has more values than there are columns — a decimal comma splits a row in two. Write 84.2, not 84,2.',
 }

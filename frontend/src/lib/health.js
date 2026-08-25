@@ -284,6 +284,17 @@ export function parseHealthCSV(text) {
   const map = mapHealthHeader(rows[0])
   if (map.date === undefined) throw new Error(t('no date column found — BodyEvolve cannot file rows without one'))
 
+  // A row wider than the header means a comma inside a value split it, and in a French file
+  // that comma is almost always a decimal point: "2025-03-12,84,2" is three fields, and read
+  // in order it files 84 kg instead of 84.2. Nothing about that looks wrong afterwards — the
+  // weight is plausible, the curve is just quietly off — so it is caught here rather than
+  // trusted. Values containing a real comma survive when they are quoted, which is what the
+  // quoted-field branch of the CSV reader is for.
+  const wide = rows.findIndex((r, i) => i > 0 && r.length > rows[0].length)
+  if (wide > 0) {
+    throw new Error(t('line {0} has more values than there are columns — a decimal comma splits a row in two. Write 84.2, not 84,2.', wide + 1))
+  }
+
   const days = new Map()
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i]

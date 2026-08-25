@@ -169,6 +169,16 @@ describe('parseHealthCSV — a tracker export', () => {
     expect(ignored).toEqual(['Skin temperature', 'HRV'])
   })
 
+  it('catches a decimal comma rather than filing the wrong weight', () => {
+    // "84,2" is two fields, and read in order it stores 84 kg. Nothing looks wrong
+    // afterwards — the weight is plausible, the curve is just quietly off.
+    expect(() => parseHealthCSV('Date,Poids\n2025-03-12,84,2')).toThrow(/decimal comma/)
+    // a quoted value with a real comma in it is not that, and still gets through
+    expect(parseHealthCSV('Date,Poids,Note\n2025-03-12,84.2,"matin, à jeun"').payloads[0].weight).toBe(84.2)
+    // nor is a row that simply stops short of the last column
+    expect(parseHealthCSV('Date,Poids,Masse grasse\n2025-03-12,84.2').payloads[0].weight).toBe(84.2)
+  })
+
   it('refuses a file it cannot file rows from', () => {
     expect(() => parseHealthCSV('Steps,Calories\n9000,300')).toThrow()
     expect(() => parseHealthCSV('Date,Steps')).toThrow()
