@@ -27,8 +27,13 @@ import { uid } from './format.js'
  * A real CSV reader: quoted fields, embedded commas and newlines, doubled quotes, BOM
  * and CRLF. Splitting on commas breaks on the first exercise named "Bench Press, Close
  * Grip" — and a whole history would import shifted by one column without ever erroring.
+ *
+ * The separator is a parameter because a comma is only the most common one. A French Excel
+ * writes semicolons — the comma is its decimal point — a spreadsheet copied to the clipboard
+ * arrives tab-separated, and a Markdown table is pipes. Callers whose file came out of an app
+ * pass nothing; callers reading what a person pasted discover it first. See DELIMS.
  */
-export function parseCSV(text) {
+export function parseCSV(text, delim = ',') {
   const rows = []
   let row = [], field = '', quoted = false
   const s = String(text).replace(/^﻿/, '')
@@ -38,7 +43,7 @@ export function parseCSV(text) {
       if (c === '"') { if (s[i + 1] === '"') { field += '"'; i++ } else quoted = false }
       else field += c
     } else if (c === '"') quoted = true
-    else if (c === ',') { row.push(field); field = '' }
+    else if (c === delim) { row.push(field); field = '' }
     else if (c === '\n' || c === '\r') {
       if (c === '\r' && s[i + 1] === '\n') i++
       row.push(field); field = ''
@@ -49,6 +54,26 @@ export function parseCSV(text) {
   row.push(field)
   if (row.some(x => x !== '')) rows.push(row)
   return rows
+}
+
+/** The separators worth trying, in the order a file is most likely to use one. */
+export const DELIMS = [',', ';', '\t', '|']
+
+/**
+ * Drop the Markdown code fence a chat window wraps a file in.
+ *
+ * Asking a conversation for a CSV gets a CSV — inside ```csv … ```, because that is how a
+ * chat window renders a file. Pasting it whole then puts "```csv" on line one, where the
+ * header should be, and every column name lands one row too low. The first fenced block is
+ * the file; anything outside it is the sentence that introduced it.
+ */
+export function unfence(text) {
+  const lines = String(text).split(/\r?\n/)
+  const fences = []
+  lines.forEach((l, i) => { if (/^[ \t]*(?:```|~~~)/.test(l)) fences.push(i) })
+  if (!fences.length) return String(text)
+  const end = fences.length > 1 ? fences[1] : lines.length
+  return lines.slice(fences[0] + 1, end).join('\n')
 }
 
 const norm = h => h.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()

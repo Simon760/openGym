@@ -15,7 +15,7 @@
 // motionless are different facts, and only one of them is worth acting on.
 
 import { extractJSON } from './plan-import.js'
-import { parseCSV, parseWhen } from './import-csv.js'
+import { parseCSV, parseWhen, unfence, DELIMS } from './import-csv.js'
 import { putSleep, validSleep, validBodyFat, validTime, SLEEP_MAX } from './body.js'
 import { putEntry, entryFor } from './nutrition.js'
 import { todayISO, fmtDate } from './format.js'
@@ -273,16 +273,59 @@ function timeCell(row, i) {
   return validTime(String(h).padStart(2, '0') + ':' + m[2])
 }
 
+// How far down a paste the header is worth looking for. A person writes a sentence or two
+// of introduction, not forty.
+const HEADER_SCAN = 40
+
+/**
+ * Find the table inside whatever was pasted.
+ *
+ * A history that came out of a conversation almost never arrives as a bare CSV. It comes
+ * wrapped in a ```csv fence, or as a Markdown table of pipes, or under a line of
+ * introduction, or — straight out of a French Excel — separated by semicolons, because there
+ * the comma is the decimal point. A comma-only reader that starts at line one fails all four
+ * the same way: the header never gets split into columns, so there is no date column, so the
+ * message blames the file for the one thing that was never wrong with it.
+ *
+ * So the separator is discovered rather than assumed, and the header is searched for rather
+ * than taken from the top. A candidate row only counts as the header once a row below it
+ * actually reads as a date under it: prose can look like a header by accident — "Voici le
+ * poids, date par date" maps a weight column and a date column — and a table cannot fake
+ * having dates in its date column. Where several separators produce a header, the one that
+ * recognises the most columns wins.
+ */
+export function healthRows(text) {
+  const body = unfence(text)
+  let best = null
+  for (const delim of DELIMS) {
+    const rows = parseCSV(body, delim)
+    for (let i = 0; i < rows.length && i < HEADER_SCAN; i++) {
+      if (rows[i].length < 2) continue
+      const map = mapHealthHeader(rows[i])
+      if (map.date === undefined) continue
+      // A Markdown table puts its |---|---| rule between the header and the first row, so
+      // look a little further down than the next line before giving up on this candidate.
+      if (!rows.slice(i + 1, i + 12).some(r => parseWhen(cell(r, map.date)))) continue
+      const score = Object.keys(map).length
+      if (!best || score > best.score) best = { rows: rows.slice(i), delim, score }
+      break
+    }
+  }
+  // Nothing read as a table. Hand back the plain comma reading so the caller reports what is
+  // missing from the file the person thinks they pasted, not from some speculative re-split.
+  return best || { rows: parseCSV(body), delim: ',' }
+}
+
 /**
  * Read a tracker export into one payload per day, plus the mapping it used. Nothing is
  * written here — the caller shows the mapping and the day count first, because a header
  * matched wrongly is the failure mode and it is invisible once the rows are in.
  */
 export function parseHealthCSV(text) {
-  const rows = parseCSV(text)
+  const { rows, delim } = healthRows(text)
   if (rows.length < 2) throw new Error(t('that file has no rows in it'))
   const map = mapHealthHeader(rows[0])
-  if (map.date === undefined) throw new Error(t('no date column found — BodyEvolve cannot file rows without one'))
+  if (map.date === undefined) throw new Error(t('no date column found — the first line has to name the columns, like Date,Weight'))
 
   // A row wider than the header means a comma inside a value split it, and in a French file
   // that comma is almost always a decimal point: "2025-03-12,84,2" is three fields, and read
@@ -290,7 +333,7 @@ export function parseHealthCSV(text) {
   // weight is plausible, the curve is just quietly off — so it is caught here rather than
   // trusted. Values containing a real comma survive when they are quoted, which is what the
   // quoted-field branch of the CSV reader is for.
-  const wide = rows.findIndex((r, i) => i > 0 && r.length > rows[0].length)
+  const wide = delim === ',' ? rows.findIndex((r, i) => i > 0 && r.length > rows[0].length) : -1
   if (wide > 0) {
     throw new Error(t('line {0} has more values than there are columns — a decimal comma splits a row in two. Write 84.2, not 84,2.', wide + 1))
   }
@@ -355,37 +398,45 @@ export function applyHealthDays(S, payloads) {
 const byDate = (a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : 0)
 
 /**
- * The Shortcut, written out as the actions to drop in. Kept beside the parser so the two
- * cannot drift: this is what the app expects, and the parser above is its only reader.
- */
-/**
  * The file to ask a conversation for, when the history lives in one. CSV rather than JSON:
  * a conversation writes it without breaking it, you can read it before importing it, and an
  * empty cell stays empty — which is the whole point, because a day nobody logged must not
  * arrive as a zero.
+ *
+ * Translated as one block rather than a dozen keys: it is read as a whole and copied as a
+ * whole, and a paragraph translated in isolation from the one above it drifts. A function
+ * and not a constant, because the dictionary is not loaded yet when this module is.
  */
-export const HISTORY_SPEC = `A retroactive history — one row per day, as far back as it goes.
+export const historySpec = () => t(`A retroactive history — one row per day, as far back as it goes.
 
 Ask for exactly this:
 
-  Write my whole history as CSV, one row per day, oldest first, nothing around it.
+  Write my whole history as CSV, one row per day, oldest first.
   First line exactly:
 
   Date,Weight,Body fat,Intake kcal,Protein,Carbs,Fat,Sport kcal,Steps,Bedtime,Wake time
 
   Rules:
-  · Date as YYYY-MM-DD
+  · Date as YYYY-MM-DD (2025-03-12)
   · Leave a cell empty when the figure was never recorded that day — never write 0
   · Weight in kg (78.4), body fat in %, intake and sport in kcal, macros in grams
   · Bedtime and Wake time as HH:MM
   · Drop any column you have no data for at all
 
-Save it as a .csv and open it here.
+Then paste the answer straight in here, or save it as a .csv and open the file.
 
-Every column is optional except the date: Date,Weight alone is a complete file. Headers do
-not have to match exactly — French names and the usual tracker exports are understood too,
-and the mapping is shown before a single day is written.`
+Only the date is required — Date,Weight alone is a complete file. Column names do not have to
+match: French names and the usual tracker exports are understood too, and the mapping is shown
+before a single day is written.
 
+Paste it however it came out. A fenced code block, a Markdown table of pipes, a sentence above
+it, semicolons instead of commas — all four read the same. The one thing that breaks is a
+decimal comma in a comma-separated file: write 84.2, not 84,2.`)
+
+/**
+ * The Shortcut, written out as the actions to drop in. Kept beside the parser so the two
+ * cannot drift: this is what the app expects, and the parser above is its only reader.
+ */
 export const SHORTCUT_RECIPE = `Shortcuts → new shortcut, then:
 
 1  Find Health Samples · Steps · Today · Calculate Sum

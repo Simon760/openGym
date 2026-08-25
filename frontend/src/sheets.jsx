@@ -24,7 +24,7 @@ import { nextPrescription, applyPrescription, policyFor, defaultIncrement, POLIC
 import { MOBILE, shareExport, shareText, canShareText } from './lib/mobile.js'
 import { entryFor, hasMacros, kcalFromMacros, derivedMismatch, remainingOf, putEntry, MACROS, MACRO_NAME } from './lib/nutrition.js'
 import { validBodyFat, composition, sleepFor, putSleep, validSleep, sleepHours, hoursBetween, validTime, BF_MIN, BF_MAX, SLEEP_MIN, SLEEP_MAX } from './lib/body.js'
-import { parseHealth, applyHealth, parseHealthCSV, applyHealthDays, SHORTCUT_RECIPE, HISTORY_SPEC } from './lib/health.js'
+import { parseHealth, applyHealth, parseHealthCSV, applyHealthDays, SHORTCUT_RECIPE, historySpec } from './lib/health.js'
 import { impliedTDEE, tdeeParts, trimOf, TDEE_PARTS, TDEE_MIN, TDEE_MAX, TRIM_MAX, IMPLIED_MIN_SPAN, IMPLIED_MIN_DAYS, IMPLIED_MIN_WEIGHINS } from './lib/energy.js'
 import { APP_NAME, FILE_PREFIX } from './lib/brand.js'
 
@@ -1018,7 +1018,7 @@ function HealthImport({ close }) {
     catch (e) { setRecipe(true) }
   }
   const copySpec = async () => {
-    try { await navigator.clipboard.writeText(HISTORY_SPEC); toast(t('Format copied')) }
+    try { await navigator.clipboard.writeText(historySpec()); toast(t('Format copied')) }
     catch (e) { setSpec(true) }
   }
 
@@ -1084,7 +1084,7 @@ function HealthImport({ close }) {
       {t('Weigh-ins, intake, training energy — as far back as it goes, one row per day. Ask for it as CSV: an empty cell stays empty, which is the whole point, because a day nobody logged must not arrive as a zero.')}
     </div>
     <Button variant="ghost" icon="clipboard" onClick={copySpec}>{t('Copy the file format')}</Button>
-    {spec && <TextArea rows={14} readOnly value={HISTORY_SPEC} style={{ marginTop: 10 }} />}
+    {spec && <TextArea rows={14} readOnly value={historySpec()} style={{ marginTop: 10 }} />}
     <h4 className="sec">{t('Whoop, Fitbit, Garmin, Oura, Polar…')}</h4>
     <div className="dim small" style={{ marginBottom: 10, lineHeight: 1.45 }}>
       {t('Export your data from the tracker’s own app or website and open the CSV here. BodyEvolve reads the columns it recognises — sleep, steps, energy, resting heart rate, weight — and shows you the mapping before writing anything.')}

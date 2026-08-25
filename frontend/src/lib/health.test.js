@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseHealth, applyHealth, putHealth, healthFor, parseHealthCSV, applyHealthDays } from './health.js'
+import { parseHealth, applyHealth, putHealth, healthFor, parseHealthCSV, applyHealthDays, mapHealthHeader } from './health.js'
 import { entryFor } from './nutrition.js'
 import { sleepHours } from './body.js'
 import { todayISO } from './format.js'
@@ -188,6 +188,71 @@ describe('parseHealthCSV — a tracker export', () => {
   it('drops a row that carries nothing but a date', () => {
     const csv = 'Date,Steps\n2026-08-22,9000\n2026-08-23,'
     expect(parseHealthCSV(csv).payloads).toHaveLength(1)
+  })
+
+})
+
+// Four ways a history that came out of a conversation arrives, all of which used to fail
+// identically — "no date column" — because the header never got split into columns at all.
+describe('parseHealthCSV — what a person actually pastes', () => {
+  const one = p => { expect(p).toHaveLength(1); return p[0] }
+
+  it('reads a file still inside its Markdown code fence', () => {
+    expect(one(parseHealthCSV('```csv\nDate,Poids\n2025-03-12,84.2\n```').payloads))
+      .toMatchObject({ d: '2025-03-12', weight: 84.2 })
+    expect(one(parseHealthCSV('```\nDate,Poids\n2025-03-12,84.2\n```').payloads).weight).toBe(84.2)
+    // and the sentence a chat window puts either side of the block
+    expect(one(parseHealthCSV('Voici ton historique :\n\n```csv\nDate,Poids\n2025-03-12,84.2\n```\n\nDis-moi si tu veux autre chose.').payloads).weight).toBe(84.2)
+  })
+
+  it('reads semicolons, and with them the decimal comma that forced them', () => {
+    // A French Excel writes this. The comma is its decimal point, which is exactly why the
+    // separator is a semicolon — so here "84,2" is one field and means 84.2 kg.
+    const p = one(parseHealthCSV('Date;Poids;Apports\n2025-03-12;84,2;1940').payloads)
+    expect(p).toMatchObject({ d: '2025-03-12', weight: 84.2, intake: 1940 })
+  })
+
+  it('reads a spreadsheet pasted straight from the clipboard', () => {
+    expect(one(parseHealthCSV('Date\tPoids\n2025-03-12\t84.2').payloads).weight).toBe(84.2)
+  })
+
+  it('reads a Markdown table, rule and all', () => {
+    const md = '| Date | Poids | Apports |\n|---|---:|---|\n| 2025-03-12 | 84.2 | 1940 |\n| 2025-03-13 | 84.0 | 2100 |'
+    const { payloads } = parseHealthCSV(md)
+    expect(payloads).toHaveLength(2)
+    expect(payloads[0]).toMatchObject({ d: '2025-03-12', weight: 84.2, intake: 1940 })
+    // the |---| rule is not a day
+    expect(payloads.map(x => x.d)).toEqual(['2025-03-12', '2025-03-13'])
+  })
+
+  it('skips whatever was written above the header', () => {
+    const csv = 'Voici ton historique de poids :\n\nDate,Poids\n2025-03-12,84.2'
+    expect(one(parseHealthCSV(csv).payloads).weight).toBe(84.2)
+  })
+
+  it('is not fooled by prose that reads like a header', () => {
+    // "poids" ends the first field and "date" starts the second, so this maps two columns —
+    // but no row below it holds a date, which is the part prose cannot fake.
+    const csv = 'Je te donne le poids, date par date\nDate,Poids\n2025-03-12,84.2'
+    expect(one(parseHealthCSV(csv).payloads)).toMatchObject({ d: '2025-03-12', weight: 84.2 })
+  })
+
+  it('still names the date column when a file genuinely has none', () => {
+    expect(() => parseHealthCSV('```csv\nPoids,Apports\n84.2,1940\n```')).toThrow(/date column/)
+  })
+
+  // The header the in-app spec tells you to ask for, in both languages it offers. If a
+  // column here stops mapping, the app is handing out a format it can no longer read.
+  it('maps every column of its own published header', () => {
+    const en = 'Date,Weight,Body fat,Intake kcal,Protein,Carbs,Fat,Sport kcal,Steps,Bedtime,Wake time'.split(',')
+    const fr = 'Date,Poids,Masse grasse,Apports kcal,Protéines,Glucides,Lipides,Sport kcal,Pas,Coucher,Réveil'.split(',')
+    const want = ['date', 'weight', 'bodyFat', 'intake', 'protein', 'carbs', 'fat', 'kcal', 'steps', 'bed', 'wake']
+    for (const header of [en, fr]) {
+      const map = mapHealthHeader(header)
+      expect(Object.keys(map).sort()).toEqual([...want].sort())
+      // and each one landed on its own column, in order
+      want.forEach((f, i) => expect(map[f]).toBe(i))
+    }
   })
 })
 
