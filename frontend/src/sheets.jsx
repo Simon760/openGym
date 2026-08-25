@@ -26,6 +26,7 @@ import { entryFor, hasMacros, kcalFromMacros, derivedMismatch, remainingOf, putE
 import { validBodyFat, composition, sleepFor, putSleep, validSleep, sleepHours, hoursBetween, validTime, BF_MIN, BF_MAX, SLEEP_MIN, SLEEP_MAX } from './lib/body.js'
 import { parseHealth, applyHealth, parseHealthCSV, applyHealthDays, SHORTCUT_RECIPE, HISTORY_SPEC } from './lib/health.js'
 import { impliedTDEE, tdeeParts, trimOf, TDEE_PARTS, TDEE_MIN, TDEE_MAX, TRIM_MAX, IMPLIED_MIN_SPAN, IMPLIED_MIN_DAYS, IMPLIED_MIN_WEIGHINS } from './lib/energy.js'
+import { APP_NAME, FILE_PREFIX } from './lib/brand.js'
 
 const S = () => useStore.getState().S
 const update = (...a) => useStore.getState().update(...a)
@@ -864,7 +865,7 @@ function PlanTools({ close }) {
   const exportFile = async () => {
     const bundle = buildPlanBundle(st, user?.name ? t('{0}’s plan', user.name) : '')
     const json = JSON.stringify(bundle, null, 2)
-    const name = 'opengym-plan-' + todayISO() + '.json'
+    const name = FILE_PREFIX + '-plan-' + todayISO() + '.json'
     if (MOBILE) { try { await shareExport(json, name) } catch (e) { /* dismissed */ } close(); return }
     const blob = new Blob([json], { type: 'application/json' })
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); URL.revokeObjectURL(a.href)
@@ -884,7 +885,7 @@ function PlanTools({ close }) {
     <h3>{t('Share your plan')}</h3>
     <div className="muted small" style={{ marginBottom: 16 }}>{t('Send your routines to a friend, or put your week on paper.')}</div>
     <Button variant="primary" icon="upload" onClick={exportFile} disabled={!hasRoutines}>{t('Export plan file')}</Button>
-    <div className="dim small" style={{ margin: '7px 2px 0', lineHeight: 1.4 }}>{t('A small file a friend imports into their own openGym — routines only, none of your workouts or weigh-ins.')}</div>
+    <div className="dim small" style={{ margin: '7px 2px 0', lineHeight: 1.4 }}>{t('A small file a friend imports into their own BodyTransformation — routines only, none of your workouts or weigh-ins.')}</div>
     {!MOBILE && <>
       <div style={{ height: 12 }} />
       <Button variant="tinted" icon="download" onClick={() => { close(); printPlan(st, user?.name || '') }} disabled={!hasRoutines}>{t('Print / Save as PDF')}</Button>
@@ -951,16 +952,17 @@ function PlanImport({ bundle, report, onApplied, close }) {
 
 /* ============================ day override / assign ============================ */
 /* ============================ health data from a watch ============================ */
-// What an Apple Shortcut collected from Health. The watch measures what openGym cannot —
+// What an Apple Shortcut collected from Health. The watch measures what BodyTransformation cannot —
 // how long the session really lasted, what it cost, the heart, the steps, the sleep — and
-// openGym measures what the watch cannot. See lib/health.js for why a payload annotates the
+// BodyTransformation measures what the watch cannot. See lib/health.js for why a payload annotates the
 // logged session rather than creating one.
 // The field names, as a person reads them: the mapping a header search settled on is the
 // failure mode of a CSV import, and it is invisible once the rows are in.
 const healthFieldLabel = () => ({
   bed: t('Bedtime'), wake: t('Wake time'), awakeMin: t('Awake during the night'),
   sleepDur: t('Sleep duration'), steps: t('Steps'), kcal: t('Energy burned'),
-  rhr: t('Resting heart rate'), weight: t('Weight'), bodyFat: t('Body fat')
+  rhr: t('Resting heart rate'), weight: t('Weight'), bodyFat: t('Body fat'),
+  intake: t('Calories eaten'), protein: t('Protein'), carbs: t('Carbs'), fat: t('Fat')
 })
 
 function HealthImport({ close }) {
@@ -1028,7 +1030,9 @@ function HealthImport({ close }) {
     return <>
       <h3>{t('Check the columns')}</h3>
       <div className="muted small" style={{ marginBottom: 12, lineHeight: 1.45 }}>
-        {t('{0} days, {1} to {2}. Nothing is written until you confirm.', days.length, fmtDate(days[0].d, true), fmtDate(days[days.length - 1].d, true))}
+        {days.length === 1
+          ? t('One day, {0}. Nothing is written until you confirm.', fmtDate(days[0].d, true))
+          : t('{0} days, {1} to {2}. Nothing is written until you confirm.', days.length, fmtDate(days[0].d, true), fmtDate(days[days.length - 1].d, true))}
       </div>
       {review.matched.map((m, i) => <div key={i} className="row small" style={{ gap: 7, padding: '3px 0' }}>
         <Icon name="check" style={{ color: 'var(--acc)', fontSize: 14, flexShrink: 0 }} />
@@ -1044,7 +1048,7 @@ function HealthImport({ close }) {
         <div className="dim small" style={{ lineHeight: 1.45 }}>{review.ignored.join(' · ')}</div>
       </>}
       <div style={{ height: 14 }} />
-      <Button variant="primary" icon="download" disabled={!review.matched.length} onClick={confirmCSV}>{t('Import {0} days', days.length)}</Button>
+      <Button variant="primary" icon="download" disabled={!review.matched.length} onClick={confirmCSV}>{days.length === 1 ? t('Import one day') : t('Import {0} days', days.length)}</Button>
       <div style={{ height: 8 }} />
       <Button variant="ghost" className="dim" onClick={() => setReview(null)}>{t('Back')}</Button>
     </>
@@ -1071,7 +1075,7 @@ function HealthImport({ close }) {
     {spec && <TextArea rows={14} readOnly value={HISTORY_SPEC} style={{ marginTop: 10 }} />}
     <h4 className="sec">{t('Whoop, Fitbit, Garmin, Oura, Polar…')}</h4>
     <div className="dim small" style={{ marginBottom: 10, lineHeight: 1.45 }}>
-      {t('Export your data from the tracker’s own app or website and open the CSV here. openGym reads the columns it recognises — sleep, steps, energy, resting heart rate, weight — and shows you the mapping before writing anything.')}
+      {t('Export your data from the tracker’s own app or website and open the CSV here. BodyTransformation reads the columns it recognises — sleep, steps, energy, resting heart rate, weight — and shows you the mapping before writing anything.')}
     </div>
     <h4 className="sec">{t('Building the Shortcut')}</h4>
     <div className="dim small" style={{ marginBottom: 10, lineHeight: 1.45 }}>
@@ -1168,7 +1172,7 @@ function Digest({ close }) {
     catch (e) { toast(t('Couldn’t copy — select the text and copy it by hand')) }
   }
   const share = async () => {
-    try { await shareText(text, 'openGym') } catch (e) { /* share sheet dismissed */ }
+    try { await shareText(text, APP_NAME) } catch (e) { /* share sheet dismissed */ }
   }
 
   return <>
@@ -1195,7 +1199,7 @@ function Digest({ close }) {
 export const digestSheet = () => ui().openSheet(close => <Digest close={close} />)
 
 /* ============================ import a written program ============================ */
-// A program that came from outside openGym — a conversation, a coach, another app — speaks
+// A program that came from outside BodyTransformation — a conversation, a coach, another app — speaks
 // in exercise names rather than catalogue ids. Pasting is the whole interface: the text can
 // arrive fenced in ``` or wrapped in a sentence, because that is how a reply arrives, and
 // asking someone to trim it first is the step where this stops being used.
@@ -1219,7 +1223,7 @@ function ProgramImport({ close }) {
   return <>
     <h3>{t('Paste a program')}</h3>
     <div className="muted small" style={{ marginBottom: 12, lineHeight: 1.45 }}>
-      {t('Paste the whole reply — openGym finds the program inside it and matches every exercise name against your library.')}
+      {t('Paste the whole reply — BodyTransformation finds the program inside it and matches every exercise name against your library.')}
     </div>
     <TextArea rows={8} value={text} placeholder={'{ "routines": [ … ] }'}
       onChange={e => { setText(e.target.value); setErr(null) }} />

@@ -64,7 +64,7 @@ export async function syncReminder(S, interactive = false) {
 // conversation. shareExport's file is the wrong shape here — a chat wants the text.
 //
 // Not native-build-only: the Web Share API covers this in mobile browsers and in an
-// installed PWA, which is the flavor someone running openGym without a server is most
+// installed PWA, which is the flavor someone running BodyTransformation without a server is most
 // likely to be on. Sharing a digest into a conversation in one tap is the whole point, and
 // making it depend on a native build would have withheld it from exactly that person.
 export const canShareText = () =>

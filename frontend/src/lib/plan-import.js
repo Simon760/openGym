@@ -1,6 +1,6 @@
 // Import a training program written in plain exercise *names*.
 //
-// The plan-share format (plan-share.js) travels between two openGym instances, so it can
+// The plan-share format (plan-share.js) travels between two BodyTransformation instances, so it can
 // speak in catalogue ids — "0025". Anything written outside the app cannot: a program that
 // came out of a conversation, a coach's notes, another app's export. So this takes the same
 // plan shape but keyed on names, resolves each one against the 1324-exercise catalogue with
@@ -141,7 +141,7 @@ function readExercise(raw, report) {
   const prog = String(pick(raw, 'progression', 'prog') || '').trim().toLowerCase()
   if (prog) {
     if (POLICIES.includes(prog)) cfg.prog = prog
-    else report.warnings.push(t('“{0}” is not a progression rule openGym knows — left on the routine’s default.', prog))
+    else report.warnings.push(t('“{0}” is not a progression rule BodyTransformation knows — left on the routine’s default.', prog))
   }
   const inc = num(pick(raw, 'increment', 'inc'))
   if (inc) cfg.inc = inc
@@ -254,7 +254,7 @@ export const PROGRAM_SPEC = `{
   ]
 }
 
-Exercise names are matched against openGym's 1324-exercise catalogue, so write them
+Exercise names are matched against BodyTransformation's 1324-exercise catalogue, so write them
 normally ("Bench Press", "Leg Press (Machine)"); anything unrecognised is kept as a
 custom exercise rather than dropped.
 

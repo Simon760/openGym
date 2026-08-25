@@ -115,8 +115,8 @@ function page(appHtml, stamp) {
   // attribute escaping would have to quote every " in a megabyte of minified JS.
   // The </script guard is a no-op escape once the string is parsed back.
   const embedded = JSON.stringify(appHtml).replace(/<\/script/gi, '<\\/script')
-  return `<title>openGym on a Phone</title>
-<meta name="description" content="The openGym tracker running live in an iPhone chassis.">
+  return `<title>BodyTransformation on a Phone</title>
+<meta name="description" content="The BodyTransformation tracker running live in an iPhone chassis.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -308,7 +308,7 @@ function page(appHtml, stamp) {
 <main>
   <div class="rig" id="rig">
     <div class="phone">
-      <div class="screen"><iframe id="app" title="openGym running in a phone-sized viewport"></iframe></div>
+      <div class="screen"><iframe id="app" title="BodyTransformation running in a phone-sized viewport"></iframe></div>
       <div class="nub mute"></div>
       <div class="nub up"></div>
       <div class="nub down"></div>

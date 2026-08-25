@@ -1,7 +1,7 @@
 // Health data from a watch, handed over by an Apple Shortcut.
 //
-// The watch measures what openGym cannot: how long the session really lasted, what it cost,
-// what the heart did, how far you actually ran, how much you slept and walked. openGym
+// The watch measures what BodyTransformation cannot: how long the session really lasted, what it cost,
+// what the heart did, how far you actually ran, how much you slept and walked. BodyTransformation
 // measures what the watch cannot: which exercise, which set, how many reps, how close to
 // failure. Neither is the whole picture and neither should try to become the other.
 //
@@ -115,7 +115,7 @@ export const healthFor = (S, iso) => (S.health || []).find(e => e.d === iso) || 
 /**
  * Write a parsed payload into a draft state (call inside store.update) and report what
  * landed where. The session figures annotate the workout already logged that day rather
- * than creating one: the sets are openGym's record and the watch has no idea what they
+ * than creating one: the sets are BodyTransformation's record and the watch has no idea what they
  * were, so a second entry would double every count that reads the log.
  */
 export function applyHealth(S, p) {
@@ -180,7 +180,7 @@ export function applyHealth(S, p) {
       w.watch = { ...(w.watch || {}), ...p.workout }
       report.wrote.push(t('session details onto {0}', w.name))
     } else {
-      report.skipped.push(t('the session details — nothing was logged in openGym that day'))
+      report.skipped.push(t('the session details — nothing was logged in BodyTransformation that day'))
     }
   }
   return report
@@ -191,7 +191,7 @@ export function applyHealth(S, p) {
 
 /* Whoop, Fitbit, Garmin, Oura and the rest all offer a CSV export, and all of them name
  * their columns differently. Rather than four brittle per-vendor parsers, the header is
- * matched loosely against the handful of things openGym can actually store, and the mapping
+ * matched loosely against the handful of things BodyTransformation can actually store, and the mapping
  * it settled on is shown before a single day is written.
  *
  * This is deliberately not a live sync. Every one of those vendors gates its API behind
@@ -282,7 +282,7 @@ export function parseHealthCSV(text) {
   const rows = parseCSV(text)
   if (rows.length < 2) throw new Error(t('that file has no rows in it'))
   const map = mapHealthHeader(rows[0])
-  if (map.date === undefined) throw new Error(t('no date column found — openGym cannot file rows without one'))
+  if (map.date === undefined) throw new Error(t('no date column found — BodyTransformation cannot file rows without one'))
 
   const days = new Map()
   for (let i = 1; i < rows.length; i++) {
@@ -389,7 +389,7 @@ export const SHORTCUT_RECIPE = `Shortcuts → new shortcut, then:
   "steps": <1>, "active_kcal": <2>, "sleep_hours": <3>,
   "workout": { "minutes": <4 duration>, "kcal": <4 energy>, "distance_km": <4 distance> } }
 
-6  Copy to Clipboard      → paste it into openGym
+6  Copy to Clipboard      → paste it into BodyTransformation
    …or Get Contents of URL, POST, to your instance once it is online.
 
 Run it two ways, both from the same shortcut:

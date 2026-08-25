@@ -24,6 +24,7 @@ import { healthFor } from './health.js'
 import { dayBalance, sportKcal, trimOf } from './energy.js'
 import { fmtNum, fmtDate, todayISO, isoOf } from './format.js'
 import { t } from './i18n.js'
+import { APP_NAME } from './brand.js'
 
 // A period listing more sessions than this is summarised rather than printed in full: the
 // digest has to survive being pasted into a message box, and the tail of a long history is
@@ -111,7 +112,7 @@ const hasAnyMacro = e => MACROS.some(m => e[m])
  * conversation, and trainingDigest below is where it lives.
  */
 export function dailyDigest(S, iso = todayISO(), now = Date.now()) {
-  const out = ['openGym — ' + t('Today') + ' — ' + fmtDate(iso, true)]
+  const out = [APP_NAME + ' — ' + t('Today') + ' — ' + fmtDate(iso, true)]
   out.push('')
 
   // What was done. One line per activity, because a day can hold more than one.
@@ -180,7 +181,7 @@ export function dailyDigest(S, iso = todayISO(), now = Date.now()) {
  * against.
  */
 export function trainingDigest(S, days = 7, now = Date.now()) {
-  const out = ['openGym — ' + t('training, last {0} days', days)]
+  const out = [APP_NAME + ' — ' + t('training, last {0} days', days)]
 
   const sessions = (S.workouts || []).filter(w => inWindow(w.d, days, now))
   const shown = sessions.slice(-MAX_SESSIONS)

@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { api } from '../lib/api.js'
 import { localTZ } from '../lib/format.js'
 import { registerCustom } from '../lib/exercises.js'
-import { DEMO, DEMO_SEEDED } from '../lib/demo.js'
+import { DEMO, DEMO_SEEDED, SOLO } from '../lib/demo.js'
 import { MOBILE, nativeLoad, nativeSave, syncReminder } from '../lib/mobile.js'
 
 const KEY = 'gym_state_v1'
@@ -37,7 +37,7 @@ export const DEF = {
   // than living here, because that is how a scale reports it. Both absent on every profile
   // written before they existed, and absent reads as never logged.
   sleep: [], sleepGoal: null,
-  // Daily figures a watch measured and openGym cannot: { d, steps, kcal, rhr, exerciseMin }.
+  // Daily figures a watch measured and BodyTransformation cannot: { d, steps, kcal, rhr, exerciseMin }.
   // A watch's reading of a *session* is not here — it annotates the workout already logged
   // that day (w.watch), because two records of one session must stay one session.
   health: []
@@ -184,6 +184,13 @@ export const useStore = create((set, get) => {
         }
         get().setGuest(true)
         syncReminder(get().S)
+        set({ ready: true })
+        return
+      }
+      // Solo build: no backend, and the data is the user's own — straight in, no API call to
+      // wait on and no sign-in screen to offer something that cannot work.
+      if (SOLO) {
+        get().setGuest(true)
         set({ ready: true })
         return
       }

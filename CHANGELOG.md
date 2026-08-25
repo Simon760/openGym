@@ -1,5 +1,41 @@
 # Changelog
 
+## Unreleased — the BodyTransformation fork
+
+A fork of openGym, renamed and extended. The upstream project, its licence and its attribution
+are unchanged; see NOTICE.md.
+
+- **Renamed** everywhere a person sees the name: window title, home header, sign-in screen,
+  PWA manifest, home-screen label, exported filenames, digest headers, printed plans. The wire
+  formats keep their old identifiers on purpose — the storage key, the service-worker cache and
+  the bundle id are identities, not labels, and renaming one orphans the data behind it.
+- **Nutrition, energy balance and maintenance.** Daily intake with macros, maintenance entered
+  as BMR / NEAT / other / planned sport, and a deficit that only counts the difference between
+  the training the figure budgets for and the training you actually did. Plus a cross-check that
+  reads maintenance back off your own weight curve.
+- **Health imports.** An Apple Shortcut payload, a tracker CSV (Whoop, Fitbit, Garmin, Oura…)
+  and a retroactive day-by-day history, all through one parser with the column mapping shown
+  before anything is written.
+- **Sleep as two clock times**, bedtime and wake time with the minutes awake in between, with
+  the hours derived rather than typed.
+- **Estimated muscle recovery** on the body map, from logged sets weighted by effort and slowed
+  by short sleep and under-eating.
+- **Digests to paste into a conversation** — "Today" for a coach following a cut, and the
+  training one for whatever writes your programs.
+- **A solo build** (`npm run build:solo`) with no backend at all, for one person on one phone:
+  static files for Vercel or any static host, straight in at boot, everything in the browser.
+
+### Fixed
+
+- The home header pushed its two icon buttons off a 390 px screen when the title was long
+  enough — they were unreachable, not merely cramped. The title now shrinks with the viewport
+  and the buttons keep their place.
+- A failed exercise animation painted a 320 px white slab into the middle of a dark screen.
+  The card is dropped instead, leaving the sets.
+- The CSV import's review screen printed raw field keys (`intake`, `protein`) for the columns
+  added after its label table was written, and said "1 days".
+- Chart axes could print "-0".
+
 ## v1.2.4 — 2026-08-01
 
 The effort ratings you have been recording since v1.2.3 now answer questions, and bodyweight
@@ -234,11 +270,11 @@ importer for your history from other apps.
 
 ### One codebase, two flavors
 
-openGym is also a standalone mobile app — and it ships as a direct APK download, not
+BodyTransformation is also a standalone mobile app — and it ships as a direct APK download, not
 through app stores.
 
 - 📱 **Standalone mobile app.** The same frontend now also builds as a native iPhone /
-  Android app (Capacitor) — the install-and-done flavor of openGym: no account, no server,
+  Android app (Capacitor) — the install-and-done flavor of BodyTransformation: no account, no server,
   no sync. Everything stays on the phone.
   - State is mirrored into a file in the app's private storage on every change, so your
     log survives even when the OS evicts WebView storage (iOS does).
@@ -298,7 +334,7 @@ A muscle map across the app, and a live demo you can try without installing anyt
 - 🐛 **Fixed: finishing a workout from its last exercise could blank the whole app.** The
   per-exercise weight sheet read the running workout without checking it was still there, and
   finishing clears it while that sheet is still on screen.
-- ▶️ **Live demo** at [duartesantos8.github.io/openGym](https://duartesantos8.github.io/openGym/) —
+- ▶️ **Live demo** at [duartesantos8.github.io/BodyTransformation](https://duartesantos8.github.io/BodyTransformation/) —
   a browser-only build (`VITE_DEMO=1`) published to GitHub Pages on every push to `main`. It boots
   into guest mode with a seeded example profile (12 weeks of Push/Pull/Legs, weigh-ins, PRs) so
   every screen has something to show, and it never talks to a server. Passkeys, sync and the admin

@@ -195,7 +195,7 @@ export const TOOLS = [
     name: 'log_history',
     description:
       'Write a run of past days in one call — the retroactive import. Each day replaces what ' +
-      'openGym holds for that date rather than adding to it, so re-sending a day is a ' +
+      'BodyTransformation holds for that date rather than adding to it, so re-sending a day is a ' +
       'correction, not a duplicate. Omit any field that was never recorded that day: an ' +
       'absent field is left alone, and a zero would be read as a real measurement.',
     inputSchema: {
@@ -227,7 +227,7 @@ export const TOOLS = [
     name: 'propose_program',
     description:
       'Send a training program to the app. It is NOT applied here: it waits for the user to ' +
-      'open openGym, where exercise names are matched against the 1324-exercise library and ' +
+      'open BodyTransformation, where exercise names are matched against the 1324-exercise library and ' +
       'the whole resolution is shown before anything is written. Same shape as the app\'s ' +
       'paste-a-program format: { name, week: { monday: "Push", … }, routines: [ { name, ' +
       'progression, exercises: [ { name, sets, reps, weight } ] } ] }.',
@@ -343,7 +343,7 @@ function callTool(name, args, S) {
       S.pendingProgram = { at: Date.now(), program: args.program };
       return {
         ok: true,
-        status: 'waiting for the user to review it in openGym',
+        status: 'waiting for the user to review it in BodyTransformation',
         routines: args.program.routines.length
       };
     }
@@ -380,7 +380,7 @@ export async function handleMcp(req, res, token, ctx) {
     return ctx.json(res, 200, rpc(id, {
       protocolVersion: /^\d{4}-\d{2}-\d{2}$/.test(asked || '') ? asked : FALLBACK_PROTOCOL,
       capabilities: { tools: { listChanged: false } },
-      serverInfo: { name: 'openGym', version: '1.2.4' }
+      serverInfo: { name: 'BodyTransformation', version: '1.2.4' }
     }));
   }
   if (method === 'ping') return ctx.json(res, 200, rpc(id, {}));

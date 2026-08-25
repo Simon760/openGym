@@ -1,7 +1,7 @@
 {
-  "name": "openGym",
-  "short_name": "openGym",
-  "description": "Personal gym & body weight tracker",
+  "name": "BodyTransformation",
+  "short_name": "BodyTransfo",
+  "description": "Training, intake and body composition — tracked in one place",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

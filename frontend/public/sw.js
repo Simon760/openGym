@@ -1,4 +1,4 @@
-/* openGym service worker — runtime caching (works with Vite's hashed asset names).
+/* BodyTransformation service worker — runtime caching (works with Vite's hashed asset names).
    Media (img/gif) cache-first; everything else network-first with offline fallback. */
 const CACHE = 'opengym-rt-v1'
 
@@ -10,7 +10,7 @@ self.addEventListener('activate', e => {
 })
 self.addEventListener('push', e => {
   const data = e.data ? e.data.json() : {}
-  e.waitUntil(self.registration.showNotification(data.title || 'openGym', {
+  e.waitUntil(self.registration.showNotification(data.title || 'BodyTransformation', {
     body: data.body || '',
     icon: 'icon-512.png',
     badge: 'icon-180.png',
@@ -26,12 +26,22 @@ self.addEventListener('notificationclick', e => {
   }))
 })
 
+// A build with no server of its own pulls the 1324 exercise animations off a CDN, and a gym
+// basement is exactly where the signal goes. They are immutable — the URL pins a commit — so
+// caching them cross-origin is safe, and it means an exercise you have looked at once is
+// there for good.
+const MEDIA_CDN = ['cdn.jsdelivr.net']
+
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url)
-  if (e.request.method !== 'GET' || url.origin !== location.origin) return
+  if (e.request.method !== 'GET') return
+  const sameOrigin = url.origin === location.origin
+  const isMedia =
+    (sameOrigin && (url.pathname.includes('/img/') || url.pathname.includes('/gif/'))) ||
+    (MEDIA_CDN.includes(url.hostname) && /\.(png|jpe?g|gif|webp|mp4)$/i.test(url.pathname))
+  if (!sameOrigin && !isMedia) return
   if (url.pathname.startsWith('/api/')) return    // never cache auth/data
 
-  const isMedia = url.pathname.includes('/img/') || url.pathname.includes('/gif/')
   if (isMedia) {
     e.respondWith(caches.open(CACHE).then(c => c.match(e.request).then(hit =>
       hit || fetch(e.request).then(res => { if (res.ok) c.put(e.request, res.clone()); return res })

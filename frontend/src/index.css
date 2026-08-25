@@ -1,5 +1,5 @@
 /* ============================================================================
-   openGym — design system
+   BodyTransformation — design system
    ----------------------------------------------------------------------------
    Rebuilt around four rules, each aimed at a specific "generated" tell in the
    previous sheet:
@@ -171,10 +171,24 @@ body.resting #app{padding-bottom:calc(250px + var(--sab))}
 @keyframes viewfade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 #app.vfade{animation:viewfade var(--med) var(--ease)}
 
-/* large title, the way a nav bar does it */
+/* Large title, the way a nav bar does it.
+   The title block has to be allowed to shrink. A flex item's default min-width is `auto`,
+   so a long title — "BodyTransformation", or "Hi Jean-Christophe" — sizes the row from its
+   own intrinsic width and pushes the icon buttons clean off a 390 px screen, where they are
+   not merely cramped but unreachable: nothing scrolls sideways to bring them back. So the
+   title may shrink and ellipsise, the button row may not, and the type scales with the
+   viewport rather than sitting at a fixed 34 px that only ever fitted one short word. */
 .hdr{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin:8px 0 18px}
-.hdr h1{font-size:34px;line-height:1.06;font-weight:700;letter-spacing:-.028em}
-.hdr .sub{color:var(--label-2);font-size:15px;letter-spacing:-.006em;margin-top:4px}
+.hdr>div{min-width:0}
+.hdr>.row{flex:none}
+.hdr h1{
+  font-size:clamp(20px,5.9vw,34px);line-height:1.06;font-weight:700;letter-spacing:-.028em;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.hdr .sub{
+  color:var(--label-2);font-size:15px;letter-spacing:-.006em;margin-top:4px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
 
 .iconbtn{
   width:36px;height:36px;border-radius:50%;flex:none;

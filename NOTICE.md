@@ -1,5 +1,8 @@
 # Third-party notices
 
+BodyTransformation is a fork of **openGym** and is distributed under the same licence. The
+upstream copyright below is unchanged and must stay with any copy of this code.
+
 openGym — Copyright (C) 2026 Duarte Santos.
 openGym's own code is licensed under the **GNU AGPL v3.0** (see [LICENSE](LICENSE)).
 

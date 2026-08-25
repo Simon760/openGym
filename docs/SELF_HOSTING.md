@@ -1,7 +1,53 @@
-# Self-hosting openGym
+# Self-hosting BodyTransformation
 
-openGym is two small containers (a web server and an API) plus a folder of your data.
+BodyTransformation is two small containers (a web server and an API) plus a folder of your data.
 This guide takes you from "just cloned it" to "using it from my phone over the internet".
+
+## 0. The simplest deploy of all: one phone, no server
+
+If it is only ever going to be **you, on your phone**, you do not need the backend. Every
+calculation in this app runs on the client — the plan, the progression engine, the recovery
+model, the energy balance, the digests. The server only ever existed to hold a profile and
+move it between devices.
+
+So there is a build for that: `npm run build:solo` produces static files that go straight in
+at boot, keep everything in the browser's `localStorage`, and never call an API. There is no
+sign-in screen, because there is nothing to sign in to.
+
+### Vercel
+
+`vercel.json` at the repo root already says what to build:
+
+1. **vercel.com → Add New → Project**, import this repository.
+2. Framework preset **Other**. Leave the build settings alone — `vercel.json` supplies them
+   (`npm run build:solo`, output `frontend/dist`).
+3. If your work is on a branch rather than the default one, set **Settings → Git →
+   Production Branch** to that branch, or merge it first. Otherwise the first deploy builds
+   the default branch and you get an app without your changes in it.
+4. Deploy. Open the URL in Safari on your phone → **Share → Add to Home Screen**.
+
+Netlify, Cloudflare Pages and GitHub Pages take the same build: `npm run build:solo`, publish
+`frontend/dist`.
+
+### What you get, and what you give up
+
+| | |
+| --- | --- |
+| ✅ | Everything the app computes — plan, sessions, progression, recovery, intake, energy, digests |
+| ✅ | Installable full-screen PWA, works offline; exercise animations are cached the first time you see them |
+| ⚠️ | Data lives in **that browser** only. `Settings → Export a backup` regularly — it is one file. |
+| ❌ | Passkey sign-in and sync across devices (needs the server) |
+| ❌ | Push notifications (needs a server to hold the subscription) |
+| ❌ | The MCP connector (needs the server; the digest you copy does the same job by hand) |
+
+The exercise animations are served from jsDelivr rather than bundled — 1324 of them is more
+than a static host wants to carry. They need a connection the first time; after that the
+service worker has them.
+
+**Vercel cannot host the backend**, and this is worth being clear about rather than finding
+out later: its functions have an ephemeral, read-only filesystem, and this API keeps its data
+in JSON files on disk. Deploy the API there and every write disappears on the next cold
+start. If you want passkeys and sync, use the Docker path below on a machine with a disk.
 
 ## 1. Run it locally (5 minutes)
 
@@ -31,20 +77,20 @@ Logs: `docker compose logs -f`. Stop: `docker compose down`.
 
 ## 2. Understand the passkey requirement (important)
 
-openGym signs you in with **passkeys** (WebAuthn). Browsers enforce two rules:
+BodyTransformation signs you in with **passkeys** (WebAuthn). Browsers enforce two rules:
 
 1. Passkeys are bound to an exact **hostname** (`RP_ID`).
 2. They only work over **HTTPS** — with one exception: `http://localhost`.
 
 So `http://localhost:8080` works on the machine running Docker, but **another device (your
 phone) cannot use `http://<your-LAN-ip>:8080`** — that's neither localhost nor HTTPS, so the
-passkey prompt won't appear. To use openGym from your phone you need a real HTTPS hostname.
+passkey prompt won't appear. To use BodyTransformation from your phone you need a real HTTPS hostname.
 
 (You can still open it over LAN in **guest mode**, which stores data only in that browser.)
 
 ## 3. Expose it over HTTPS on your own domain
 
-Put openGym behind something that terminates TLS for a hostname you control, then point it at
+Put BodyTransformation behind something that terminates TLS for a hostname you control, then point it at
 the `web` container. Pick whichever you already run:
 
 ### Option A — Cloudflare Tunnel (no open ports)
@@ -63,7 +109,7 @@ gym.example.com {
 ### Option C — Traefik / nginx / Nginx Proxy Manager
 
 Route `gym.example.com` (HTTPS) → `web:80` (or `<docker-host>:8080`). Any reverse proxy works —
-openGym only needs the browser to reach it over `https://gym.example.com`.
+BodyTransformation only needs the browser to reach it over `https://gym.example.com`.
 
 Then set your domain in `.env` and restart:
 
@@ -72,7 +118,7 @@ Then set your domain in `.env` and restart:
 RP_ID=gym.example.com
 ORIGIN=https://gym.example.com
 WEB_PORT=8080
-RP_NAME=openGym
+RP_NAME=BodyTransformation
 ```
 
 ```bash
@@ -120,7 +166,7 @@ into the project folder. (Individual users can also export their own data as JSO
 
 ## 6. Notifications
 
-openGym can push two kinds of alert to your phone/desktop, even when the app isn't open:
+BodyTransformation can push two kinds of alert to your phone/desktop, even when the app isn't open:
 rest-timer-over, and a reminder on days you have a workout planned but haven't logged one yet.
 Turn it on per-profile in **Settings → Notifications** (requires a signed-in passkey profile and
 HTTPS — see section 3).
@@ -170,7 +216,7 @@ downloaded media are untouched.
 
 ## Connect a Claude conversation (MCP)
 
-openGym can expose your log to a Claude conversation as a **custom connector**, so a
+BodyTransformation can expose your log to a Claude conversation as a **custom connector**, so a
 conversation that coaches you reads your real training and intake instead of what you
 remember to paste — and can send programs back.
 
@@ -205,7 +251,7 @@ phone this does too.
 | `get_plan` | The weekly plan, and every exercise's sets, reps, weight and progression rule. |
 | `log_intake` | Record a day's calories and macros. |
 | `log_weight` | Record a weigh-in. |
-| `log_history` | Write a run of past days in one call — the retroactive import. Each day replaces what openGym holds for that date, so re-sending a day is a correction rather than a duplicate. An omitted field is left alone; a zero would be read as a measurement. |
+| `log_history` | Write a run of past days in one call — the retroactive import. Each day replaces what BodyTransformation holds for that date, so re-sending a day is a correction rather than a duplicate. An omitted field is left alone; a zero would be read as a measurement. |
 | `propose_program` | Send a program. It is **not** applied here: it waits in the app, where exercise names are matched against the library and the whole resolution is shown before anything is written. |
 
 ### The URL is the credential
@@ -215,7 +261,7 @@ path. That makes the URL a secret:
 
 - Anyone holding it can read your entire log and write to it. Don't paste it anywhere
   you wouldn't paste a password.
-- openGym's nginx doesn't log this path, but check any proxy or CDN in front of it
+- BodyTransformation's nginx doesn't log this path, but check any proxy or CDN in front of it
   doesn't either.
 - To rotate: change `MCP_TOKEN` and re-add the connector.
 
