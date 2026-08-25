@@ -896,4 +896,5 @@ export default {
   'Copy the end-of-workout link': 'Copy the end-of-workout link',
   'Copy the nightly link': 'Copy the nightly link',
   'Paste it into the shortcut’s Open URL action, then drop your watch’s variables right after each “=”. If the field will not take a paste, it already holds a variable — delete that first.': 'Paste it into the shortcut’s Open URL action, then drop your watch’s variables right after each “=”. If the field will not take a paste, it already holds a variable — delete that first.',
+  'What the link actually carried': 'What the link actually carried',
 }

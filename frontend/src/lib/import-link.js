@@ -56,8 +56,15 @@ const clean = (key, v) => {
   return n === '' || n === '-' ? v : n
 }
 
-/** A link that had a query but nothing in it — see views/Import.jsx. */
-export const EMPTY_LINK = { empty: true }
+/**
+ * A link that had a query and nothing usable in it, carrying the query itself.
+ *
+ * The query is kept and shown, because at this point every explanation is a guess and the
+ * text settles it: "?sport=&min=" is a variable that was never dropped in, "?sport=612%20kcal"
+ * is one that was and something else is wrong. Guessing at it over several rounds is worse
+ * than printing the one line that ends the question.
+ */
+export const emptyLink = query => ({ empty: true, query: String(query || '').slice(0, 300) })
 
 const b64 = v => new TextDecoder().decode(Uint8Array.from(atob(v), c => c.charCodeAt(0)))
 

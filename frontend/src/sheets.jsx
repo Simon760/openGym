@@ -999,6 +999,7 @@ function HealthImport({ close, arrived }) {
   const [err, setErr] = useState(null)
   const [recipe, setRecipe] = useState(false)
   const [link, setLink] = useState(null)
+  const [raw, setRaw] = useState(null)
   const [spec, setSpec] = useState(false)
   const [review, setReview] = useState(null)
   const [pending, setPending] = useState(null)
@@ -1010,7 +1011,11 @@ function HealthImport({ close, arrived }) {
   // than written on sight: a URL is whatever opened it, and this one writes to the log.
   useEffect(() => {
     if (!arrived) return
-    if (arrived.empty) { setErr(t('That link carried no figures. Either the variables were never dropped in after each “=”, or the action above found nothing to give them — check that Shortcuts has access to Health, and that the workout you are looking for is in it.')); return }
+    if (arrived.empty) {
+      setErr(t('That link carried no figures. Either the variables were never dropped in after each “=”, or the action above found nothing to give them — check that Shortcuts has access to Health, and that the workout you are looking for is in it.'))
+      setRaw(arrived.query)
+      return
+    }
     try {
       if (typeof arrived === 'object') setPending(parseHealth(arrived))
       else if (arrived.includes('{')) setPending(parseHealth(arrived))
@@ -1154,6 +1159,12 @@ function HealthImport({ close, arrived }) {
     <TextArea rows={7} value={text} placeholder={'{ "steps": 9420, "sleep_hours": 7.25 }'}
       onChange={e => { setText(e.target.value); setErr(null) }} />
     {err && <div className="small" style={{ color: 'var(--red)', margin: '8px 2px 0', lineHeight: 1.4 }}>{err}</div>}
+    {/* The link exactly as it arrived. Every explanation for an empty one is a guess until
+        you can read it: "?sport=&min=" is a variable that never got dropped in. */}
+    {raw && <>
+      <div className="dim small" style={{ margin: '10px 2px 4px' }}>{t('What the link actually carried')}</div>
+      <TextArea rows={2} readOnly value={'?' + raw} style={{ fontVariantNumeric: 'tabular-nums' }} />
+    </>}
     <div style={{ height: 12 }} />
     <Button variant="primary" icon="download" disabled={!text.trim()} onClick={run}>{t('Import')}</Button>
     <div style={{ height: 8 }} />

@@ -871,4 +871,5 @@ export default {
   'Copy the end-of-workout link': 'Copier le lien de fin de séance',
   'Copy the nightly link': 'Copier le lien du soir',
   'Paste it into the shortcut’s Open URL action, then drop your watch’s variables right after each “=”. If the field will not take a paste, it already holds a variable — delete that first.': 'Colle-le dans l’action « Ouvrir l’URL » du raccourci, puis dépose les variables de ta montre juste après chaque « = ». Si le champ refuse le collage, c’est qu’il contient déjà une variable — supprime-la d’abord.',
+  'What the link actually carried': 'Ce que le lien portait réellement',
 }

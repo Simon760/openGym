@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { payloadFromQuery, EMPTY_LINK } from '../lib/import-link.js'
+import { payloadFromQuery, emptyLink } from '../lib/import-link.js'
 import { healthImportSheet } from '../sheets.jsx'
 import { useUI } from '../store/useUI.js'
 
@@ -19,7 +19,7 @@ export default function Import() {
     // A link that carried a query and no data is the one mistake this route invites: the
     // Open URL action is typed by hand, and "?sport=&min=" with the variables never dropped
     // in looks exactly like a link that worked. Say so rather than opening a blank paste box.
-    const arrived = payload || (query ? EMPTY_LINK : null)
+    const arrived = payload || (query ? emptyLink(query) : null)
     // A link opens the app from wherever it was left, which may well be on a sheet. Stacking
     // this one behind that one is how a watch's figures go unnoticed.
     useUI.getState().closeAll()
