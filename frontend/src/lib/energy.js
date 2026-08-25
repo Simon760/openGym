@@ -62,14 +62,14 @@ export const KCAL_PER_KG_FAT = 7700
  *
  * Consumer wrist devices are good at heart rate and poor at energy: validation work puts
  * their heart-rate error in the low single digits of a percent and their energy error in the
- * twenties to forties, almost always high. Thirty percent is the middle of that range and a
- * deliberately blunt instrument — the point is not to be exact, it is to stop a cut being
- * planned around four hundred calories that were never burned.
+ * twenties to forties, almost always high. Twenty-eight percent sits inside that range and
+ * is a deliberately blunt instrument — the point is not to be exact, it is to stop a cut
+ * being planned around four hundred calories that were never burned.
  *
  * It applies to what the watch reported and to nothing else. Set it to zero to trust the
  * watch as it comes.
  */
-export const WATCH_TRIM = 0.3
+export const WATCH_TRIM = 0.28
 export const TRIM_MAX = 0.6
 
 export const validTrim = v =>

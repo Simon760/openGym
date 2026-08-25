@@ -644,7 +644,6 @@ export default {
   'A body-fat reading sits between {0} and {1} %.': 'A body-fat reading sits between {0} and {1} %.',
   'Last night': 'Last night',
   'Logged against {0}, the day it carries you through.': 'Logged against {0}, the day it carries you through.',
-  'Hours slept': 'Hours slept',
   'How it felt (1–5)': 'How it felt (1–5)',
   'A night sits between {0} and {1} hours.': 'A night sits between {0} and {1} hours.',
   '{0} h short of your target': '{0} h short of your target',
@@ -678,7 +677,6 @@ export default {
   'session details onto {0}': 'session details onto {0}',
   'a body-fat reading with no weigh-in that day to attach it to': 'a body-fat reading with no weigh-in that day to attach it to',
   'the session details — nothing was logged in openGym that day': 'the session details — nothing was logged in openGym that day',
-  'Paste what your Shortcut produced. Session details are added to the workout you logged that day — never as a second one.': 'Paste what your Shortcut produced. Session details are added to the workout you logged that day — never as a second one.',
   'Building the Shortcut': 'Building the Shortcut',
   'Run it automatically when a workout ends, or force it any time from the Home Screen or your watch.': 'Run it automatically when a workout ends, or force it any time from the Home Screen or your watch.',
   'Copy the recipe': 'Copy the recipe',
@@ -691,7 +689,6 @@ export default {
   'felt {0}/5': 'felt {0}/5',
   'steps': 'steps',
   'burned': 'burned',
-  'resting HR {0}': 'resting HR {0}',
   'Activity': 'Activity',
   // Estimated muscle recovery — untranslated placeholders.
   // check-locales.mjs requires every locale to hold the same key set.
@@ -798,12 +795,10 @@ export default {
   'sport': 'sport',
   'deficit': 'deficit',
   'surplus': 'surplus',
-  'Since {0}': 'Since {0}',
   'Deficit': 'Deficit',
   'eating': 'eating',
   'training': 'training',
   'over {0} logged days of {1}': 'over {0} logged days of {1}',
-  '{0} sessions unmeasured': '{0} sessions unmeasured',
   '{0} kcal eaten': '{0} kcal eaten',
   '{0} logged': '{0} logged',
   // Untranslated — English source strings, so the key sets stay in step
@@ -833,5 +828,4 @@ export default {
   'maintenance': 'maintenance',
   'sport vs plan': 'sport vs plan',
   'eaten': 'eaten',
-  '{0} kcal trained, {1} budgeted': '{0} kcal trained, {1} budgeted',
 }

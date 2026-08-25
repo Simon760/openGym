@@ -638,7 +638,6 @@ export default {
   'A body-fat reading sits between {0} and {1} %.': 'Une mesure de masse grasse se situe entre {0} et {1} %.',
   'Last night': 'La nuit dernière',
   'Logged against {0}, the day it carries you through.': 'Enregistrée sur {0}, la journée qu’elle porte.',
-  'Hours slept': 'Heures de sommeil',
   'How it felt (1–5)': 'Ressenti (1–5)',
   'A night sits between {0} and {1} hours.': 'Une nuit se situe entre {0} et {1} heures.',
   '{0} h short of your target': '{0} h sous ton objectif',
@@ -671,7 +670,6 @@ export default {
   'session details onto {0}': 'détails de séance sur {0}',
   'a body-fat reading with no weigh-in that day to attach it to': 'une mesure de masse grasse sans pesée ce jour-là pour la porter',
   'the session details — nothing was logged in openGym that day': 'les détails de séance — rien n’a été enregistré dans openGym ce jour-là',
-  'Paste what your Shortcut produced. Session details are added to the workout you logged that day — never as a second one.': 'Colle ce que ton raccourci a produit. Les détails de séance s’ajoutent à la séance enregistrée ce jour-là — jamais en double.',
   'Building the Shortcut': 'Construire le raccourci',
   'Run it automatically when a workout ends, or force it any time from the Home Screen or your watch.': 'Lance-le automatiquement à la fin d’une séance, ou force-le quand tu veux depuis l’écran d’accueil ou ta montre.',
   'Copy the recipe': 'Copier la recette',
@@ -684,7 +682,6 @@ export default {
   'felt {0}/5': 'ressenti {0}/5',
   'steps': 'pas',
   'burned': 'brûlées',
-  'resting HR {0}': 'FC repos {0}',
   'Activity': 'Activité',
   // Estimated muscle recovery
   'estimated': 'estimée',
@@ -790,12 +787,10 @@ export default {
   'sport': 'sport',
   'deficit': 'déficit',
   'surplus': 'excédent',
-  'Since {0}': 'Depuis le {0}',
   'Deficit': 'Déficit',
   'eating': 'alimentation',
   'training': 'entraînement',
   'over {0} logged days of {1}': 'sur {0} jours enregistrés sur {1}',
-  '{0} sessions unmeasured': '{0} séances sans mesure',
   '{0} kcal eaten': '{0} kcal mangées',
   '{0} logged': '{0} enregistrés',
   // Maintenance as its parts, the watch discount, the Today digest
@@ -825,5 +820,4 @@ export default {
   'maintenance': 'de dépense',
   'sport vs plan': 'sport vs prévu',
   'eaten': 'mangées',
-  '{0} kcal trained, {1} budgeted': '{0} kcal entraînées, {1} prévues',
 }

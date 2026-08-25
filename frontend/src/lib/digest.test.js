@@ -27,15 +27,21 @@ const base = (over = {}) => ({
 })
 
 describe('dailyDigest', () => {
-  it('leads with the weight, its move and the distance left to the goal', () => {
+  it('is today and nothing else — no weigh-in, no trend, no running total', () => {
+    // a conversation receiving one of these every evening accumulates the history itself;
+    // re-sending it nightly asks the reader to reconcile two versions of the same past
     const S = base({
-      targetW: 77,
-      bodyweight: [{ d: iso(3), w: 79.4 }, { d: iso(0), w: 78.4 }]
+      targetW: 77, tdee: 2100,
+      bodyweight: [{ d: iso(3), w: 79.4 }, { d: iso(0), w: 78.4 }],
+      nutrition: [{ d: iso(3), kcal: 1800 }, { d: iso(0), kcal: 1900 }]
     })
     const out = dailyDigest(S, iso(0))
-    expect(out).toContain('78.4 kg')
-    expect(out).toContain('-1')      // moved down a kilo since the previous weigh-in
-    expect(out).toContain('77')      // the goal
+    expect(out).not.toContain('78.4')
+    expect(out).not.toContain('Last 7 days')
+    expect(out).not.toContain('Since')
+    // what it does carry: the day
+    expect(out).toContain('1,900 kcal')
+    expect(out).toContain('Balance')
   })
 
   it('reports intake with its macros and the gap to target', () => {
@@ -99,10 +105,9 @@ describe('dailyDigest', () => {
     expect(dailyDigest(S, iso(0))).toContain('8 h')
   })
 
-  it('carries the denominator with the weekly intake average', () => {
-    // three logged days inside the week — the mean must not read as a seven-day figure
+  it('says nothing about days other than the one it is reporting', () => {
     const S = base({ nutrition: [1, 2, 3].map(n => ({ d: iso(n), kcal: 2100 })) })
-    expect(dailyDigest(S, iso(0))).toMatch(/3/)
+    expect(dailyDigest(S, iso(0))).toContain('Intake nothing logged')
   })
 })
 
@@ -145,16 +150,6 @@ describe('dailyDigest — the energy balance', () => {
     expect(dailyDigest(base({ tdee: 2100 }), iso(0))).not.toContain('Balance')
   })
 
-  it('carries the running total, so the conversation does not have to keep it', () => {
-    const S = base({
-      tdee: 2000,
-      nutrition: [{ d: iso(9), kcal: 1500 }, { d: iso(5), kcal: 1500 }, { d: iso(0), kcal: 1500 }],
-      health: [{ d: iso(5), kcal: 400 }]
-    })
-    const out = dailyDigest(S, iso(0))
-    expect(out).toContain('1,900 kcal')      // 3 x 500 eating + 400 training
-    expect(out).toContain('3 logged days of 10')
-  })
 })
 
 describe('trainingDigest', () => {

@@ -18,10 +18,10 @@ import { EXIDX } from './exercises.js'
 import { setLabel, modeOf, effectiveRoutineId, workoutVolume } from './history.js'
 import { readSession, nextPrescription, policyFor } from './progression.js'
 import { effortSummary, displayScale, scaleName, toScale } from './effort.js'
-import { entryFor, avgOver, MACROS, MACRO_NAME } from './nutrition.js'
+import { entryFor, MACROS, MACRO_NAME } from './nutrition.js'
 import { sleepFor, sleepHours } from './body.js'
 import { healthFor } from './health.js'
-import { dayBalance, deficitTotals, sportKcal, trimOf } from './energy.js'
+import { dayBalance, sportKcal, trimOf } from './energy.js'
 import { fmtNum, fmtDate, todayISO, isoOf } from './format.js'
 import { t } from './i18n.js'
 
@@ -95,16 +95,20 @@ const DIGEST_MACROS = ['c', 'p', 'f']
 const hasAnyMacro = e => MACROS.some(m => e[m])
 
 /**
- * The evening check-in — "Today", as one page of plain facts.
+ * The evening check-in — "Today", and only today.
  *
- * The order is the order a coach reads them in: what was done, what was eaten, how the
- * night before went. Then the three things the app works out that no message could: the
- * weigh-in in context, the day's balance spelled out rather than handed over as a total,
- * and the running deficit — because a conversation asked to keep a running total across a
- * month of daily messages will drift, and this one is recomputed from the log every time.
+ * The order is the order a coach reads them in: what was done, what was eaten, how the night
+ * before went, and then the one thing the app works out that no message could — the day's
+ * balance, spelled out rather than handed over as a total, so the reader can see which of
+ * the three numbers moved.
  *
- * No set-by-set detail. That is a different question asked by a different conversation, and
- * trainingDigest below is where it lives.
+ * Deliberately nothing else. No trend, no running total, no weigh-in: a conversation that
+ * receives one of these every evening accumulates the history itself, and a digest that
+ * re-sends it every night is asking the reader to reconcile two versions of the same past.
+ * The app keeps the trends — Stats has them, and they are not what this message is for.
+ *
+ * No set-by-set detail either. That is a different question asked by a different
+ * conversation, and trainingDigest below is where it lives.
  */
 export function dailyDigest(S, iso = todayISO(), now = Date.now()) {
   const out = ['openGym — ' + t('Today') + ' — ' + fmtDate(iso, true)]
@@ -154,14 +158,6 @@ export function dailyDigest(S, iso = todayISO(), now = Date.now()) {
   out.push(t('Sleep') + ' ' + (slH == null ? t('nothing logged')
     : fmtNum(slH) + ' h ' + t('(the night before)') + (sl.q ? ' · ' + t('felt {0}/5', sl.q) : '')))
 
-  const bw = bwAt(S, iso)
-  if (bw) {
-    const prev = (S.bodyweight || []).filter(b => b.d < bw.d).pop()
-    const bits = [fmtNum(bw.w) + ' ' + S.unit + (prev ? ' (' + sign(bw.w - prev.w) + ')' : '')]
-    if (S.targetW) bits.push(t('target {0}', fmtNum(S.targetW) + ' ' + S.unit) + ' (' + sign(S.targetW - bw.w) + ')')
-    out.push(t('Weight') + ' ' + bits.join(' · '))
-  }
-
   // Spelled out rather than handed over as a total: the reader has to be able to see which
   // of the three numbers moved. The middle term is the day against the plan, not the day's
   // training — maintenance already budgets for the planned session.
@@ -174,28 +170,6 @@ export function dailyDigest(S, iso = todayISO(), now = Date.now()) {
       + ' (' + (bal.deficit >= 0 ? t('deficit') : t('surplus')) + ')')
   }
 
-  out.push('')
-  out.push(t('Last 7 days'))
-  const avg = avgOver(S, 7, now)
-  out.push('  ' + t('Intake') + ' ' + (avg.kcal == null
-    ? t('nothing logged')
-    // The denominator travels with the average everywhere it appears — an intake log has
-    // gaps, and a mean over 3 days read as a week is the wrong number to coach from.
-    : fmtNum(avg.kcal) + ' kcal/' + t('day') + ' ' + t('over {0} logged days', avg.kcalDays)))
-  const tr = bwTrend(S, 7, now)
-  if (tr) out.push('  ' + t('Weight') + ' ' + sign(tr[1].w - tr[0].w) + ' ' + S.unit)
-
-  // Since the beginning, through the day being reported — this digest is what closes it.
-  const tot = deficitTotals(S, S.tdee, 0, now, iso)
-  if (tot) {
-    out.push('')
-    out.push(t('Since {0}', fmtDate(tot.from, true)))
-    out.push('  ' + t('Deficit') + ' ' + fmtNum(tot.total) + ' kcal ≈ ' + fmtNum(tot.kg) + ' kg')
-    out.push('  ' + t('eating') + ' ' + fmtNum(tot.nutrition) + ' · ' + t('sport vs plan') + ' ' + sign(tot.sportDelta)
-      + ' (' + t('{0} kcal trained, {1} budgeted', fmtNum(tot.sportLogged), fmtNum(tot.sportPlanned)) + ')')
-    out.push('  ' + t('over {0} logged days of {1}', tot.days, tot.span)
-      + (tot.unmeasured ? ' · ' + t('{0} sessions unmeasured', tot.unmeasured) : ''))
-  }
   return out.join('\n')
 }
 

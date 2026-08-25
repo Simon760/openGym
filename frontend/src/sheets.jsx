@@ -433,7 +433,7 @@ function TdeeSheet({ close }) {
     </div>}
 
     <h4 className="sec">{t('Trust in the watch')}</h4>
-    <Stepper label={t('Discount its active energy by')} unit="%" value={trim} step={5} decimal={false}
+    <Stepper label={t('Discount its active energy by')} unit="%" value={trim} step={1} decimal={false}
       onChange={n => setTrim(Math.max(0, Math.min(Math.round(TRIM_MAX * 100), Math.round(n || 0))))} />
     <div className="dim small" style={{ margin: '6px 2px 0', lineHeight: 1.45 }}>
       {t('Wrist devices are good at heart rate and poor at energy — they read it 20 to 40 % high, almost always high. Applied to what the watch reports, and to nothing you typed yourself. Zero trusts it as it comes.')}

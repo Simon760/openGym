@@ -233,7 +233,7 @@ assumed, so the deficit is smaller than the food alone suggests.
 
 Consumer wrist devices are good at heart rate and poor at energy: validation work puts their
 heart-rate error in the low single digits of a percent and their energy error in the twenties
-to forties, and almost always high. So **30 % of the watch's active-energy figure is thrown
+to forties, and almost always high. So **28 % of the watch's active-energy figure is thrown
 away by default**, adjustable in the same sheet, and set to zero if you want the raw number.
 
 It is a deliberately blunt instrument. The point is not to be exact — it is to stop a cut
@@ -285,30 +285,23 @@ openGym — Today — Tue 25 Aug
 
 Activity
   Push Day · 53 min · 430 kcal · HR 128 avg
-Active energy 780 kcal from the watch → 546 counted, 30 % taken off
+Active energy 780 kcal from the watch → 562 counted, 28 % taken off
 Intake 1,940 kcal · Carbs 180 g · Protein 155 g · Fat 62 g · target 2,200 (-260)
 Sleep 7.2 h (the night before) · felt 4/5
-Weight 78.4 kg (-0.4) · target 77 kg (-1.4)
-Balance 2,500 maintenance +346 sport vs plan − 1,940 eaten = +906 kcal (deficit)
-
-Last 7 days
-  Intake 2,043 kcal/day over 6 logged days
-  Weight -0.4 kg
-
-Since Tue 2 Jun
-  Deficit 29,172 kcal ≈ 3.8 kg
-  eating 28,314 · sport vs plan +858 (16,358 kcal trained, 15,600 budgeted)
-  over 78 logged days of 85
+Balance 2,500 maintenance +362 sport vs plan − 1,940 eaten = +922 kcal (deficit)
 ```
 
-Facts first, in the order a coach reads them, then the three things the app works out that no
-message could: the weigh-in in context, the balance spelled out rather than handed over as a
-total, and the running deficit — because a conversation asked to keep a running total across
-a month of daily messages will drift, and this one is recomputed from the log every time.
+Today, and deliberately nothing else. No trend, no running total, no weigh-in: a conversation
+that receives one of these every evening accumulates the history itself, and a digest that
+re-sends the same past every night is asking its reader to reconcile two versions of it. The
+trends live in Stats, which is where they are actually looked at.
 
-No set-by-set detail. That is a different question asked by a different conversation, and
-*Plan → Share → training digest* is where it lives, with what was prescribed against what was
-done and what the app will prescribe next.
+The one thing here that is not a raw fact is the balance, and it is spelled out rather than
+handed over as a total so the reader can see which of the three numbers moved.
+
+No set-by-set detail either. That is a different question asked by a different conversation,
+and the **Training** tab of the same sheet is where it lives, with what was prescribed against
+what was done and what the app will prescribe next.
 
 Text, not JSON. Both a person and a model read it, and the person reads it first — they are
 about to paste it somewhere, and a wall of braces is not something you check before you do
