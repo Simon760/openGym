@@ -89,6 +89,40 @@ export const validSleep = v => {
 }
 
 /**
+ * A night is stored as the two times you actually know — when you went to bed and when you
+ * got up — plus the minutes you were awake in between. The hours are derived from those, not
+ * typed: nobody knows they slept 7.25 hours, they know they went to bed at 23:30 and got up
+ * at 07:00 and were up twice.
+ *
+ * Entries written before this carry `h` alone; sleepHours falls back to it, so nothing needs
+ * migrating and an imported figure from a watch is still a complete night.
+ */
+const HHMM = /^([01]?\d|2[0-3]):([0-5]\d)$/
+export const validTime = v => (HHMM.test(String(v || '').trim()) ? String(v).trim() : null)
+const minutesOf = hhmm => { const m = HHMM.exec(hhmm); return +m[1] * 60 + +m[2] }
+
+/**
+ * Hours between two clock times, crossing midnight when it has to. Bed at 23:30 and up at
+ * 07:00 is 7.5 h; bed at 00:30 and up at 07:00 is 6.5. Equal times read as a full day rather
+ * than zero, because nobody logs a night of no length — they mistyped.
+ */
+export function hoursBetween(bed, wake) {
+  const b = validTime(bed), w = validTime(wake)
+  if (!b || !w) return null
+  const diff = minutesOf(w) - minutesOf(b)
+  return Math.round(((diff > 0 ? diff : diff + 1440) / 60) * 100) / 100
+}
+
+/** What a night actually came to: time in bed, less the time spent awake in it. */
+export function sleepHours(e) {
+  if (!e) return null
+  const span = hoursBetween(e.bed, e.wake)
+  if (span == null) return validSleep(e.h)
+  const awake = Math.max(0, Math.min(span * 60, +e.awake || 0))
+  return validSleep(Math.round((span - awake / 60) * 100) / 100)
+}
+
+/**
  * A night's sleep is filed under the day you woke up, not the day you went to bed. That is
  * the day it affects — the session you are about to train, the appetite you are about to
  * fight — and it is also the only reading that lines up with the weigh-in and the intake
@@ -103,9 +137,16 @@ export const lastSleep = S => {
 /** Insert or replace a night, returning a new sorted list. Clearing the hours drops it. */
 export function putSleep(list, entry) {
   const rest = (list || []).filter(e => e.d !== entry.d)
-  const h = validSleep(entry.h)
+  const bed = validTime(entry.bed), wake = validTime(entry.wake)
+  // Either the two times, or a bare figure from an import. Half a pair is not a night.
+  const h = bed && wake ? sleepHours({ bed, wake, awake: entry.awake }) : validSleep(entry.h)
   if (h == null) return rest.sort(byDate)
-  const out = { d: entry.d, h, t: entry.t || Date.now() }
+  const out = { d: entry.d, t: entry.t || Date.now() }
+  if (bed && wake) {
+    out.bed = bed; out.wake = wake
+    const awake = Math.round(Math.max(0, +entry.awake || 0))
+    if (awake) out.awake = awake
+  } else out.h = h
   const q = num(entry.q)
   if (q != null && q >= 1 && q <= 5) out.q = Math.round(q)
   return [...rest, out].sort(byDate)
@@ -117,9 +158,9 @@ export function putSleep(list, entry) {
  * length of the window would report a solid week as insomnia.
  */
 export function sleepAverage(S, days, now = Date.now()) {
-  const list = (S.sleep || []).filter(e => inWindow(e.d, days, now) && validSleep(e.h) != null)
+  const list = (S.sleep || []).filter(e => inWindow(e.d, days, now) && sleepHours(e) != null)
   if (!list.length) return { nights: 0, hours: null, quality: null }
-  const hours = list.reduce((a, e) => a + e.h, 0) / list.length
+  const hours = list.reduce((a, e) => a + sleepHours(e), 0) / list.length
   const rated = list.filter(e => e.q != null)
   return {
     nights: list.length,
@@ -137,16 +178,16 @@ export function sleepAverage(S, days, now = Date.now()) {
 export function sleepDebt(S, days, goal, now = Date.now()) {
   const g = num(goal)
   if (g == null) return null
-  const list = (S.sleep || []).filter(e => inWindow(e.d, days, now) && validSleep(e.h) != null)
+  const list = (S.sleep || []).filter(e => inWindow(e.d, days, now) && sleepHours(e) != null)
   if (!list.length) return null
-  return { nights: list.length, hours: Math.round(list.reduce((a, e) => a + (g - e.h), 0) * 10) / 10 }
+  return { nights: list.length, hours: Math.round(list.reduce((a, e) => a + (g - sleepHours(e)), 0) * 10) / 10 }
 }
 
 /** Chart points for the sleep curve. */
 export const sleepSeries = (S, days, now = Date.now()) =>
   (S.sleep || [])
-    .filter(e => inWindow(e.d, days, now) && validSleep(e.h) != null)
-    .map(e => ({ t: new Date(e.d + 'T12:00:00').getTime(), y: e.h, d: e.d }))
+    .filter(e => inWindow(e.d, days, now) && sleepHours(e) != null)
+    .map(e => ({ t: new Date(e.d + 'T12:00:00').getTime(), y: sleepHours(e), d: e.d }))
 
 export const todaySleep = S => sleepFor(S, todayISO())
 

@@ -46,7 +46,7 @@ import { EXIDX } from './exercises.js'
 import { musclesOf } from './muscles.js'
 import { rirOf } from './effort.js'
 import { entryFor } from './nutrition.js'
-import { sleepFor } from './body.js'
+import { sleepFor, sleepHours } from './body.js'
 import { isoOf } from './format.js'
 
 /** Below this residual fatigue a muscle is called recovered. */
@@ -129,9 +129,9 @@ export function conditionsSince(S, fromMs, now = Date.now()) {
   const uniq = [...new Set(days)]
 
   const target = S.sleepGoal || SLEEP_TARGET
-  const nights = uniq.map(d => sleepFor(S, d)).filter(Boolean)
+  const nights = uniq.map(d => sleepFor(S, d)).filter(e => e && sleepHours(e) != null)
   const sleepFactor = nights.length
-    ? 1 + SLEEP_PENALTY * clamp01((target - nights.reduce((a, e) => a + e.h, 0) / nights.length) / target)
+    ? 1 + SLEEP_PENALTY * clamp01((target - nights.reduce((a, e) => a + sleepHours(e), 0) / nights.length) / target)
     : 1
 
   // Today is left out of the energy average: the day is not over, so a log that is honestly

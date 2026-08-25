@@ -6,7 +6,7 @@ import { fmtNum, fmtDate, todayISO, isoOf, weekKey, DAYS } from '../lib/format.j
 import { t, dateLocale } from '../lib/i18n.js'
 import { bwSheet, goalSheet, dayOverrideSheet, calendarSheet, startFlow, loadStarterPlan, bwDeltaColor, nutriSheet, nutriGoalSheet, digestSheet, openPendingProgram, discardPendingProgram, sleepSheet } from '../sheets.jsx'
 import { entryFor, kcalFromMacros, macroSplit, remainingOf, MACROS, MACRO_NAME, MACRO_COLOR } from '../lib/nutrition.js'
-import { composition, todaySleep, lastSleep } from '../lib/body.js'
+import { composition, todaySleep, lastSleep, sleepHours } from '../lib/body.js'
 import LineChart from '../components/LineChart.jsx'
 import Icon from '../components/Icon.jsx'
 import { Button } from '../components/ui.jsx'
@@ -160,7 +160,7 @@ export default function Home() {
           <div style={{ minWidth: 0 }}>
             <div className="lbl2">{t('Last night')}</div>
             <div className="ttl">{lastNight
-              ? fmtNum(lastNight.h) + ' h' + (lastNight.q ? ' · ' + lastNight.q + '/5' : '') + (sleptToday ? '' : ' · ' + fmtDate(lastNight.d, true))
+              ? fmtNum(sleepHours(lastNight)) + ' h' + (lastNight.q ? ' · ' + lastNight.q + '/5' : '') + (sleptToday ? '' : ' · ' + fmtDate(lastNight.d, true))
               : t('Not logged')}</div>
           </div>
         </div>

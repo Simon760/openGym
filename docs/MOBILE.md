@@ -112,7 +112,7 @@ There is a free path that gets you more: an **Apple Shortcut**.
 Shortcuts reads Health natively (steps, active energy, sleep, workouts, heart rate) and can
 be triggered *by the watch finishing a session*. No Mac, no developer account, no App Store.
 
-**The shortcut.** Settings → Import from your watch → *Copy the recipe* gives you the exact
+**The shortcut.** Settings → Import health data → *Copy the recipe* gives you the exact
 actions. In outline:
 
 1. `Find Health Samples` · Steps · Today · Calculate Sum
@@ -141,3 +141,50 @@ training session have to stay one session, or every count in the app doubles. If
 logged that day, the import says the session details had nowhere to go and keeps the rest.
 
 Every field is optional. A shortcut that only ever sends steps is a complete shortcut.
+
+## Whoop, Fitbit, Garmin, Oura, Polar — the CSV they already owe you
+
+The same sheet takes a **CSV export** from any tracker: *Import health data → Open a file*.
+
+None of these vendors is reachable live without money or an approval queue. Every one of
+them gates its API behind OAuth 2.0 and a registered developer application with a redirect
+URI — which needs a deployed instance and a per-vendor review. Oura has stopped issuing
+personal access tokens outright. Google Fit is being retired in favour of Health Connect,
+which is Android-native and not a web API at all. A file you already have the right to
+export works today, everywhere, for nothing.
+
+Where the export lives:
+
+| Tracker | Export |
+| --- | --- |
+| Whoop | app.whoop.com → Settings → Data Export → the sleep and physiological cycles CSVs |
+| Fitbit | fitbit.com → Settings → Data Export (or Google Takeout → Fitbit) |
+| Garmin | garmin.com → Account → Export Your Data |
+| Oura | cloud.ouraring.com → Trends → download CSV |
+| Polar | flow.polar.com → Settings → Account → Export |
+| Withings, Samsung, Amazfit… | all offer a CSV or a Takeout archive with one inside |
+
+**How the columns are read.** There is no per-vendor parser to go stale. The header is
+matched loosely — `Sleep onset`, `Bedtime start`, `Sleep start` all mean the same thing —
+against the handful of things openGym can store: the two sleep times, time awake, sleep
+duration, steps, energy burned, resting heart rate, weight, body fat. A duration is read as
+minutes or hours according to what the header says, and where it says nothing, by size:
+nobody sleeps four hundred hours.
+
+**The mapping is shown before anything is written.** A header matched to the wrong field is
+the failure mode of an import like this, and it is invisible once the rows are in. So the
+sheet lists what it matched, what it ignored, and how many days it found, and waits.
+
+Rows land exactly as a Shortcut payload does — one day at a time, session figures onto the
+session already logged, never as a second one. Re-importing a file that overlaps one you
+already imported replaces those days rather than stacking them.
+
+## Sleep is two clock times, not a number of hours
+
+The sleep sheet asks when you went to bed, when you got up, and how many minutes you were
+awake in between. It derives the hours; it never stores them. "Went to bed at 23:30, got up
+at 07:00, was up about twenty minutes" is what a person actually remembers at breakfast —
+7.17 hours is not, and asking for it invites a rounded guess.
+
+Nights logged before this, and nights a watch or a duration-only CSV supplies, keep their
+bare hours figure and are read exactly the same way everywhere in the app.

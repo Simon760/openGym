@@ -19,7 +19,7 @@ import { setLabel, modeOf, effectiveRoutineId, workoutVolume } from './history.j
 import { readSession, nextPrescription, policyFor } from './progression.js'
 import { effortSummary, displayScale, scaleName, toScale } from './effort.js'
 import { entryFor, avgOver, MACROS, MACRO_NAME } from './nutrition.js'
-import { sleepFor } from './body.js'
+import { sleepFor, sleepHours } from './body.js'
 import { healthFor } from './health.js'
 import { fmtNum, fmtDate, todayISO, isoOf } from './format.js'
 import { t } from './i18n.js'
@@ -118,7 +118,7 @@ export function dailyDigest(S, iso = todayISO(), now = Date.now()) {
   out.push(t('Intake') + ' ' + (intake || t('nothing logged')))
 
   const sl = sleepFor(S, iso)
-  if (sl) out.push(t('Sleep') + ' ' + fmtNum(sl.h) + ' h' + (sl.q ? ' · ' + t('felt {0}/5', sl.q) : ''))
+  if (sl) out.push(t('Sleep') + ' ' + fmtNum(sleepHours(sl)) + ' h' + (sl.q ? ' · ' + t('felt {0}/5', sl.q) : ''))
   const hd = healthFor(S, iso)
   if (hd) {
     const b = []

@@ -15,8 +15,9 @@
 // motionless are different facts, and only one of them is worth acting on.
 
 import { extractJSON } from './plan-import.js'
-import { putSleep, validSleep, validBodyFat } from './body.js'
-import { todayISO } from './format.js'
+import { parseCSV, parseWhen } from './import-csv.js'
+import { putSleep, validSleep, validBodyFat, validTime, SLEEP_MAX } from './body.js'
+import { todayISO, fmtDate } from './format.js'
 import { t } from './i18n.js'
 
 export const HEALTH_FMT = 1
@@ -48,8 +49,16 @@ export function parseHealth(raw) {
   const exercise = num(pick(data, 'exercise_minutes', 'exerciseMinutes', 'move_minutes'))
   if (exercise) out.exerciseMin = Math.round(exercise)
 
-  const sleep = num(pick(data, 'sleep_hours', 'sleepHours', 'sleep'))
-  if (sleep != null && validSleep(sleep) != null) out.sleepHours = validSleep(sleep)
+  const bed = validTime(pick(data, 'bed', 'bedtime', 'sleep_start', 'went_to_bed'))
+  const wake = validTime(pick(data, 'wake', 'wake_time', 'sleep_end', 'got_up'))
+  if (bed && wake) {
+    out.bed = bed; out.wake = wake
+    const awake = num(pick(data, 'awake', 'awake_minutes', 'minutes_awake'))
+    if (awake) out.awake = Math.round(awake)
+  } else {
+    const sleep = num(pick(data, 'sleep_hours', 'sleepHours', 'sleep'))
+    if (sleep != null && validSleep(sleep) != null) out.sleepHours = validSleep(sleep)
+  }
 
   const kg = num(pick(data, 'weight_kg', 'weightKg', 'weight'))
   if (kg) out.weight = Math.round(kg * 10) / 10
@@ -76,7 +85,7 @@ export function parseHealth(raw) {
 
   // A payload carrying only a date says nothing; letting it through would report a
   // successful import that wrote nothing.
-  const wrote = ['steps', 'kcal', 'rhr', 'exerciseMin', 'sleepHours', 'weight', 'bodyFat', 'workout']
+  const wrote = ['steps', 'kcal', 'rhr', 'exerciseMin', 'sleepHours', 'bed', 'weight', 'bodyFat', 'workout']
   if (!wrote.some(k => out[k] != null)) throw new Error(t('that payload has no health data in it'))
   return out
 }
@@ -108,7 +117,10 @@ export function applyHealth(S, p) {
     if (p.rhr != null) report.wrote.push(t('resting heart rate {0}', p.rhr))
   }
 
-  if (p.sleepHours != null) {
+  if (p.bed && p.wake) {
+    S.sleep = putSleep(S.sleep, { d: p.d, bed: p.bed, wake: p.wake, awake: p.awake })
+    report.wrote.push(t('slept {0} to {1}', p.bed, p.wake))
+  } else if (p.sleepHours != null) {
     S.sleep = putSleep(S.sleep, { d: p.d, h: p.sleepHours })
     report.wrote.push(t('{0} h of sleep', p.sleepHours))
   }
@@ -144,6 +156,135 @@ export function applyHealth(S, p) {
       report.skipped.push(t('the session details — nothing was logged in openGym that day'))
     }
   }
+  return report
+}
+
+
+/* --------------------------------------------------- tracker CSV exports -- */
+
+/* Whoop, Fitbit, Garmin, Oura and the rest all offer a CSV export, and all of them name
+ * their columns differently. Rather than four brittle per-vendor parsers, the header is
+ * matched loosely against the handful of things openGym can actually store, and the mapping
+ * it settled on is shown before a single day is written.
+ *
+ * This is deliberately not a live sync. Every one of those vendors gates its API behind
+ * OAuth 2.0 and a registered developer application with a redirect URI, which needs a
+ * deployed instance and a per-vendor approval; Oura has stopped issuing personal tokens
+ * outright, and Google Fit is being retired in favour of Health Connect, which is Android
+ * native. A file you already have rights to export works today, everywhere, for free.
+ */
+
+const norm = h => String(h || '').toLowerCase().replace(/[_\-]+/g, ' ').replace(/\(.*?\)/g, '').replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim()
+
+// Longest, most specific names first: "sleep duration" must not be eaten by "duration".
+export const CSV_COLUMNS = [
+  ['date', ['date', 'day', 'cycle start time', 'calendar date', 'timestamp', 'start']],
+  ['bed', ['bedtime start', 'sleep start', 'sleep onset', 'bedtime', 'went to bed', 'start time']],
+  ['wake', ['bedtime end', 'sleep end', 'wake onset', 'wake time', 'woke up', 'end time']],
+  ['awakeMin', ['awake time', 'awake duration', 'minutes awake', 'wake duration', 'time awake']],
+  ['sleepDur', ['asleep duration', 'sleep duration', 'minutes asleep', 'hours of sleep',
+    'sleep hours', 'time asleep', 'total sleep', 'sleep total']],
+  ['steps', ['steps', 'step count', 'total steps']],
+  ['kcal', ['active calories', 'calories burned', 'activity calories', 'active energy', 'energy burned', 'calories']],
+  ['rhr', ['resting heart rate', 'resting hr', 'lowest resting heart rate', 'rhr']],
+  ['weight', ['weight kg', 'weight', 'body weight']],
+  ['bodyFat', ['body fat', 'fat percentage', 'body fat percentage', 'fat']],
+]
+
+export function mapHealthHeader(header) {
+  const map = {}
+  const used = new Set()
+  // Columns claim fields, not the other way round, so the most specific name that matches a
+  // given header wins and a header is never counted twice.
+  for (const [field, names] of CSV_COLUMNS) {
+    header.forEach((h, i) => {
+      if (map[field] !== undefined || used.has(i)) return
+      const n = norm(h)
+      if (names.some(name => n === name || n.startsWith(name + ' ') || n.endsWith(' ' + name))) {
+        map[field] = i; used.add(i)
+      }
+    })
+  }
+  return map
+}
+
+const cell = (row, i) => (i === undefined ? '' : String(row[i] ?? '').trim())
+const numCell = (row, i) => { const n = parseFloat(cell(row, i).replace(',', '.')); return isFinite(n) && n > 0 ? n : null }
+// Hours or minutes. The header usually says; where it does not, nobody sleeps 400 hours.
+const durUnit = (header, v) =>
+  (/\bmin/i.test(header || '') ? 'min' : /\bh(ou)?rs?\b/i.test(header || '') ? 'h' : v > SLEEP_MAX ? 'min' : 'h')
+
+// "23:14", "2026-08-24T23:14:00Z", "11:14 PM" — a clock time out of whatever the export wrote.
+function timeCell(row, i) {
+  const raw = cell(row, i)
+  if (!raw) return null
+  const direct = validTime(raw)
+  if (direct) return direct
+  const m = /(\d{1,2}):(\d{2})(?::\d{2})?\s*(am|pm)?/i.exec(raw)
+  if (!m) return null
+  let h = +m[1]
+  if (m[3]) { const pm = /pm/i.test(m[3]); if (h === 12) h = pm ? 12 : 0; else if (pm) h += 12 }
+  return validTime(String(h).padStart(2, '0') + ':' + m[2])
+}
+
+/**
+ * Read a tracker export into one payload per day, plus the mapping it used. Nothing is
+ * written here — the caller shows the mapping and the day count first, because a header
+ * matched wrongly is the failure mode and it is invisible once the rows are in.
+ */
+export function parseHealthCSV(text) {
+  const rows = parseCSV(text)
+  if (rows.length < 2) throw new Error(t('that file has no rows in it'))
+  const map = mapHealthHeader(rows[0])
+  if (map.date === undefined) throw new Error(t('no date column found — openGym cannot file rows without one'))
+
+  const days = new Map()
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i]
+    const when = parseWhen(cell(row, map.date))
+    if (!when) continue
+    const p = days.get(when.d) || { d: when.d }
+
+    const bed = timeCell(row, map.bed), wake = timeCell(row, map.wake)
+    if (bed && wake) {
+      p.bed = bed; p.wake = wake
+      const awake = numCell(row, map.awakeMin)
+      if (awake) p.awake = Math.round(awake)
+    } else {
+      // A duration instead of the two times. Whether it counts hours or minutes is in the
+      // header, not the value, and read as the wrong one a 432 becomes eighteen days.
+      const dur = numCell(row, map.sleepDur)
+      if (dur != null) {
+        const h = durUnit(rows[0][map.sleepDur], dur) === 'min' ? dur / 60 : dur
+        if (validSleep(h) != null) p.sleepHours = validSleep(h)
+      }
+    }
+
+    const steps = numCell(row, map.steps); if (steps) p.steps = Math.round(steps)
+    const kcal = numCell(row, map.kcal); if (kcal) p.kcal = Math.round(kcal)
+    const rhr = numCell(row, map.rhr); if (rhr) p.rhr = Math.round(rhr)
+    const kg = numCell(row, map.weight); if (kg) p.weight = Math.round(kg * 10) / 10
+    const bf = validBodyFat(numCell(row, map.bodyFat)); if (bf != null) p.bodyFat = bf
+
+    if (Object.keys(p).length > 1) days.set(when.d, p)
+  }
+
+  if (!days.size) throw new Error(t('no readable rows in that file'))
+  return {
+    payloads: [...days.values()].sort((a, b) => (a.d < b.d ? -1 : 1)),
+    matched: Object.keys(map).filter(k => k !== 'date').map(k => ({ field: k, column: rows[0][map[k]] })),
+    ignored: rows[0].filter((h, i) => h && !Object.values(map).includes(i))
+  }
+}
+
+/** Write a run of days, reporting one line per day rather than one per field. */
+export function applyHealthDays(S, payloads) {
+  const report = { wrote: [], skipped: [] }
+  payloads.forEach(p => {
+    const r = applyHealth(S, p)
+    if (r.wrote.length) report.wrote.push(fmtDate(p.d, true) + ' — ' + r.wrote.join(', '))
+    r.skipped.forEach(x => { if (!report.skipped.includes(x)) report.skipped.push(x) })
+  })
   return report
 }
 

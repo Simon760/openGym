@@ -81,6 +81,9 @@ const monday = date => { const d = new Date(date); d.setDate(d.getDate() - ((d.g
 // A full example profile: 12 weeks of Mon/Wed/Fri sessions on the starter plan, with linear
 // progression, the odd missed session, twice-weekly weigh-ins trending toward the goal, and
 // per-set effort ratings on most (not all) of it.
+// Minutes-since-midnight back to a clock time, wrapping past midnight the way a night does.
+const hhmm = m => String(Math.floor(m / 60) % 24).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0')
+
 export function buildDemoState() {
   const rnd = rng(20260723)
   const [push, pull, legs] = starterRoutines()
@@ -110,13 +113,17 @@ export function buildDemoState() {
       bodyweight.push({ d: iso, w: Math.round(w * 10) / 10, bf: Math.round(bf * 10) / 10, t: at(day, 7, 30) })
     }
 
-    // sleep, filed under the day you woke up
+    // sleep, filed under the day you woke up — as the two clock times the sheet asks for,
+    // with the hours derived from them rather than stored alongside.
     if (rnd() > SLEEP_SKIPPED) {
-      const h = Math.round((SLEEP_BASE + (rnd() - 0.5) * 2.2) * 4) / 4
-      const e = { d: iso, h: Math.max(4, Math.min(10, h)), t: at(day, 8, 0) }
+      const h = Math.max(4, Math.min(10, Math.round((SLEEP_BASE + (rnd() - 0.5) * 2.2) * 4) / 4))
+      const awake = rnd() > 0.65 ? Math.round(rnd() * 5) * 5 : 0
+      const bedMin = 1380 + Math.round((rnd() - 0.5) * 16) * 5
+      const e = { d: iso, bed: hhmm(bedMin), wake: hhmm(bedMin + Math.round(h * 60) + awake), t: at(day, 8, 0) }
+      if (awake) e.awake = awake
       // Feel tracks the hours loosely — a short night rarely feels good, but a long one is
       // not automatically a 5 either.
-      if (rnd() > SLEEP_UNRATED) e.q = Math.max(1, Math.min(5, Math.round(e.h - 3.5 + (rnd() - 0.5))))
+      if (rnd() > SLEEP_UNRATED) e.q = Math.max(1, Math.min(5, Math.round(h - 3.5 + (rnd() - 0.5))))
       sleep.push(e)
     }
 

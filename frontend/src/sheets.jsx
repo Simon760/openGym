@@ -23,8 +23,8 @@ import { estimate1RM, best1RM, is1RMRecord, REP_CAP } from './lib/onerm.js'
 import { nextPrescription, applyPrescription, policyFor, defaultIncrement, POLICIES_FOR, POLICY_NAME, POLICY_DESC, MAX_BW_SETS } from './lib/progression.js'
 import { MOBILE, shareExport, shareText, canShareText } from './lib/mobile.js'
 import { entryFor, hasMacros, kcalFromMacros, derivedMismatch, remainingOf, putEntry, MACROS, MACRO_NAME } from './lib/nutrition.js'
-import { validBodyFat, composition, sleepFor, putSleep, validSleep, BF_MIN, BF_MAX, SLEEP_MIN, SLEEP_MAX } from './lib/body.js'
-import { parseHealth, applyHealth, SHORTCUT_RECIPE } from './lib/health.js'
+import { validBodyFat, composition, sleepFor, putSleep, validSleep, sleepHours, hoursBetween, validTime, BF_MIN, BF_MAX, SLEEP_MIN, SLEEP_MAX } from './lib/body.js'
+import { parseHealth, applyHealth, parseHealthCSV, applyHealthDays, SHORTCUT_RECIPE } from './lib/health.js'
 
 const S = () => useStore.getState().S
 const update = (...a) => useStore.getState().update(...a)
@@ -854,20 +854,48 @@ function PlanImport({ bundle, report, onApplied, close }) {
 // how long the session really lasted, what it cost, the heart, the steps, the sleep — and
 // openGym measures what the watch cannot. See lib/health.js for why a payload annotates the
 // logged session rather than creating one.
+// The field names, as a person reads them: the mapping a header search settled on is the
+// failure mode of a CSV import, and it is invisible once the rows are in.
+const healthFieldLabel = () => ({
+  bed: t('Bedtime'), wake: t('Wake time'), awakeMin: t('Awake during the night'),
+  sleepDur: t('Sleep duration'), steps: t('Steps'), kcal: t('Energy burned'),
+  rhr: t('Resting heart rate'), weight: t('Weight'), bodyFat: t('Body fat')
+})
+
 function HealthImport({ close }) {
   const [text, setText] = useState('')
   const [err, setErr] = useState(null)
   const [recipe, setRecipe] = useState(false)
+  const [review, setReview] = useState(null)
   const [done, setDone] = useState(null)
+  const fileRef = useRef(null)
 
+  // A Shortcut hands over JSON; a tracker hands over a CSV. No CSV contains a brace, so the
+  // two never have to be told apart by the person pasting.
   const run = () => {
-    let payload
-    try { payload = parseHealth(text) } catch (e) { setErr(e.message); return }
+    if (text.includes('{')) {
+      let payload
+      try { payload = parseHealth(text) } catch (e) { setErr(e.message); return }
+      let report
+      update(s => { report = applyHealth(s, payload) })
+      // The outcome stays on screen rather than going out as a toast: what was skipped is
+      // the part worth reading, and a toast is gone before it has been.
+      setDone(report)
+      return
+    }
+    try { setReview(parseHealthCSV(text)) } catch (e) { setErr(e.message) }
+  }
+  const confirmCSV = () => {
     let report
-    update(s => { report = applyHealth(s, payload) })
-    // The outcome stays on screen rather than going out as a toast: what was skipped is the
-    // part worth reading, and a toast is gone before it has been.
-    setDone(report)
+    update(s => { report = applyHealthDays(s, review.payloads) })
+    const p = review.payloads
+    setDone({ ...report, range: fmtDate(p[0].d, true) + ' → ' + fmtDate(p[p.length - 1].d, true) })
+  }
+  const pickFile = ev => {
+    const f = ev.target.files[0]; ev.target.value = ''; if (!f) return
+    const rd = new FileReader()
+    rd.onload = () => { setErr(null); setText(String(rd.result || '').slice(0, 2_000_000)) }
+    rd.readAsText(f)
   }
   const copyRecipe = async () => {
     try { await navigator.clipboard.writeText(SHORTCUT_RECIPE); toast(t('Recipe copied')) }
@@ -876,9 +904,9 @@ function HealthImport({ close }) {
 
   if (done) return <>
     <h3>{done.wrote.length ? t('Imported') : t('Nothing was imported')}</h3>
-    <div className="muted small" style={{ marginBottom: 10 }}>{fmtDate(done.date, true)}</div>
+    <div className="muted small" style={{ marginBottom: 10 }}>{done.date ? fmtDate(done.date, true) : done.range}</div>
     {done.wrote.map((w, i) => <div key={i} className="row small" style={{ gap: 7, padding: '3px 0' }}>
-      <Icon name="check" style={{ color: 'var(--acc)', fontSize: 14 }} />{w}
+      <Icon name="check" style={{ color: 'var(--acc)', fontSize: 14, flexShrink: 0 }} />{w}
     </div>)}
     {done.skipped.length > 0 && <>
       <h4 className="sec">{t('Left out')}</h4>
@@ -888,16 +916,51 @@ function HealthImport({ close }) {
     <Button variant="primary" onClick={close}>{t('Done')}</Button>
   </>
 
+  if (review) {
+    const label = healthFieldLabel()
+    const days = review.payloads
+    return <>
+      <h3>{t('Check the columns')}</h3>
+      <div className="muted small" style={{ marginBottom: 12, lineHeight: 1.45 }}>
+        {t('{0} days, {1} to {2}. Nothing is written until you confirm.', days.length, fmtDate(days[0].d, true), fmtDate(days[days.length - 1].d, true))}
+      </div>
+      {review.matched.map((m, i) => <div key={i} className="row small" style={{ gap: 7, padding: '3px 0' }}>
+        <Icon name="check" style={{ color: 'var(--acc)', fontSize: 14, flexShrink: 0 }} />
+        <span className="dim">{m.column}</span>
+        <Icon name="chevronRight" style={{ fontSize: 12, opacity: 0.5 }} />
+        <span>{label[m.field] || m.field}</span>
+      </div>)}
+      {!review.matched.length && <div className="small" style={{ color: 'var(--yellow)', lineHeight: 1.4 }}>
+        {t('No column was recognised beyond the date.')}
+      </div>}
+      {review.ignored.length > 0 && <>
+        <h4 className="sec">{t('Ignored')}</h4>
+        <div className="dim small" style={{ lineHeight: 1.45 }}>{review.ignored.join(' · ')}</div>
+      </>}
+      <div style={{ height: 14 }} />
+      <Button variant="primary" icon="download" disabled={!review.matched.length} onClick={confirmCSV}>{t('Import {0} days', days.length)}</Button>
+      <div style={{ height: 8 }} />
+      <Button variant="ghost" className="dim" onClick={() => setReview(null)}>{t('Back')}</Button>
+    </>
+  }
+
   return <>
-    <h3>{t('Import from your watch')}</h3>
+    <h3>{t('Import health data')}</h3>
     <div className="muted small" style={{ marginBottom: 12, lineHeight: 1.45 }}>
-      {t('Paste what your Shortcut produced. Session details are added to the workout you logged that day — never as a second one.')}
+      {t('Paste what your Shortcut produced, or open the CSV your tracker exported. Session details are added to the workout you logged that day — never as a second one.')}
     </div>
     <TextArea rows={7} value={text} placeholder={'{ "steps": 9420, "sleep_hours": 7.25 }'}
       onChange={e => { setText(e.target.value); setErr(null) }} />
     {err && <div className="small" style={{ color: 'var(--red)', margin: '8px 2px 0', lineHeight: 1.4 }}>{err}</div>}
     <div style={{ height: 12 }} />
     <Button variant="primary" icon="download" disabled={!text.trim()} onClick={run}>{t('Import')}</Button>
+    <div style={{ height: 8 }} />
+    <Button variant="ghost" icon="folder" onClick={() => fileRef.current?.click()}>{t('Open a file')}</Button>
+    <input ref={fileRef} type="file" accept=".csv,.json,.txt,text/csv,application/json,text/plain" onChange={pickFile} hidden />
+    <h4 className="sec">{t('Whoop, Fitbit, Garmin, Oura, Polar…')}</h4>
+    <div className="dim small" style={{ marginBottom: 10, lineHeight: 1.45 }}>
+      {t('Export your data from the tracker’s own app or website and open the CSV here. openGym reads the columns it recognises — sleep, steps, energy, resting heart rate, weight — and shows you the mapping before writing anything.')}
+    </div>
     <h4 className="sec">{t('Building the Shortcut')}</h4>
     <div className="dim small" style={{ marginBottom: 10, lineHeight: 1.45 }}>
       {t('Run it automatically when a workout ends, or force it any time from the Home Screen or your watch.')}
@@ -915,34 +978,59 @@ function SleepSheet({ close }) {
   const st = S()
   const iso = todayISO()
   const existing = sleepFor(st, iso)
-  const [h, setH] = useState(existing ? existing.h : 0)
-  const [q, setQ] = useState(existing && existing.q ? existing.q : 0)
+  // The two times you actually know, not a duration you would have to compute. "Went to bed
+  // at 23:30, got up at 07:00, was up twice" is what a person remembers; 7.25 hours is not.
+  const [bed, setBed] = useState(existing?.bed || '23:00')
+  const [wake, setWake] = useState(existing?.wake || '07:00')
+  const [awake, setAwake] = useState(existing?.awake || 0)
+  const [q, setQ] = useState(existing?.q || 0)
   const goal = st.sleepGoal
-  const short = goal && h > 0 ? Math.round((goal - h) * 10) / 10 : null
+  const span = hoursBetween(bed, wake)
+  const slept = sleepHours({ bed, wake, awake })
+  const short = goal && slept != null ? Math.round((goal - slept) * 10) / 10 : null
 
   const save = () => {
-    update(s => { s.sleep = putSleep(s.sleep, { d: iso, h, q }) })
+    if (!validTime(bed) || !validTime(wake)) { toast(t('Enter both times as HH:MM')); return }
+    update(s => { s.sleep = putSleep(s.sleep, { d: iso, bed, wake, awake, q }) })
     close()
-    toast(validSleep(h) != null ? t('Sleep saved') : t('Sleep cleared'))
+    toast(slept != null ? t('Sleep saved') : t('Sleep cleared'))
   }
+  const clear = () => {
+    update(s => { s.sleep = (s.sleep || []).filter(e => e.d !== iso) })
+    close(); toast(t('Sleep cleared'))
+  }
+
   return <>
     <h3>{t('Last night')}</h3>
     <div className="muted small">{t('Logged against {0}, the day it carries you through.', fmtDate(iso, true))}</div>
     <div style={{ height: 12 }} />
-    <Stepper label={t('Hours slept')} unit="h" value={h} step={0.25} onChange={setH} />
+    {/* Side by side, because the pair is what you read: 23:00 → 07:00. */}
+    <div className="row" style={{ gap: 10, alignItems: 'stretch' }}>
+      <div className="stp-w" style={{ flex: 1 }}><span className="stp-l">{t('Went to bed')}</span>
+        <input className="field tm" type="time" value={bed} onChange={e => setBed(e.target.value)} /></div>
+      <div className="stp-w" style={{ flex: 1 }}><span className="stp-l">{t('Got up')}</span>
+        <input className="field tm" type="time" value={wake} onChange={e => setWake(e.target.value)} /></div>
+    </div>
+    <Stepper label={t('Awake during the night (min)')} unit="min" value={awake} step={5} decimal={false} onChange={n => setAwake(n || 0)} />
     <Stepper label={t('How it felt (1–5)')} value={q} step={1} decimal={false} onChange={n => setQ(Math.min(5, n || 0))} />
-    {h > 0 && validSleep(h) == null && <div className="small" style={{ color: 'var(--yellow)', marginTop: 8 }}>
-      {t('A night sits between {0} and {1} hours.', SLEEP_MIN, SLEEP_MAX)}
+
+    {/* The derived figure, shown so the two times can be checked against it before saving. */}
+    {span != null && <div className="small" style={{ marginTop: 10 }}>
+      {slept != null
+        ? <b>{t('{0} h slept', fmtNum(slept))}</b>
+        : <span style={{ color: 'var(--yellow)' }}>{t('A night sits between {0} and {1} hours.', SLEEP_MIN, SLEEP_MAX)}</span>}
+      {awake > 0 && slept != null && <span className="dim"> · {t('{0} h in bed', fmtNum(span))}</span>}
     </div>}
-    {/* Landing exactly on the target is its own answer — negating a zero to fill the
-        "over" phrasing printed "-0 h over your target". */}
-    {short != null && validSleep(h) != null && <div className="small" style={{ marginTop: 8, color: short > 0 ? 'var(--orange)' : 'var(--acc)' }}>
+    {short != null && slept != null && <div className="small" style={{ marginTop: 6, color: short > 0 ? 'var(--orange)' : 'var(--acc)' }}>
       {short === 0 ? t('Right on your target')
         : short > 0 ? t('{0} h short of your target', fmtNum(short))
           : t('{0} h over your target', fmtNum(Math.abs(short)))}
     </div>}
+
     <div style={{ height: 14 }} />
     <Button variant="primary" onClick={save}>{t('Save')}</Button>
+    {existing && <><div style={{ height: 8 }} />
+      <Button variant="danger" onClick={clear}>{t('Delete')}</Button></>}
     <h4 className="sec">{t('Target')}</h4>
     <Stepper label={t('Hours per night')} unit="h" value={goal || 0} step={0.25}
       onChange={n => update(s => { s.sleepGoal = validSleep(n) })} />

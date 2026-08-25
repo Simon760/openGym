@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   validBodyFat, lastComposition, composition, compositionTrend, bodyFatSeries,
   validSleep, sleepFor, lastSleep, putSleep, sleepAverage, sleepDebt, sleepSeries,
+  hoursBetween, sleepHours, validTime,
   BF_MIN, BF_MAX, SLEEP_MIN, SLEEP_MAX
 } from './body.js'
 import { isoOf } from './format.js'
@@ -172,5 +173,68 @@ describe('sleepFor / lastSleep / sleepSeries', () => {
     expect(sleepFor({}, iso(0))).toBe(null)
     expect(lastSleep({})).toBe(null)
     expect(sleepSeries({}, 7)).toEqual([])
+  })
+})
+
+describe('hoursBetween', () => {
+  it('crosses midnight the way a night does', () => {
+    expect(hoursBetween('23:30', '07:00')).toBe(7.5)
+    expect(hoursBetween('00:30', '07:00')).toBe(6.5)
+    expect(hoursBetween('22:00', '06:15')).toBe(8.25)
+  })
+
+  it('reads a same-hour pair as a full day rather than nothing', () => {
+    // nobody logs a night of zero length; they mistyped, and a silent 0 hides that
+    expect(hoursBetween('23:00', '23:00')).toBe(24)
+  })
+
+  it('refuses what is not a clock time', () => {
+    expect(hoursBetween('25:00', '07:00')).toBe(null)
+    expect(hoursBetween('23:00', '')).toBe(null)
+    expect(validTime('7:00')).toBe('7:00')
+    expect(validTime('24:00')).toBe(null)
+  })
+})
+
+describe('sleepHours', () => {
+  it('takes the time awake out of the time in bed', () => {
+    expect(sleepHours({ bed: '23:00', wake: '07:00' })).toBe(8)
+    expect(sleepHours({ bed: '23:00', wake: '07:00', awake: 45 })).toBe(7.25)
+  })
+
+  it('cannot be talked below zero by an absurd waking', () => {
+    expect(sleepHours({ bed: '23:00', wake: '07:00', awake: 10000 })).toBe(null)
+  })
+
+  it('still reads an entry written before the times existed', () => {
+    // and a bare figure is what a watch import supplies
+    expect(sleepHours({ h: 7.25 })).toBe(7.25)
+    expect(sleepHours(null)).toBe(null)
+  })
+})
+
+describe('putSleep with times', () => {
+  it('stores the times and derives the hours from them', () => {
+    const [e] = putSleep([], { d: '2026-08-20', bed: '23:30', wake: '07:00', awake: 30 })
+    expect(e).toMatchObject({ d: '2026-08-20', bed: '23:30', wake: '07:00', awake: 30 })
+    expect('h' in e).toBe(false)
+    expect(sleepHours(e)).toBe(7)
+  })
+
+  it('drops a waking of zero rather than storing it', () => {
+    expect('awake' in putSleep([], { d: '2026-08-20', bed: '23:00', wake: '07:00', awake: 0 })[0]).toBe(false)
+  })
+
+  it('refuses half a pair — one time is not a night', () => {
+    expect(putSleep([], { d: '2026-08-20', bed: '23:00' })).toEqual([])
+  })
+
+  it('still accepts a bare figure, so a watch import lands unchanged', () => {
+    expect(putSleep([], { d: '2026-08-20', h: 7.5 })[0]).toMatchObject({ h: 7.5 })
+  })
+
+  it('feeds the averages through the derived hours', () => {
+    const st = { sleep: putSleep([], { d: isoOf(daysAgo(1)), bed: '23:00', wake: '06:00', awake: 30 }) }
+    expect(sleepAverage(st, 7).hours).toBe(6.5)
   })
 })

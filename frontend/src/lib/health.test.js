@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { parseHealth, applyHealth, putHealth, healthFor } from './health.js'
+import { parseHealth, applyHealth, putHealth, healthFor, parseHealthCSV, applyHealthDays } from './health.js'
+import { sleepHours } from './body.js'
 import { todayISO } from './format.js'
 
 const base = (over = {}) => ({
@@ -119,5 +120,82 @@ describe('putHealth', () => {
     const l = putHealth(putHealth([], { d: '2026-08-20', steps: 1 }), { d: '2026-08-18', steps: 2 })
     expect(l.map(e => e.d)).toEqual(['2026-08-18', '2026-08-20'])
     expect(putHealth([{ d: D, steps: 1 }], { d: D })).toEqual([])
+  })
+})
+
+describe('parseHealthCSV — a tracker export', () => {
+  it('reads a Whoop-shaped sleep export', () => {
+    const csv = [
+      'Cycle start time,Sleep onset,Wake onset,Asleep duration (min),Awake duration (min),Resting heart rate (bpm)',
+      '2026-08-22,2026-08-21 23:14:00,2026-08-22 07:02:00,432,26,52',
+      '2026-08-23,2026-08-22 23:40:00,2026-08-23 06:55:00,401,18,54'
+    ].join('\n')
+    const { payloads, matched } = parseHealthCSV(csv)
+    expect(payloads).toHaveLength(2)
+    expect(payloads[0]).toMatchObject({ d: '2026-08-22', bed: '23:14', wake: '07:02', awake: 26, rhr: 52 })
+    expect(matched.map(m => m.field)).toContain('bed')
+  })
+
+  it('reads a Fitbit-shaped daily export', () => {
+    const csv = [
+      'Date,Steps,Calories Burned,Minutes Asleep,Weight',
+      '2026-08-22,9420,2480,438,78.4',
+      '2026-08-23,7110,2310,455,78.1'
+    ].join('\n')
+    const { payloads } = parseHealthCSV(csv)
+    expect(payloads[0]).toMatchObject({ d: '2026-08-22', steps: 9420, kcal: 2480, weight: 78.4 })
+    // 438 minutes, not 438 hours — most exports write minutes and reading them as hours
+    // would file a day and a half of sleep
+    expect(payloads[0].sleepHours).toBeCloseTo(7.3, 1)
+  })
+
+  it('reads a 12-hour clock', () => {
+    const csv = 'Date,Bedtime,Wake time\n2026-08-22,11:14 PM,7:02 AM'
+    expect(parseHealthCSV(csv).payloads[0]).toMatchObject({ bed: '23:14', wake: '07:02' })
+  })
+
+  it('prefers the two times over a duration when the file has both', () => {
+    const csv = 'Date,Sleep start,Sleep end,Sleep duration\n2026-08-22,23:00,07:00,999'
+    const p = parseHealthCSV(csv).payloads[0]
+    expect(p.bed).toBe('23:00')
+    expect('sleepHours' in p).toBe(false)
+  })
+
+  it('reports what it matched and what it ignored, so a wrong mapping is visible', () => {
+    const csv = 'Date,Steps,Skin temperature,HRV\n2026-08-22,9000,33.1,64'
+    const { matched, ignored } = parseHealthCSV(csv)
+    expect(matched).toEqual([{ field: 'steps', column: 'Steps' }])
+    expect(ignored).toEqual(['Skin temperature', 'HRV'])
+  })
+
+  it('refuses a file it cannot file rows from', () => {
+    expect(() => parseHealthCSV('Steps,Calories\n9000,300')).toThrow()
+    expect(() => parseHealthCSV('Date,Steps')).toThrow()
+    expect(() => parseHealthCSV('Date,Steps\nnot a date,x')).toThrow()
+  })
+
+  it('drops a row that carries nothing but a date', () => {
+    const csv = 'Date,Steps\n2026-08-22,9000\n2026-08-23,'
+    expect(parseHealthCSV(csv).payloads).toHaveLength(1)
+  })
+})
+
+describe('applyHealthDays', () => {
+  it('writes a run of days and reports one line each', () => {
+    const S = base()
+    const { payloads } = parseHealthCSV(
+      'Date,Steps,Sleep start,Sleep end\n2026-08-22,9000,23:00,07:00\n2026-08-23,8000,23:30,06:30')
+    const r = applyHealthDays(S, payloads)
+    expect(r.wrote).toHaveLength(2)
+    expect(S.health).toHaveLength(2)
+    expect(S.sleep).toHaveLength(2)
+    expect(sleepHours(S.sleep[0])).toBe(8)
+    expect(sleepHours(S.sleep[1])).toBe(7)
+  })
+
+  it('does not repeat the same reason once per day', () => {
+    const S = base()
+    const { payloads } = parseHealthCSV('Date,Body fat\n2026-08-22,18.6\n2026-08-23,18.4')
+    expect(applyHealthDays(S, payloads).skipped).toHaveLength(1)
   })
 })
