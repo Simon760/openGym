@@ -92,7 +92,7 @@ function WeightInput({ value, setValue, unit }) {
 }
 
 /* ============================ body weight ============================ */
-function BwSheet({ required, onDone, close }) {
+function BwSheet({ onDone, close }) {
   const st = useStore(s => s.S)
   const unit = st.unit
   const bw = lastBW(st)
@@ -126,8 +126,8 @@ function BwSheet({ required, onDone, close }) {
   const recent = [...st.bodyweight].reverse().slice(0, 3)
   const delEntry = d => update(s => { s.bodyweight = s.bodyweight.filter(b => b.d !== d) })
   return <>
-    <h3>{required ? t('Quick check-in') : t('Log body weight')}</h3>
-    <div className="muted small">{required ? t('Slide or tap to set your weight — tracked before every workout so your curve stays honest.') : t('Today') + ', ' + fmtDate(todayISO(), true)}</div>
+    <h3>{t('Log body weight')}</h3>
+    <div className="muted small">{t('Today') + ', ' + fmtDate(todayISO(), true)}</div>
     <WeightInput value={v} setValue={setV} unit={unit} />
     <div style={{ height: 10 }} />
     <Stepper label={t('Body fat (%)')} unit="%" value={bf} step={0.1} onChange={setBf} />
@@ -141,12 +141,8 @@ function BwSheet({ required, onDone, close }) {
       {t('A body-fat reading sits between {0} and {1} %.', BF_MIN, BF_MAX)}
     </div>}
     <div style={{ height: 14 }} />
-    <Button variant="primary" onClick={save}>{required ? t('Save & start workout') : t('Save')}</Button>
-    {required && <>
-      <div style={{ height: 8 }} /><Button variant="ghost" className="dim" onClick={() => { close(); onDone && onDone(null) }}>{t('Start without weighing in')}</Button>
-      <div style={{ height: 2 }} /><Button variant="ghost" className="dim" icon="reset" onClick={() => { close(); nav('/workout') }}>{t('Choose a different workout')}</Button>
-    </>}
-    {!required && recent.length > 0 && <>
+    <Button variant="primary" onClick={save}>{t('Save')}</Button>
+    {recent.length > 0 && <>
       <h4 className="sec">{t('Recent weigh-ins')}</h4>
       <div className="list" style={{ gap: 0 }}>
         {recent.map(b => <div key={b.d} className="row between" style={{ padding: '9px 2px', borderBottom: '1px solid var(--sep)' }}>
@@ -159,8 +155,7 @@ function BwSheet({ required, onDone, close }) {
   </>
 }
 export function bwSheet(opts = {}) {
-  const h = ui().openSheet(close => <BwSheet {...opts} close={close} />, { locked: !!opts.required })
-  return h
+  return ui().openSheet(close => <BwSheet {...opts} close={close} />)
 }
 
 /* ============================ import from another app ============================ */
@@ -1605,8 +1600,17 @@ export function WorkoutRow({ w, onClick }) {
 }
 
 /* ============================ workout lifecycle ============================ */
+/**
+ * Starting a workout starts the workout.
+ *
+ * A weigh-in used to stand in the way of every session, on the reasoning that a curve fed
+ * before each one stays honest. It does not survive contact with actually training: the
+ * gesture is "start", and anything between the tap and the first set is a thing to get past.
+ * Weighing in is still one tap from the home screen, where it belongs — next to the curve it
+ * feeds, on the day's own terms rather than the workout's.
+ */
 export function startFlow(routineId) {
-  bwSheet({ required: true, onDone: bw => beginWorkout(routineId, bw) })
+  beginWorkout(routineId)
 }
 export function beginWorkout(routineId, bw) {
   const st = S()
@@ -1619,7 +1623,10 @@ export function beginWorkout(routineId, bw) {
     return { id: cfg.id, sg: cfg.sg, target: { ...cfg }, plan, sets: applyPrescription(buildSets(st, cfg), plan) }
   })
   update(s => {
-    s.active = { id: uid(), d: todayISO(), start: Date.now(), routineId, name: r ? r.name : t('Freestyle'), bw: bw || null, cur: 0, entries }
+    // The weight the session is remembered against: the last one recorded, since nothing is
+    // asked for at the door any more. The summary shows it and nothing computes from it.
+    const last = lastBW(st)
+    s.active = { id: uid(), d: todayISO(), start: Date.now(), routineId, name: r ? r.name : t('Freestyle'), bw: bw ?? (last ? last.w : null), cur: 0, entries }
   })
   useUI.getState().stopRest()
   nav('/workout')
