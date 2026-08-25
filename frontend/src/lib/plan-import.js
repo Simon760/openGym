@@ -18,6 +18,7 @@
 
 import { EXIDX, BODYPARTS, isBodyweightEq } from './exercises.js'
 import { matchExercise, CATEGORY_BP } from './import-csv.js'
+import { muscleSlug, musclesOf, MUSCLE_NAME } from './muscles.js'
 import { modeOf } from './history.js'
 import { POLICIES } from './progression.js'
 import { uid } from './format.js'
@@ -112,9 +113,26 @@ function readExercise(raw, report) {
     report.matched.push({ from: name, to: EXIDX[id].n, id })
   } else {
     created = { id: uid(), n: name, bp: bodyPartOf(pick(raw, 'bodyPart', 'bp', 'muscle', 'group', 'groupe')) }
+    // A body part alone spreads a flat, invented share over the muscles in it, which for a
+    // compound is wrong in the direction that matters: "chest" fatigues the chest and
+    // nothing else, so an imported bench press leaves the triceps and shoulders reading as
+    // fresh. A program that names the muscles gets them stored the way the catalogue stores
+    // its own — target plus supporting — and from there every map and the recovery estimate
+    // treat the exercise exactly like a catalogue one.
+    const tg = pick(raw, 'target', 'primary', 'primaryMuscle', 'cible')
+    const sm = pick(raw, 'secondary', 'secondaryMuscles', 'support', 'secondaires')
+    if (tg && muscleSlug(tg)) created.tg = String(tg).toLowerCase().trim()
+    const list = (Array.isArray(sm) ? sm : String(sm || '').split(',')).map(x => String(x).trim()).filter(Boolean)
+    const keep = list.filter(m => muscleSlug(m))
+    if (keep.length) created.sm = keep.map(m => m.toLowerCase())
+    // Named but undrawable is worth saying: it looks like it was taken and it was not.
+    const dropped = [tg && !muscleSlug(tg) ? tg : null, ...list.filter(m => !muscleSlug(m))].filter(Boolean)
+    if (dropped.length) {
+      report.warnings.push(t('“{0}”: {1} is not a muscle the body map draws, so it was left out.', name, dropped.join(', ')))
+    }
     if (raw.description || raw.desc) created.desc = String(raw.description || raw.desc)
     id = created.id
-    report.created.push({ name, bp: created.bp })
+    report.created.push({ name, bp: created.bp, muscles: musclesOf(created) })
   }
 
   const cfg = { id, sets: Math.max(1, Math.round(sets)) }
@@ -263,8 +281,19 @@ history. When you do invent one, say which body part it works:
   { "name": "Sled Push", "bodyPart": "legs", "sets": 4, "seconds": 30 }
 
 chest · back · shoulders · arms · biceps · triceps · forearms · legs · quads · hamstrings ·
-glutes · calves · abs · core · cardio · neck. Left out, it lands in the catch-all — and that
-guess is what colours the muscle map and feeds the recovery estimate.
+glutes · calves · abs · core · cardio · neck.
+
+For anything compound, name the muscles too — a body part alone spreads one flat share over
+the muscles inside it, so an invented bench press would fatigue the chest and leave the
+triceps and shoulders reading as fresh:
+
+  { "name": "Sled Push", "target": "quads",
+    "secondary": ["glutes", "calves", "core"], "sets": 4, "seconds": 30 }
+
+The target counts full, each supporting muscle counts 0.4 — the same arithmetic the
+catalogue's own exercises use. Accepted names: chest · lats · upper back · lower back ·
+traps · shoulders · biceps · triceps · forearms · abs · obliques · glutes · quads ·
+hamstrings · adductors · hip flexors · calves · shins.
 
 Per exercise: sets, reps, weight (kg) · seconds for a hold · minutes + speed for cardio ·
 repsMin/repsMax for a rep range · progression: off | linear | greyskull | double | time ·

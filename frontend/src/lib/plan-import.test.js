@@ -71,7 +71,27 @@ describe('parseProgram — resolving names', () => {
     expect(bundle.customEx[0]).toMatchObject({ n: 'Coach special press', bp: 'chest' })
     // the routine still points at it, in place
     expect(bundle.routines[0].ex[0].id).toBe(bundle.customEx[0].id)
-    expect(report.created).toEqual([{ name: 'Coach special press', bp: 'chest' }])
+    expect(report.created).toEqual([{ name: 'Coach special press', bp: 'chest', muscles: { chest: 1 } }])
+  })
+
+  it('carries the muscles a program names, so a compound is not read as one muscle', () => {
+    // "chest" alone would fatigue the chest and leave the triceps and shoulders reading as
+    // fresh — which is exactly the reading a bench press must not produce
+    const { bundle, report } = parseProgram(one({
+      name: 'Coach special press', bodyPart: 'chest',
+      target: 'pectorals', secondary: ['triceps', 'shoulders']
+    }))
+    expect(bundle.customEx[0]).toMatchObject({ tg: 'pectorals', sm: ['triceps', 'shoulders'] })
+    // the same arithmetic the catalogue's own exercises get: target full, support at 0.4
+    expect(report.created[0].muscles).toEqual({ chest: 1, triceps: 0.4, deltoids: 0.4 })
+  })
+
+  it('says which named muscle the body map cannot draw rather than dropping it quietly', () => {
+    const { bundle, report } = parseProgram(one({
+      name: 'Zzz carry', bodyPart: 'legs', target: 'quads', secondary: ['glutes', 'posterior chain']
+    }))
+    expect(bundle.customEx[0].sm).toEqual(['glutes'])
+    expect(report.warnings.join(' ')).toContain('posterior chain')
   })
 
   it('files an invented exercise under a body part it understands', () => {

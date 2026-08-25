@@ -14,7 +14,7 @@ import Icon from './components/Icon.jsx'
 import { Button, Slider, Switch, Segmented, SelectRow, Row, TextArea } from './components/ui.jsx'
 import { glyphOf, GLYPH_GROUPS, DEFAULT_GLYPH } from './lib/glyphs.js'
 import BodyMap from './components/BodyMap.jsx'
-import { loadOfWorkouts } from './lib/muscles.js'
+import { loadOfWorkouts, MUSCLE_NAME } from './lib/muscles.js'
 import { parseImport, mergeImport } from './lib/import-csv.js'
 import { buildPlanBundle, parsePlan, mergePlan, printPlan } from './lib/plan-share.js'
 import { parseProgram, PROGRAM_SPEC } from './lib/plan-import.js'
@@ -935,7 +935,15 @@ function PlanImport({ bundle, report, onApplied, close }) {
             what the muscle map colours and what the recovery model counts — and an
             unrecognised name defaults to the catch-all, so it is worth seeing before it
             silently paints the wrong half of the body. */}
-        {' '}{report.created.map(c => c.name + ' (' + t(c.bp) + ')').join(', ')}
+        {/* With the muscles each one will actually fatigue. That is not cosmetic — it is
+            what the muscle map colours and what the recovery model counts — and a name the
+            catalogue does not know gets them from its body part alone, so it is worth
+            seeing before it silently paints the wrong half of the body. */}
+        <div style={{ marginTop: 4 }}>{report.created.map((c, i) => <div key={i} className="dim">
+          {c.name} — {Object.keys(c.muscles || {}).length
+            ? Object.keys(c.muscles).map(m => t(MUSCLE_NAME[m])).join(', ')
+            : t(c.bp)}
+        </div>)}</div>
       </div>}
       {report.warnings.map((w, i) => <div key={i} className="dim" style={{ marginTop: 4 }}>{w}</div>)}
     </div>}

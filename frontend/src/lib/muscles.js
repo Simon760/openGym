@@ -69,6 +69,14 @@ const BY_BODYPART = {
 
 const SECONDARY = 0.4   // a supporting muscle counts this much against a primary
 
+/**
+ * The drawable muscle a spelling refers to, or null. Exported so an importer can tell a
+ * name this map can shade from one it will silently drop — a program that says "lats" is
+ * understood, one that says "posterior chain" is not, and the difference has to surface at
+ * import time rather than as a muscle that never lights up.
+ */
+export const muscleSlug = name => ALIAS[String(name || '').toLowerCase().trim()] || null
+
 /** Muscles one exercise trains: { slug: 0…1 }. */
 export function musclesOf(ex) {
   if (!ex) return {}
