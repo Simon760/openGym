@@ -994,6 +994,33 @@ const healthFieldLabel = () => ({
   intake: t('Calories eaten'), protein: t('Protein'), carbs: t('Carbs'), fat: t('Fat')
 })
 
+/* One labelled number, and the fields the watch form asks for.
+ *
+ * Both live out here on purpose. A component declared inside a render body is a different
+ * component on every render, so React unmounts what it drew and mounts it again — and an
+ * <input> that is remounted between keystrokes loses focus, which on a phone means the
+ * keyboard drops after every digit. The list is out here for the same reason a constant is:
+ * it does not change, so nothing downstream should think it did. */
+const WATCH_FIELDS = [
+  { k: 'sport', label: 'Session energy', unit: 'kcal' },
+  { k: 'min', label: 'Session length', unit: 'min' },
+  { k: 'steps', label: 'Steps', unit: '' },
+  { k: 'sleep', label: 'Sleep', unit: 'h', decimal: true }
+]
+
+function NumRow({ label, unit, value, onChange, decimal = false }) {
+  return (
+    <div className="row between" style={{ padding: '9px 2px', borderBottom: '1px solid var(--sep)', gap: 12 }}>
+      <span style={{ fontSize: 15 }}>{label}</span>
+      <span className="row" style={{ gap: 6, flex: 'none' }}>
+        <NumberField className="numf" value={value} nullable decimal={decimal}
+          onChange={onChange} placeholder="—" />
+        <span className="dim small" style={{ width: 28 }}>{unit}</span>
+      </span>
+    </div>
+  )
+}
+
 /**
  * The watch's figures, typed in.
  *
@@ -1024,26 +1051,13 @@ function ManualEntry({ onDone, close }) {
     onDone(report)
   }
 
-  const Row = ({ k, label, unit, decimal = false }) => (
-    <div className="row between" style={{ padding: '9px 2px', borderBottom: '1px solid var(--sep)', gap: 12 }}>
-      <span style={{ fontSize: 15 }}>{label}</span>
-      <span className="row" style={{ gap: 6, flex: 'none' }}>
-        <NumberField className="numf" value={v[k] ?? null} nullable decimal={decimal}
-          onChange={n => set(k, n)} placeholder="—" />
-        <span className="dim small" style={{ width: 28 }}>{unit}</span>
-      </span>
-    </div>
-  )
-
   return <>
     {close && <h3>{t('My watch')}</h3>}
     <div className="dim small" style={{ margin: '0 2px 6px', lineHeight: 1.45 }}>
       {t('Read them off your watch and type them in. Leave a field empty when you have nothing for it.')}
     </div>
-    <Row k="sport" label={t('Session energy')} unit="kcal" />
-    <Row k="min" label={t('Session length')} unit="min" />
-    <Row k="steps" label={t('Steps')} unit="" />
-    <Row k="sleep" label={t('Sleep')} unit="h" decimal />
+    {WATCH_FIELDS.map(f => <NumRow key={f.k} label={t(f.label)} unit={f.unit} decimal={f.decimal}
+      value={v[f.k] ?? null} onChange={n => set(f.k, n)} />)}
     <div style={{ height: 12 }} />
     <Button variant="primary" icon="check" disabled={!any} onClick={save}>{t('Save for today')}</Button>
     {close && <><div style={{ height: 8 }} />
