@@ -867,4 +867,8 @@ export default {
   'Session': 'Séance',
   'Set the automation up once and your watch fills this in by itself — no copying, no pasting.': 'Configure l’automatisation une fois et ta montre remplit tout ça toute seule — sans copier-coller.',
   'That link carried no figures. In the Open URL action, the watch’s variables have to sit right after each “=”.': 'Ce lien ne portait aucun chiffre. Dans l’action Ouvrir l’URL, les variables de la montre doivent être juste après chaque « = ».',
+  'Link copied — paste it into Open URL': 'Lien copié — colle-le dans « Ouvrir l’URL »',
+  'Copy the end-of-workout link': 'Copier le lien de fin de séance',
+  'Copy the nightly link': 'Copier le lien du soir',
+  'Paste it into the shortcut’s Open URL action, then drop your watch’s variables right after each “=”. If the field will not take a paste, it already holds a variable — delete that first.': 'Colle-le dans l’action « Ouvrir l’URL » du raccourci, puis dépose les variables de ta montre juste après chaque « = ». Si le champ refuse le collage, c’est qu’il contient déjà une variable — supprime-la d’abord.',
 }

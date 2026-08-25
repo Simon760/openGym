@@ -26,6 +26,15 @@ export const HEALTH_FMT = 1
 /** Where this copy of the app lives, without the route it happens to be showing. */
 export const appURL = () => (typeof location === 'undefined' ? '' : location.origin + location.pathname)
 
+/**
+ * The link a Shortcut's "Open URL" action holds, with the values left empty for the watch's
+ * variables to be dropped after each "=". Handed over by a button rather than printed in a
+ * paragraph, because retyping this on a phone is where the setup dies — and "/i" rather than
+ * "/import" so that retyping it is survivable when the clipboard misbehaves.
+ */
+export const shortcutLink = (kind = 'session', base = appURL()) =>
+  base + '#/i?' + (kind === 'day' ? 'steps=&kcal=&sleep=' : 'sport=&min=')
+
 const MACRO_LABEL = { protein: 'Protein', carbs: 'Carbs', fat: 'Fat' }
 
 const num = v => (Number.isFinite(+v) && +v > 0 ? +v : null)

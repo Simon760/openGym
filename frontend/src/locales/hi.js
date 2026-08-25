@@ -875,4 +875,8 @@ export default {
   'Session': 'Session',
   'Set the automation up once and your watch fills this in by itself — no copying, no pasting.': 'Set the automation up once and your watch fills this in by itself — no copying, no pasting.',
   'That link carried no figures. In the Open URL action, the watch’s variables have to sit right after each “=”.': 'That link carried no figures. In the Open URL action, the watch’s variables have to sit right after each “=”.',
+  'Link copied — paste it into Open URL': 'Link copied — paste it into Open URL',
+  'Copy the end-of-workout link': 'Copy the end-of-workout link',
+  'Copy the nightly link': 'Copy the nightly link',
+  'Paste it into the shortcut’s Open URL action, then drop your watch’s variables right after each “=”. If the field will not take a paste, it already holds a variable — delete that first.': 'Paste it into the shortcut’s Open URL action, then drop your watch’s variables right after each “=”. If the field will not take a paste, it already holds a variable — delete that first.',
 }

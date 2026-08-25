@@ -25,7 +25,7 @@ import { nextPrescription, applyPrescription, policyFor, defaultIncrement, POLIC
 import { MOBILE, shareExport, shareText, canShareText } from './lib/mobile.js'
 import { entryFor, hasMacros, kcalFromMacros, derivedMismatch, remainingOf, putEntry, MACROS, MACRO_NAME } from './lib/nutrition.js'
 import { validBodyFat, composition, sleepFor, putSleep, validSleep, sleepHours, hoursBetween, validTime, BF_MIN, BF_MAX, SLEEP_MIN, SLEEP_MAX } from './lib/body.js'
-import { parseHealth, applyHealth, parseHealthCSV, applyHealthDays, shortcutRecipe, historySpec } from './lib/health.js'
+import { parseHealth, applyHealth, parseHealthCSV, applyHealthDays, shortcutRecipe, shortcutLink, historySpec } from './lib/health.js'
 import { impliedTDEE, tdeeParts, trimOf, TDEE_PARTS, TDEE_MIN, TDEE_MAX, TRIM_MAX, IMPLIED_MIN_SPAN, IMPLIED_MIN_DAYS, IMPLIED_MIN_WEIGHINS } from './lib/energy.js'
 import { APP_NAME, FILE_PREFIX } from './lib/brand.js'
 
@@ -998,6 +998,7 @@ function HealthImport({ close, arrived }) {
   const [text, setText] = useState('')
   const [err, setErr] = useState(null)
   const [recipe, setRecipe] = useState(false)
+  const [link, setLink] = useState(null)
   const [spec, setSpec] = useState(false)
   const [review, setReview] = useState(null)
   const [pending, setPending] = useState(null)
@@ -1048,6 +1049,13 @@ function HealthImport({ close, arrived }) {
     const rd = new FileReader()
     rd.onload = () => { setErr(null); setText(String(rd.result || '').slice(0, 2_000_000)) }
     rd.readAsText(f)
+  }
+  // The two links a Shortcut's Open URL action holds. Copied from inside the app, on the
+  // phone that will paste them, which is the one clipboard hop that always works.
+  const copyLink = async kind => {
+    const url = shortcutLink(kind)
+    try { await navigator.clipboard.writeText(url); toast(t('Link copied — paste it into Open URL')) }
+    catch (e) { setLink(url) }
   }
   const copyRecipe = async () => {
     try { await navigator.clipboard.writeText(shortcutRecipe()); toast(t('Recipe copied')) }
@@ -1165,6 +1173,14 @@ function HealthImport({ close, arrived }) {
     <div className="dim small" style={{ marginBottom: 10, lineHeight: 1.45 }}>
       {t('Set the automation up once and your watch fills this in by itself — no copying, no pasting.')}
     </div>
+    <Button variant="ghost" icon="link" onClick={() => copyLink('session')}>{t('Copy the end-of-workout link')}</Button>
+    <div style={{ height: 8 }} />
+    <Button variant="ghost" icon="link" onClick={() => copyLink('day')}>{t('Copy the nightly link')}</Button>
+    {link && <TextArea rows={2} readOnly value={link} style={{ marginTop: 10 }} />}
+    <div className="dim small" style={{ margin: '8px 2px 0', lineHeight: 1.45 }}>
+      {t('Paste it into the shortcut’s Open URL action, then drop your watch’s variables right after each “=”. If the field will not take a paste, it already holds a variable — delete that first.')}
+    </div>
+    <div style={{ height: 12 }} />
     <Button variant="ghost" icon="clipboard" onClick={copyRecipe}>{t('Copy the recipe')}</Button>
     {recipe && <TextArea rows={12} readOnly value={shortcutRecipe()} style={{ marginTop: 10 }} />}
   </>

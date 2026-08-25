@@ -78,8 +78,12 @@ function Shell() {
               <Route path="/history" element={<History />} />
               <Route path="/library" element={<Library />} />
               <Route path="/settings" element={<Settings />} />
-              {/* A Shortcut handing over what the watch measured — see views/Import.jsx */}
+              {/* A Shortcut handing over what the watch measured — see views/Import.jsx.
+                  "/i" is the same route under a name short enough to type by hand: the URL
+                  goes into the Open URL action on a phone, and pasting into that field is
+                  the step people get stuck on. */}
               <Route path="/import" element={<Import />} />
+              <Route path="/i" element={<Import />} />
               <Route path="/admin" element={user?.admin ? <Admin /> : <Navigate to="/home" replace />} />
               <Route path="*" element={<Navigate to="/home" replace />} />
             </Routes>
