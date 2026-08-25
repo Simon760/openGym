@@ -50,7 +50,54 @@ const ALIAS = {
   groin: 'adductors', 'inner thighs': 'adductors',
   ankles: null, feet: null, hands: null, 'ankle stabilizers': null,
   sternocleidomastoid: null,
+
+  // What a coach writes, which is not what a dataset writes. A program arriving from
+  // outside says "front delts" and "erector spinae", not "delts" and "spine", and a
+  // secondary muscle that does not resolve is not a small loss: it is the shoulder work
+  // of every bench press missing from the recovery map for good.
+  'front delts': 'deltoids', 'front deltoids': 'deltoids', 'anterior delts': 'deltoids',
+  'anterior deltoid': 'deltoids', 'rear delts': 'deltoids', 'rear deltoid': 'deltoids',
+  'posterior delts': 'deltoids', 'posterior deltoid': 'deltoids', 'side delts': 'deltoids',
+  'lateral delts': 'deltoids', 'lateral deltoid': 'deltoids', 'medial delts': 'deltoids',
+  'infraspinatus': 'deltoids',
+  pecs: 'chest', 'lower chest': 'chest', 'pectoralis major': 'chest',
+  'erector spinae': 'lower-back', erectors: 'lower-back',
+  'gluteus maximus': 'gluteal', 'gluteus medius': 'gluteal', 'glute max': 'gluteal',
+  'glute medius': 'gluteal', 'hip abductors': 'gluteal',
+  'hip adductors': 'adductors', 'quadriceps femoris': 'quadriceps', hamstring: 'hamstring',
+  bicep: 'biceps', tricep: 'triceps', trap: 'trapezius', 'upper traps': 'trapezius',
+  'mid traps': 'trapezius', 'lower traps': 'trapezius', 'teres major': 'upper-back',
+  'rectus abdominis': 'abs', 'transverse abdominis': 'abs', 'tibialis anterior': 'tibialis',
+  gastrocnemius: 'calves', brachioradialis: 'forearm', serratus: 'serratus',
+
+  // French, because a program written for a French speaker is written in French. Accents
+  // and hyphens are stripped before the lookup, so these are the bare forms.
+  pectoraux: 'chest', poitrine: 'chest', epaules: 'deltoids', deltoides: 'deltoids',
+  'deltoide anterieur': 'deltoids', 'deltoide posterieur': 'deltoids',
+  'deltoide lateral': 'deltoids', 'coiffe des rotateurs': 'deltoids',
+  dorsaux: 'upper-back', 'grand dorsal': 'upper-back', 'grands dorsaux': 'upper-back',
+  dos: 'upper-back', 'haut du dos': 'upper-back', rhomboides: 'upper-back',
+  trapezes: 'trapezius', lombaires: 'lower-back', 'bas du dos': 'lower-back',
+  'erecteurs du rachis': 'lower-back',
+  abdos: 'abs', abdominaux: 'abs', gainage: 'abs', 'sangle abdominale': 'abs',
+  fessiers: 'gluteal', 'grand fessier': 'gluteal', 'moyen fessier': 'gluteal',
+  ischios: 'hamstring', 'ischio jambiers': 'hamstring',
+  adducteurs: 'adductors', abducteurs: 'gluteal',
+  mollets: 'calves', jumeaux: 'calves', soleaire: 'calves',
+  'tibial anterieur': 'tibialis', tibiaux: 'tibialis',
+  'flechisseurs de hanche': 'hip-flexors', psoas: 'hip-flexors',
+  'avant bras': 'forearm', 'dentele anterieur': 'serratus',
+  cardio: null, 'corps entier': null, 'full body': null,
 }
+
+/**
+ * A written name reduced to an ALIAS key: lower case, accents stripped, hyphens and
+ * underscores flattened to spaces. Nobody typing a program distinguishes "ischio-jambiers"
+ * from "ischio jambiers", and a muscle dropped over a hyphen never lights up again.
+ */
+const key = name => String(name || '').toLowerCase()
+  .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim()
 
 // Custom exercises carry only a body part, so they fall back to it. Weights inside a
 // group sum to 1 — "upper legs" spreads over three muscles rather than counting triple.
@@ -75,14 +122,14 @@ const SECONDARY = 0.4   // a supporting muscle counts this much against a primar
  * understood, one that says "posterior chain" is not, and the difference has to surface at
  * import time rather than as a muscle that never lights up.
  */
-export const muscleSlug = name => ALIAS[String(name || '').toLowerCase().trim()] || null
+export const muscleSlug = name => ALIAS[key(name)] || null
 
 /** Muscles one exercise trains: { slug: 0…1 }. */
 export function musclesOf(ex) {
   if (!ex) return {}
   const out = {}
   const add = (name, w) => {
-    const slug = ALIAS[String(name || '').toLowerCase().trim()]
+    const slug = ALIAS[key(name)]
     if (slug) out[slug] = Math.max(out[slug] || 0, w)
   }
   add(ex.tg, 1)

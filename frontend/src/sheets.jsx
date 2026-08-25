@@ -24,7 +24,7 @@ import { nextPrescription, applyPrescription, policyFor, defaultIncrement, POLIC
 import { MOBILE, shareExport, shareText, canShareText } from './lib/mobile.js'
 import { entryFor, hasMacros, kcalFromMacros, derivedMismatch, remainingOf, putEntry, MACROS, MACRO_NAME } from './lib/nutrition.js'
 import { validBodyFat, composition, sleepFor, putSleep, validSleep, sleepHours, hoursBetween, validTime, BF_MIN, BF_MAX, SLEEP_MIN, SLEEP_MAX } from './lib/body.js'
-import { parseHealth, applyHealth, parseHealthCSV, applyHealthDays, SHORTCUT_RECIPE, historySpec } from './lib/health.js'
+import { parseHealth, applyHealth, parseHealthCSV, applyHealthDays, shortcutRecipe, historySpec } from './lib/health.js'
 import { impliedTDEE, tdeeParts, trimOf, TDEE_PARTS, TDEE_MIN, TDEE_MAX, TRIM_MAX, IMPLIED_MIN_SPAN, IMPLIED_MIN_DAYS, IMPLIED_MIN_WEIGHINS } from './lib/energy.js'
 import { APP_NAME, FILE_PREFIX } from './lib/brand.js'
 
@@ -871,11 +871,22 @@ function PlanTools({ close }) {
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); URL.revokeObjectURL(a.href)
     close(); toast(t('Plan file saved — send it to a friend'))
   }
+  // Two kinds of JSON come through this button, because to the person holding them both are
+  // "the file with my routines in it": an BodyEvolve export, which carries its own marker, and
+  // a program a coach or a conversation wrote, which speaks in exercise names. Refusing the
+  // second one — "this isn't an BodyEvolve plan file" — sends someone looking for a different
+  // button for the same gesture, and that is where an import gets abandoned. The marker is
+  // tried first: an export must not go through the name matcher, which would rebuild by name
+  // what it already has by id.
   const pickFile = ev => {
     const f = ev.target.files[0]; ev.target.value = ''; if (!f) return
     const rd = new FileReader()
     rd.onload = () => {
-      try { const bundle = parsePlan(rd.result); close(); planImportSheet(bundle) }
+      const text = String(rd.result || '')
+      try { const bundle = parsePlan(text); close(); return planImportSheet(bundle) } catch { /* not an export */ }
+      try { const { bundle, report } = parseProgram(text); close(); planImportSheet(bundle, report) }
+      // The program reader's complaint is the useful one: it says what the file is missing,
+      // where the plan reader can only say the file is not the one file it knows.
       catch (e) { toast(t('Import failed: {0}', e.message)) }
     }
     rd.readAsText(f)
@@ -1014,7 +1025,7 @@ function HealthImport({ close }) {
     rd.readAsText(f)
   }
   const copyRecipe = async () => {
-    try { await navigator.clipboard.writeText(SHORTCUT_RECIPE); toast(t('Recipe copied')) }
+    try { await navigator.clipboard.writeText(shortcutRecipe()); toast(t('Recipe copied')) }
     catch (e) { setRecipe(true) }
   }
   const copySpec = async () => {
@@ -1094,7 +1105,7 @@ function HealthImport({ close }) {
       {t('Run it automatically when a workout ends, or force it any time from the Home Screen or your watch.')}
     </div>
     <Button variant="ghost" icon="clipboard" onClick={copyRecipe}>{t('Copy the recipe')}</Button>
-    {recipe && <TextArea rows={12} readOnly value={SHORTCUT_RECIPE} style={{ marginTop: 10 }} />}
+    {recipe && <TextArea rows={12} readOnly value={shortcutRecipe()} style={{ marginTop: 10 }} />}
   </>
 }
 export const healthImportSheet = () => ui().openSheet(close => <HealthImport close={close} />)
@@ -1219,6 +1230,16 @@ function ProgramImport({ close }) {
   const [text, setText] = useState('')
   const [err, setErr] = useState(null)
   const [spec, setSpec] = useState(false)
+  const fileRef = useRef(null)
+
+  // A program that arrived as a file rather than a reply — a coach sends a .json, and asking
+  // someone to open it in a text editor first to copy what is inside is not an interface.
+  const pickFile = ev => {
+    const f = ev.target.files[0]; ev.target.value = ''; if (!f) return
+    const rd = new FileReader()
+    rd.onload = () => { setErr(null); setText(String(rd.result || '').slice(0, 1_000_000)) }
+    rd.readAsText(f)
+  }
 
   const run = () => {
     try {
@@ -1242,6 +1263,9 @@ function ProgramImport({ close }) {
     {err && <div className="small" style={{ color: 'var(--red)', margin: '8px 2px 0', lineHeight: 1.4 }}>{err}</div>}
     <div style={{ height: 12 }} />
     <Button variant="primary" icon="download" disabled={!text.trim()} onClick={run}>{t('Read the program')}</Button>
+    <div style={{ height: 8 }} />
+    <Button variant="ghost" icon="folder" onClick={() => fileRef.current?.click()}>{t('Open a file')}</Button>
+    <input ref={fileRef} type="file" accept="application/json,.json,.txt,text/plain" onChange={pickFile} hidden />
     <h4 className="sec">{t('Writing the program')}</h4>
     <div className="dim small" style={{ marginBottom: 10, lineHeight: 1.45 }}>
       {t('Hand this format to whatever writes your programs, and its answers will import straight in.')}

@@ -437,7 +437,7 @@ decimal comma in a comma-separated file: write 84.2, not 84,2.`)
  * The Shortcut, written out as the actions to drop in. Kept beside the parser so the two
  * cannot drift: this is what the app expects, and the parser above is its only reader.
  */
-export const SHORTCUT_RECIPE = `Shortcuts → new shortcut, then:
+export const shortcutRecipe = () => t(`Shortcuts → new shortcut, then:
 
 1  Find Health Samples · Steps · Today · Calculate Sum
 2  Find Health Samples · Active Energy · Today · Calculate Sum
@@ -446,8 +446,7 @@ export const SHORTCUT_RECIPE = `Shortcuts → new shortcut, then:
 4  Find Workouts · Sort by End Date · Latest 1   → duration, active energy, distance
 5  Text, with the numbers from above dropped in:
 
-{ "opengym_health": 1,
-  "date": "<today, formatted yyyy-MM-dd>",
+{ "date": "<today, formatted yyyy-MM-dd>",
   "steps": <1>, "active_kcal": <2>, "sleep_hours": <3>,
   "workout": { "minutes": <4 duration>, "kcal": <4 energy>, "distance_km": <4 distance> } }
 
@@ -458,4 +457,6 @@ Run it two ways, both from the same shortcut:
 · Automation → Workout → Ends → it fires the moment you finish on the watch
 · Add to Home Screen, Back Tap, or the Shortcuts app on the watch, to force it any time
 
-Every field is optional — send only what you care about.`
+Every field is optional — send only what you care about. Add "intake_kcal", "protein",
+"carbs", "fat" for the day's food, "weight_kg" and "body_fat" for a weigh-in, or "bed" and
+"wake" as HH:MM instead of sleep_hours when you want the two clock times.`)

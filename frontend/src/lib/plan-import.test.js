@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { parseProgram, extractJSON, dayIndex } from './plan-import.js'
+import { parsePlan, buildPlanBundle } from './plan-share.js'
 import { EXIDX } from './exercises.js'
 
 const prog = (routines, extra = {}) => ({ routines, ...extra })
@@ -221,6 +222,32 @@ describe('parseProgram — what it refuses', () => {
 
   it('names a routine that did not name itself', () => {
     expect(parseProgram(prog([{ exercises: ['Bench Press'] }])).bundle.routines[0].name).toBeTruthy()
+  })
+
+})
+
+// The plan file picker tries parsePlan and falls back to parseProgram, because both kinds of
+// JSON reach it and to the person holding them both are "the file with my routines in it".
+// The fallback is only sound while these two stay complementary — an export that parseProgram
+// could also swallow would be rebuilt by name, losing the ids it already had.
+describe('a plan file and a written program are different files', () => {
+  const coach = prog([{ name: 'Bloc 4 — Push', exercises: ['Bench Press', 'Overhead Press'] }])
+
+  it('refuses a coach program as a plan export, and reads it as a program', () => {
+    expect(() => parsePlan(coach)).toThrow()
+    expect(parseProgram(coach).bundle.routineCount).toBe(1)
+  })
+
+  it('reads a plan export as a plan, and never sends it through the name matcher', () => {
+    const { bundle } = parseProgram(coach)
+    // round-trip it the way the app does: import the program, then export the result
+    const state = { routines: bundle.routines, customEx: bundle.customEx || [], week: {} }
+    const exported = buildPlanBundle(state, 'Bloc 4')
+    const back = parsePlan(exported)
+    expect(back.routineCount).toBe(1)
+    expect(back.exerciseCount).toBe(2)
+    // ids survive, which is the whole reason the marker is tried first
+    expect(back.routines[0].ex.map(e => e.id)).toEqual(bundle.routines[0].ex.map(e => e.id))
   })
 })
 

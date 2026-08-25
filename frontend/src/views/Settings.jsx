@@ -44,7 +44,14 @@ export default function Settings() {
     rd.onload = () => {
       try {
         const data = JSON.parse(rd.result)
-        if (!data.workouts || !data.routines) throw new Error('not an BodyEvolve backup')
+        // A plan export and a written program are both .json with routines in them, and this
+        // is the first import button in Settings — so they land here by mistake. Name the
+        // right door rather than refusing the file flatly.
+        if (!data.workouts || !data.routines) {
+          throw new Error(data.routines || data.opengym_plan || data.days || data.sessions
+            ? t('that file is a training plan, not a backup — import it from the Plan tab, under Share your plan')
+            : t('that file is not a BodyEvolve backup'))
+        }
         confirmSheet({ title: t('Import backup?'), message: t('This replaces all current data with the backup file.'), confirmText: t('Import'), danger: true, onConfirm: () => { replaceState(Object.assign(JSON.parse(JSON.stringify(DEF)), data), true); toast(t('Backup imported')) } })
       } catch (e) { toast(t('Import failed: {0}', e.message)) }
     }
