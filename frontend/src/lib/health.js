@@ -17,10 +17,13 @@
 import { extractJSON } from './plan-import.js'
 import { parseCSV, parseWhen } from './import-csv.js'
 import { putSleep, validSleep, validBodyFat, validTime, SLEEP_MAX } from './body.js'
+import { putEntry, entryFor } from './nutrition.js'
 import { todayISO, fmtDate } from './format.js'
 import { t } from './i18n.js'
 
 export const HEALTH_FMT = 1
+
+const MACRO_LABEL = { protein: 'Protein', carbs: 'Carbs', fat: 'Fat' }
 
 const num = v => (Number.isFinite(+v) && +v > 0 ? +v : null)
 const pick = (o, ...keys) => { for (const k of keys) if (o[k] != null && o[k] !== '') return o[k]; return null }
@@ -60,6 +63,13 @@ export function parseHealth(raw) {
     if (sleep != null && validSleep(sleep) != null) out.sleepHours = validSleep(sleep)
   }
 
+  const intake = num(pick(data, 'intake_kcal', 'intakeKcal', 'calories_eaten', 'kcal_in', 'intake'))
+  if (intake) out.intake = Math.round(intake)
+  for (const [k, ...names] of [['protein', 'protein', 'p'], ['carbs', 'carbs', 'carbohydrates', 'c'], ['fat', 'fat', 'fats', 'f']]) {
+    const g = num(pick(data, ...names))
+    if (g) out[k] = Math.round(g * 10) / 10
+  }
+
   const kg = num(pick(data, 'weight_kg', 'weightKg', 'weight'))
   if (kg) out.weight = Math.round(kg * 10) / 10
   const bf = validBodyFat(pick(data, 'body_fat', 'bodyFat', 'bf'))
@@ -85,7 +95,8 @@ export function parseHealth(raw) {
 
   // A payload carrying only a date says nothing; letting it through would report a
   // successful import that wrote nothing.
-  const wrote = ['steps', 'kcal', 'rhr', 'exerciseMin', 'sleepHours', 'bed', 'weight', 'bodyFat', 'workout']
+  const wrote = ['steps', 'kcal', 'rhr', 'exerciseMin', 'sleepHours', 'bed', 'weight', 'bodyFat',
+    'intake', 'protein', 'carbs', 'fat', 'workout']
   if (!wrote.some(k => out[k] != null)) throw new Error(t('that payload has no health data in it'))
   return out
 }
@@ -123,6 +134,22 @@ export function applyHealth(S, p) {
   } else if (p.sleepHours != null) {
     S.sleep = putSleep(S.sleep, { d: p.d, h: p.sleepHours })
     report.wrote.push(t('{0} h of sleep', p.sleepHours))
+  }
+
+  // Intake merges into the day rather than replacing it: a history file that carries only
+  // the calories must not wipe macros already logged that day, and vice versa.
+  if (p.intake != null || p.protein != null || p.carbs != null || p.fat != null) {
+    const ex = entryFor(S, p.d) || {}
+    S.nutrition = putEntry(S.nutrition, {
+      d: p.d,
+      kcal: p.intake != null ? p.intake : ex.kcal,
+      p: p.protein != null ? p.protein : ex.p,
+      c: p.carbs != null ? p.carbs : ex.c,
+      f: p.fat != null ? p.fat : ex.f
+    })
+    if (p.intake != null) report.wrote.push(t('{0} kcal eaten', p.intake))
+    const g = ['protein', 'carbs', 'fat'].filter(k => p[k] != null)
+    if (g.length) report.wrote.push(t('{0} logged', g.map(k => t(MACRO_LABEL[k])).join(', ')))
   }
 
   if (p.weight != null || p.bodyFat != null) {
@@ -174,21 +201,40 @@ export function applyHealth(S, p) {
  * native. A file you already have rights to export works today, everywhere, for free.
  */
 
-const norm = h => String(h || '').toLowerCase().replace(/[_\-]+/g, ' ').replace(/\(.*?\)/g, '').replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim()
+// Accents stripped, because the file may well have been written in French; "%" kept as a
+// word, because "Fat %" and "Fat (g)" are different columns and everything else about them
+// normalises to the same three letters.
+const norm = h => String(h || '').toLowerCase()
+  .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .replace(/\(.*?\)/g, ' ').replace(/[_\-]+/g, ' ').replace(/%/g, ' pct ')
+  .replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim()
 
 // Longest, most specific names first: "sleep duration" must not be eaten by "duration".
 export const CSV_COLUMNS = [
-  ['date', ['date', 'day', 'cycle start time', 'calendar date', 'timestamp', 'start']],
-  ['bed', ['bedtime start', 'sleep start', 'sleep onset', 'bedtime', 'went to bed', 'start time']],
-  ['wake', ['bedtime end', 'sleep end', 'wake onset', 'wake time', 'woke up', 'end time']],
-  ['awakeMin', ['awake time', 'awake duration', 'minutes awake', 'wake duration', 'time awake']],
+  ['date', ['date', 'day', 'jour', 'cycle start time', 'calendar date', 'timestamp', 'start']],
+  ['bed', ['bedtime start', 'sleep start', 'sleep onset', 'bedtime', 'went to bed', 'start time', 'coucher', 'heure de coucher']],
+  ['wake', ['bedtime end', 'sleep end', 'wake onset', 'wake time', 'woke up', 'end time', 'reveil', 'heure de reveil']],
+  ['awakeMin', ['awake time', 'awake duration', 'minutes awake', 'wake duration', 'time awake', 'reveils', 'reveils nocturnes']],
   ['sleepDur', ['asleep duration', 'sleep duration', 'minutes asleep', 'hours of sleep',
-    'sleep hours', 'time asleep', 'total sleep', 'sleep total']],
-  ['steps', ['steps', 'step count', 'total steps']],
-  ['kcal', ['active calories', 'calories burned', 'activity calories', 'active energy', 'energy burned', 'calories']],
-  ['rhr', ['resting heart rate', 'resting hr', 'lowest resting heart rate', 'rhr']],
-  ['weight', ['weight kg', 'weight', 'body weight']],
-  ['bodyFat', ['body fat', 'fat percentage', 'body fat percentage', 'fat']],
+    'sleep hours', 'time asleep', 'total sleep', 'sleep total', 'sommeil', 'duree de sommeil']],
+  // Intake before expenditure: "calories" alone means burned in every tracker export, so
+  // the eaten column has to claim its own header before the burned list gets that far.
+  ['intake', ['calories eaten', 'kcal in', 'calories in', 'energy intake', 'intake kcal',
+    'food calories', 'kcal eaten', 'energy in', 'intake', 'eaten', 'apports', 'kcal apports',
+    'calories ingerees', 'apport calorique']],
+  ['protein', ['protein g', 'protein grams', 'protein', 'proteins', 'proteines']],
+  ['carbs', ['carbs g', 'carb grams', 'carbs', 'carb', 'carbohydrate', 'carbohydrates', 'glucides']],
+  ['steps', ['steps', 'step count', 'total steps', 'pas', 'nombre de pas']],
+  ['kcal', ['active calories', 'calories burned', 'activity calories', 'active energy',
+    'energy burned', 'sport kcal', 'exercise calories', 'workout calories', 'sport',
+    'depense sport', 'calories brulees', 'calories', 'depense']],
+  ['rhr', ['resting heart rate', 'resting hr', 'lowest resting heart rate', 'rhr', 'fc repos', 'fc au repos']],
+  ['weight', ['weight kg', 'weight', 'body weight', 'poids', 'poids kg']],
+  // Body fat before the fat macro: "Body fat" ends in " fat" and the macro list would
+  // otherwise swallow it. "Fat %" survives as 'fat pct', which is why norm keeps the sign.
+  ['bodyFat', ['body fat pct', 'body fat', 'fat pct', 'fat percentage', 'bodyfat',
+    'masse grasse', 'taux de masse grasse', 'mg pct']],
+  ['fat', ['fat g', 'fat grams', 'fat', 'fats', 'lipids', 'lipides']],
 ]
 
 export function mapHealthHeader(header) {
@@ -266,6 +312,13 @@ export function parseHealthCSV(text) {
     const kg = numCell(row, map.weight); if (kg) p.weight = Math.round(kg * 10) / 10
     const bf = validBodyFat(numCell(row, map.bodyFat)); if (bf != null) p.bodyFat = bf
 
+    // What was eaten. An empty cell is a day nobody logged, not a day of fasting, so it
+    // stays absent — a zero here would drag every average and every deficit total with it.
+    const intake = numCell(row, map.intake); if (intake) p.intake = Math.round(intake)
+    for (const [k, i] of [['protein', map.protein], ['carbs', map.carbs], ['fat', map.fat]]) {
+      const g = numCell(row, i); if (g) p[k] = Math.round(g * 10) / 10
+    }
+
     if (Object.keys(p).length > 1) days.set(when.d, p)
   }
 
@@ -294,6 +347,34 @@ const byDate = (a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : 0)
  * The Shortcut, written out as the actions to drop in. Kept beside the parser so the two
  * cannot drift: this is what the app expects, and the parser above is its only reader.
  */
+/**
+ * The file to ask a conversation for, when the history lives in one. CSV rather than JSON:
+ * a conversation writes it without breaking it, you can read it before importing it, and an
+ * empty cell stays empty — which is the whole point, because a day nobody logged must not
+ * arrive as a zero.
+ */
+export const HISTORY_SPEC = `A retroactive history — one row per day, as far back as it goes.
+
+Ask for exactly this:
+
+  Write my whole history as CSV, one row per day, oldest first, nothing around it.
+  First line exactly:
+
+  Date,Weight,Body fat,Intake kcal,Protein,Carbs,Fat,Sport kcal,Steps,Bedtime,Wake time
+
+  Rules:
+  · Date as YYYY-MM-DD
+  · Leave a cell empty when the figure was never recorded that day — never write 0
+  · Weight in kg (78.4), body fat in %, intake and sport in kcal, macros in grams
+  · Bedtime and Wake time as HH:MM
+  · Drop any column you have no data for at all
+
+Save it as a .csv and open it here.
+
+Every column is optional except the date: Date,Weight alone is a complete file. Headers do
+not have to match exactly — French names and the usual tracker exports are understood too,
+and the mapping is shown before a single day is written.`
+
 export const SHORTCUT_RECIPE = `Shortcuts → new shortcut, then:
 
 1  Find Health Samples · Steps · Today · Calculate Sum

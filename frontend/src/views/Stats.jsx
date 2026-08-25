@@ -5,7 +5,7 @@ import { EXIDX } from '../lib/exercises.js'
 import { lastBW, streakWeeks, setLabel, modeOf, effortOf } from '../lib/history.js'
 import { fmtNum, fmtDate, fmtVol, todayISO, weekKey } from '../lib/format.js'
 import { t } from '../lib/i18n.js'
-import { bwSheet, goalSheet, calendarSheet, workoutDetailSheet, WorkoutRow, bwDeltaColor, nutriSheet, nutriGoalSheet, sleepSheet } from '../sheets.jsx'
+import { bwSheet, goalSheet, calendarSheet, workoutDetailSheet, WorkoutRow, bwDeltaColor, nutriSheet, nutriGoalSheet, sleepSheet, tdeeSheet } from '../sheets.jsx'
 import LineChart from '../components/LineChart.jsx'
 import Heatmap from '../components/Heatmap.jsx'
 import Icon from '../components/Icon.jsx'
@@ -19,6 +19,7 @@ import {
 } from '../lib/effort.js'
 import { avgOver, seriesOf, MACROS, MACRO_NAME, MACRO_COLOR } from '../lib/nutrition.js'
 import { bodyFatSeries, compositionTrend, sleepSeries, sleepAverage, sleepDebt, lastComposition } from '../lib/body.js'
+import { deficitTotals, deficitSeries, impliedTDEE, predictedVsActual, KCAL_PER_KG_FAT } from '../lib/energy.js'
 import { Button, Segmented, SelectRow } from '../components/ui.jsx'
 
 // Which muscles the training in a window actually hit — and, the point of the card,
@@ -180,6 +181,106 @@ function NutritionCard({ S }) {
         <LineChart points={pts} h={150} unit="kcal" color="var(--orange)" goal={goal?.kcal || null} />
       </div>}
     </>}
+  </div>
+}
+
+// What the cut has actually come to. Three numbers, and they add up on purpose: the deficit
+// eating created, the deficit training created, and the two together — all over the same set
+// of days, because a combined figure drawn from a wider day set than its parts is not a sum
+// of anything. See lib/energy.js for the model and for why the day set is the logged one.
+function EnergyCard({ S }) {
+  const [win, setWin] = useState(0)
+  const tot = deficitTotals(S, S.tdee, win)
+  const pts = deficitSeries(S, S.tdee, win)
+  const cmp = predictedVsActual(S, S.tdee, win)
+  const implied = impliedTDEE(S, win)
+
+  return <div className="card">
+    <div className="row between" style={{ marginBottom: 8 }}>
+      <h2 style={{ margin: 0 }}>{t('Energy')}</h2>
+      <Button size="sm" icon="flame" style={S.tdee ? { color: 'var(--yellow)' } : undefined} onClick={tdeeSheet}>
+        {S.tdee ? fmtNum(S.tdee) : t('Maintenance')}
+      </Button>
+    </div>
+
+    {!S.tdee
+      ? <div className="muted small" style={{ lineHeight: 1.45 }}>
+        {t('Set what you spend on a day with no training and every day here gets a balance: (maintenance + sport) − what you ate.')}
+      </div>
+      : <>
+        <Segmented className="seg-range" value={win} onChange={setWin}
+          options={[{ value: 30, label: '30d' }, { value: 90, label: '90d' }, { value: 365, label: '1y' }, { value: 0, label: t('All') }]} />
+        {!tot ? <div className="muted small">{t('Nothing logged in this period.')}</div> : <>
+          <div className="row between" style={{ alignItems: 'flex-end', gap: 12 }}>
+            <div style={{ minWidth: 0 }}>
+              <div className="stat-v" style={{ color: tot.total >= 0 ? 'var(--acc)' : 'var(--orange)' }}>
+                {fmtNum(Math.abs(tot.total))} <span className="muted" style={{ fontSize: '1rem' }}>kcal</span>
+              </div>
+              <div className="small dim">{tot.total >= 0 ? t('total deficit') : t('total surplus')}</div>
+            </div>
+            <div style={{ textAlign: 'right', flexShrink: 0 }}>
+              <div className="stat-v">{fmtNum(Math.abs(tot.kg))} <span className="muted" style={{ fontSize: '1rem' }}>kg</span></div>
+              <div className="small dim">{t('of fat, at {0} kcal', fmtNum(KCAL_PER_KG_FAT))}</div>
+            </div>
+          </div>
+
+          {/* The split. Two bars rather than a pie: the question is which of the two is
+              doing the work, and a length answers it at a glance. Drawn against the larger
+              of the two rather than against the total, so a component that worked *against*
+              the deficit still has a bar and still reads as a size. */}
+          <div style={{ marginTop: 12 }}>
+            {[['nutrition', t('Eating'), 'var(--orange)'], ['sport', t('Training'), 'var(--blue)']].map(([k, label, col]) => {
+              const v = tot[k]
+              const peak = Math.max(Math.abs(tot.nutrition), Math.abs(tot.sport)) || 1
+              return <div key={k} style={{ marginBottom: 8 }}>
+                <div className="row between small" style={{ marginBottom: 4 }}>
+                  <span className="muted">{label}</span>
+                  <b style={v < 0 ? { color: 'var(--orange)' } : undefined}>{fmtNum(v)} kcal</b>
+                </div>
+                <div style={{ height: 6, borderRadius: 3, background: 'var(--surface-3)', overflow: 'hidden' }}>
+                  <div style={{ width: ((Math.abs(v) / peak) * 100) + '%', height: '100%', background: v < 0 ? 'var(--red)' : col }} />
+                </div>
+              </div>
+            })}
+          </div>
+          {tot.nutrition < 0 && <div className="small" style={{ color: 'var(--orange)', lineHeight: 1.45 }}>
+            {t('Eating sat above maintenance across this period — every gram lost came from training.')}
+          </div>}
+
+          <div className="small dim" style={{ marginTop: 2, lineHeight: 1.45 }}>
+            {t('over {0} logged days of {1}, {2} to {3}', tot.days, tot.span, fmtDate(tot.from, true), fmtDate(tot.to, true))}
+            {tot.unmeasured > 0 && ' · ' + t('{0} of them trained with nothing to measure the session, so their deficit is understated', tot.unmeasured)}
+          </div>
+
+          {pts.length > 1 && <div className="chart" style={{ marginTop: 10 }}>
+            <LineChart points={pts} h={150} unit="kcal" color="var(--acc)" goal={0} />
+          </div>}
+
+          {/* The one reading here that can tell you the maintenance figure is wrong. */}
+          {cmp && <>
+            <h4 className="sec">{t('Predicted against the scale')}</h4>
+            <div className="row" style={{ gap: 18, flexWrap: 'wrap' }}>
+              <div><div className="stat-v" style={{ fontSize: 20 }}>{fmtNum(cmp.predicted)} kg</div>
+                <div className="small dim">{t('predicted')}</div></div>
+              <div><div className="stat-v" style={{ fontSize: 20 }}>{fmtNum(cmp.actual)} kg</div>
+                <div className="small dim">{t('measured')}</div></div>
+            </div>
+            <div className="small" style={{ marginTop: 8, lineHeight: 1.45, color: Math.abs(cmp.gap) > 2 ? 'var(--orange)' : 'var(--label-2)' }}>
+              {Math.abs(cmp.gap) <= 2
+                ? t('Close enough — 7 700 kcal per kilo assumes an expenditure that does not fall as you get lighter, so a gap of a kilo or two is the model, not the log.')
+                : cmp.gap > 0
+                  ? t('The scale is {0} kg behind the deficit. Either the intake is under-reported or your maintenance is set too high.', fmtNum(cmp.gap))
+                  : t('The scale is {0} kg ahead of the deficit. Either your maintenance is set too low or something is unlogged.', fmtNum(-cmp.gap))}
+            </div>
+          </>}
+
+          {implied.tdee != null && implied.tdee !== S.tdee && <div className="small" style={{ marginTop: 10 }}>
+            <span className="muted">{t('Your weight curve puts maintenance at')} </span>
+            <b>{fmtNum(implied.tdee)} kcal</b>
+            <Button size="sm" icon="bolt" style={{ marginLeft: 8 }} onClick={tdeeSheet}>{t('Adjust')}</Button>
+          </div>}
+        </>}
+      </>}
   </div>
 }
 
@@ -369,6 +470,7 @@ export default function Stats() {
     {S.workouts.length > 0 && <MuscleBalance S={S} />}
     {anyEffort && <EffortCard S={S} />}
     <NutritionCard S={S} />
+    <EnergyCard S={S} />
     <SleepCard S={S} />
 
     <div className="cols">

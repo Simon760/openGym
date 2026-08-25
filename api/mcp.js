@@ -128,14 +128,18 @@ function planOut(S) {
 /* -------------------------------------------------------------------- tools -- */
 
 const num = v => (Number.isFinite(+v) && +v > 0 ? +v : null);
+const byDay = (a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : 0);
 
 export const TOOLS = [
   {
     name: 'get_training_log',
     description:
-      'Read logged workouts, body weight and daily calorie/macro intake for the last N days. ' +
-      'Each exercise carries what the session prescribed alongside what was actually done, ' +
-      'so you can tell whether it hit its target.',
+      'Read logged workouts, body weight, daily calorie/macro intake and daily activity for ' +
+      'the last N days. Each exercise carries what the session prescribed alongside what was ' +
+      'actually done, so you can tell whether it hit its target. `tdee` is the user\'s ' +
+      'maintenance without training, so a day\'s energy balance is ' +
+      '(tdee + activity.kcal) - intake.kcal; it is null until they set one, and a day with ' +
+      'no intake logged has no balance rather than a balance of zero.',
     inputSchema: {
       type: 'object',
       properties: { days: { type: 'integer', description: 'Days back from today. 0 for everything. Default 30.' } }
@@ -167,6 +171,38 @@ export const TOOLS = [
     }
   },
   {
+    name: 'log_history',
+    description:
+      'Write a run of past days in one call — the retroactive import. Each day replaces what ' +
+      'openGym holds for that date rather than adding to it, so re-sending a day is a ' +
+      'correction, not a duplicate. Omit any field that was never recorded that day: an ' +
+      'absent field is left alone, and a zero would be read as a real measurement.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        days: {
+          type: 'array',
+          description: 'One object per day. Every field except date is optional.',
+          items: {
+            type: 'object',
+            properties: {
+              date: { type: 'string', description: 'YYYY-MM-DD.' },
+              kg: { type: 'number', description: 'Body weight.' },
+              body_fat: { type: 'number', description: 'Percent.' },
+              kcal: { type: 'number', description: 'Calories eaten.' },
+              protein: { type: 'number' }, carbs: { type: 'number' }, fat: { type: 'number' },
+              sport_kcal: { type: 'number', description: 'Energy burned by activity that day.' },
+              steps: { type: 'integer' },
+              sleep_hours: { type: 'number' }
+            },
+            required: ['date']
+          }
+        }
+      },
+      required: ['days']
+    }
+  },
+  {
     name: 'propose_program',
     description:
       'Send a training program to the app. It is NOT applied here: it waits for the user to ' +
@@ -193,6 +229,11 @@ function callTool(name, args, S) {
         unit: S.unit || 'kg',
         weight_goal: S.targetW || null,
         intake_goal: S.nutriGoal || null,
+        tdee: S.tdee || null,
+        activity: (S.health || []).filter(e => inWindow(e.d, days, now))
+          .map(e => compact({ date: e.d, kcal: e.kcal, steps: e.steps, resting_hr: e.rhr })),
+        sleep: (S.sleep || []).filter(e => inWindow(e.d, days, now))
+          .map(e => compact({ date: e.d, bed: e.bed, wake: e.wake, awake_min: e.awake, hours: e.h, felt: e.q })),
         body_weight: (S.bodyweight || []).filter(b => inWindow(b.d, days, now)).map(b => ({ date: b.d, kg: b.w })),
         intake: (S.nutrition || []).filter(e => inWindow(e.d, days, now))
           .map(e => ({ date: e.d, kcal: e.kcal, protein: e.p, carbs: e.c, fat: e.f })),
@@ -220,6 +261,50 @@ function callTool(name, args, S) {
       S.bodyweight = [...rest, { d, w: kg, t: Date.now() }].sort((a, b) => (a.d < b.d ? -1 : 1));
       return { ok: true, date: d, kg };
     }
+    case 'log_history': {
+      if (!Array.isArray(args.days) || !args.days.length) throw new Error('days must be a non-empty array');
+      if (args.days.length > 2000) throw new Error('at most 2000 days per call');
+      const put = (list, entry, keys) => {
+        const rest = (list || []).filter(e => e.d !== entry.d);
+        const kept = { d: entry.d, t: Date.now() };
+        for (const k of keys) if (entry[k] != null) kept[k] = entry[k];
+        // A day carrying nothing but its date is dropped, not stored as a row of blanks.
+        return (Object.keys(kept).length > 2 ? [...rest, kept] : rest).sort(byDay);
+      };
+      let written = 0, skipped = 0;
+      for (const d of args.days) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(d && d.date || '')) { skipped++; continue; }
+        const day = d.date;
+        let touched = false;
+
+        const kg = num(d.kg), bf = num(d.body_fat);
+        if (kg) {
+          const ex = (S.bodyweight || []).find(b => b.d === day);
+          S.bodyweight = put(S.bodyweight, { d: day, w: kg, bf: bf || (ex && ex.bf) || null }, ['w', 'bf']);
+          touched = true;
+        }
+        const eaten = { d: day, kcal: num(d.kcal), p: num(d.protein), c: num(d.carbs), f: num(d.fat) };
+        if (eaten.kcal || eaten.p || eaten.c || eaten.f) {
+          const ex = (S.nutrition || []).find(e => e.d === day) || {};
+          for (const k of ['kcal', 'p', 'c', 'f']) if (eaten[k] == null) eaten[k] = ex[k] != null ? ex[k] : null;
+          S.nutrition = put(S.nutrition, eaten, ['kcal', 'p', 'c', 'f']);
+          touched = true;
+        }
+        const sport = num(d.sport_kcal), steps = num(d.steps);
+        if (sport || steps) {
+          const ex = (S.health || []).find(e => e.d === day) || {};
+          S.health = put(S.health, {
+            d: day, kcal: sport || ex.kcal || null, steps: steps ? Math.round(steps) : ex.steps || null
+          }, ['kcal', 'steps']);
+          touched = true;
+        }
+        const slept = num(d.sleep_hours);
+        if (slept && slept >= 0.5 && slept <= 16) { S.sleep = put(S.sleep, { d: day, h: slept }, ['h']); touched = true; }
+
+        if (touched) written++; else skipped++;
+      }
+      return { ok: true, written, skipped };
+    }
     case 'propose_program': {
       if (!args.program || typeof args.program !== 'object') throw new Error('program must be an object');
       if (!Array.isArray(args.program.routines) || !args.program.routines.length) {
@@ -240,7 +325,7 @@ function callTool(name, args, S) {
   }
 }
 
-const WRITES = new Set(['log_intake', 'log_weight', 'propose_program']);
+const WRITES = new Set(['log_intake', 'log_weight', 'log_history', 'propose_program']);
 
 /* ------------------------------------------------------------------ handler -- */
 

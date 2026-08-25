@@ -179,6 +179,70 @@ Rows land exactly as a Shortcut payload does — one day at a time, session figu
 session already logged, never as a second one. Re-importing a file that overlaps one you
 already imported replaces those days rather than stacking them.
 
+## Bringing a history in
+
+The same sheet takes a history file: *Import health data → Copy the file format*, hand that
+to whatever holds your history — a spreadsheet, a notes app, a conversation — and open the
+CSV it gives back.
+
+CSV, not JSON, and for one reason: an empty cell stays empty. A day nobody weighed themselves
+on has to arrive as *nothing*, not as a zero, or the weight curve grows a hole at the axis and
+every average that reads it is wrong. JSON invites the same mistake with `0` and `null`, and
+a long hand-written one usually arrives with a trailing comma in it.
+
+```
+Date,Weight,Body fat,Intake kcal,Protein,Carbs,Fat,Sport kcal,Steps,Bedtime,Wake time
+2026-05-04,82.4,22.4,2180,150,210,68,340,7420,23:10,06:55
+2026-05-05,,,2050,148,,,,6100,,
+```
+
+Every column is optional except the date — `Date,Weight` alone is a complete file. Headers do
+not have to match exactly: French names work, so do the usual tracker exports, and the mapping
+is shown before anything is written.
+
+Rows land day by day, replacing what openGym holds for that date rather than adding to it, so
+re-importing a corrected file is a correction and not a duplicate. Intake merges: a file
+carrying only calories will not wipe macros already logged for that day.
+
+## Maintenance, and the deficit
+
+Set your maintenance in *Stats → Energy*, or from the day's balance on the home screen. It is
+the one figure in the app that nothing can measure for you, and everything else follows from
+it:
+
+```
+deficit = (maintenance + sport) − intake
+```
+
+**Maintenance here means a day with no training in it.** Sport is added on top, from the
+watch's all-day active energy where there is one, else from the session's own figure. So do
+not paste in a TDEE that came out of a formula with an activity multiplier — Mifflin-St Jeor
+× 1.55 and its relatives already contain the training, and adding sport to one of those counts
+every session twice. Every day then reads 300–600 kcal better than it went, and the cut stalls
+for no visible reason.
+
+You do not have to guess it for long. Once there are four weigh-ins across three weeks and
+intake logged on at least 60 % of the days, the app reads maintenance off your own history:
+
+```
+expenditure  = mean intake + (weight lost × 7 700) / days
+maintenance  = expenditure − mean sport
+```
+
+That figure is measured on you, so it beats every formula. The sheet shows it beside the one
+you typed and offers to take it.
+
+The Energy card totals the whole thing three ways — the deficit eating created, the deficit
+training created, and the two together — over the days that logged an intake, with the day
+count travelling beside the totals. A day nobody logged has no balance rather than a balance
+of zero, and today is left out until it is over: at four in the afternoon the log holds lunch,
+and counting it would book a deficit dinner is about to erase.
+
+Finally the card puts the predicted loss next to what the scale actually did. The two never
+match exactly — 7 700 kcal per kilo assumes an expenditure that does not fall as you get
+lighter — so a kilo or two of gap is the model. Four is a maintenance figure that needs
+correcting, and the card says which way.
+
 ## Sleep is two clock times, not a number of hours
 
 The sleep sheet asks when you went to bed, when you got up, and how many minutes you were

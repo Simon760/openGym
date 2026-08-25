@@ -201,10 +201,11 @@ phone this does too.
 
 | Tool | |
 | --- | --- |
-| `get_training_log` | Workouts, body weight and intake over a window. Every exercise carries what the session prescribed beside what was actually done. |
+| `get_training_log` | Workouts, body weight, intake, daily activity and sleep over a window. Every exercise carries what the session prescribed beside what was actually done. It also returns `tdee`, so a day's balance is `(tdee + activity.kcal) − intake.kcal`. |
 | `get_plan` | The weekly plan, and every exercise's sets, reps, weight and progression rule. |
 | `log_intake` | Record a day's calories and macros. |
 | `log_weight` | Record a weigh-in. |
+| `log_history` | Write a run of past days in one call — the retroactive import. Each day replaces what openGym holds for that date, so re-sending a day is a correction rather than a duplicate. An omitted field is left alone; a zero would be read as a measurement. |
 | `propose_program` | Send a program. It is **not** applied here: it waits in the app, where exercise names are matched against the library and the whole resolution is shown before anything is written. |
 
 ### The URL is the credential

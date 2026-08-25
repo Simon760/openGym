@@ -75,6 +75,39 @@ describe('dailyDigest', () => {
   })
 })
 
+describe('dailyDigest — the energy balance', () => {
+  it('spells the balance out rather than handing over a total', () => {
+    // the conversation reading this has to see which of the three numbers moved
+    const S = base({
+      tdee: 2100,
+      nutrition: [{ d: iso(0), kcal: 1900 }],
+      health: [{ d: iso(0), kcal: 620 }]
+    })
+    const out = dailyDigest(S, iso(0))
+    expect(out).toContain('2,100 + 620')
+    expect(out).toContain('1,900')
+    expect(out).toContain('+820')
+  })
+
+  it('says nothing about a balance it cannot compute', () => {
+    const noTdee = dailyDigest(base({ nutrition: [{ d: iso(0), kcal: 1900 }] }), iso(0))
+    expect(noTdee).not.toContain('Balance')
+    // and an unlogged day is not a break-even day
+    expect(dailyDigest(base({ tdee: 2100 }), iso(0))).not.toContain('Balance')
+  })
+
+  it('carries the running total, so the conversation does not have to keep it', () => {
+    const S = base({
+      tdee: 2000,
+      nutrition: [{ d: iso(9), kcal: 1500 }, { d: iso(5), kcal: 1500 }, { d: iso(0), kcal: 1500 }],
+      health: [{ d: iso(5), kcal: 400 }]
+    })
+    const out = dailyDigest(S, iso(0))
+    expect(out).toContain('1,900 kcal')      // 3 x 500 eating + 400 training
+    expect(out).toContain('3 logged days of 10')
+  })
+})
+
 describe('trainingDigest', () => {
   const R = { id: 'r1', name: 'Push Day', ex: [{ id: '0025', sets: 4, reps: 8, weight: 75, prog: 'linear', mode: 'reps' }] }
   const S = (...workouts) => base({ routines: [R], week: { 1: 'r1' }, workouts })

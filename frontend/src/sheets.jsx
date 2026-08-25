@@ -24,7 +24,8 @@ import { nextPrescription, applyPrescription, policyFor, defaultIncrement, POLIC
 import { MOBILE, shareExport, shareText, canShareText } from './lib/mobile.js'
 import { entryFor, hasMacros, kcalFromMacros, derivedMismatch, remainingOf, putEntry, MACROS, MACRO_NAME } from './lib/nutrition.js'
 import { validBodyFat, composition, sleepFor, putSleep, validSleep, sleepHours, hoursBetween, validTime, BF_MIN, BF_MAX, SLEEP_MIN, SLEEP_MAX } from './lib/body.js'
-import { parseHealth, applyHealth, parseHealthCSV, applyHealthDays, SHORTCUT_RECIPE } from './lib/health.js'
+import { parseHealth, applyHealth, parseHealthCSV, applyHealthDays, SHORTCUT_RECIPE, HISTORY_SPEC } from './lib/health.js'
+import { impliedTDEE, validTDEE, TDEE_MIN, TDEE_MAX, IMPLIED_MIN_SPAN, IMPLIED_MIN_DAYS, IMPLIED_MIN_WEIGHINS } from './lib/energy.js'
 
 const S = () => useStore.getState().S
 const update = (...a) => useStore.getState().update(...a)
@@ -379,6 +380,72 @@ function NutriGoalSheet({ close }) {
   </>
 }
 export const nutriGoalSheet = () => ui().openSheet(close => <NutriGoalSheet close={close} />)
+
+/* ============================ maintenance (TDEE) ============================ */
+// The one figure in the app nothing can measure for you — and the one every deficit reading
+// hangs off. See lib/energy.js for why it asks for the sedentary number and adds training
+// on top, and for how the implied figure below is derived.
+function TdeeSheet({ close }) {
+  const st = S()
+  const [v, setV] = useState(st.tdee || 0)
+  const implied = impliedTDEE(st)
+  const typed = validTDEE(v)
+  const gap = typed && implied.tdee ? typed - implied.tdee : null
+
+  const why = {
+    weighIns: t('It needs at least {0} weigh-ins.', IMPLIED_MIN_WEIGHINS),
+    span: t('It needs a run of at least {0} days — anything shorter is water, not fat.', IMPLIED_MIN_SPAN),
+    days: t('It needs at least {0} days of logged intake.', IMPLIED_MIN_DAYS),
+    coverage: t('Your intake is logged on {0} of {1} days — too few to stand for the period.', implied.days, implied.span + 1),
+    range: t('The figures do not come to anything a body could spend — check the log.')
+  }[implied.why]
+
+  return <>
+    <h3>{t('Maintenance')}</h3>
+    <div className="muted small" style={{ lineHeight: 1.45 }}>
+      {t('What you spend on a day with no training. Sport is added on top of it, from what your watch measured — so this figure must not already include your training.')}
+    </div>
+    <div style={{ height: 12 }} />
+    <Stepper label={t('Calories per day')} unit="kcal" value={v} step={25} decimal={false} onChange={n => setV(n || 0)} />
+
+    {implied.tdee ? <>
+      <h4 className="sec">{t('What your own history says')}</h4>
+      <div className="row between" style={{ alignItems: 'flex-end', gap: 12 }}>
+        <div>
+          <div className="stat-v">{fmtNum(implied.tdee)} <span className="muted" style={{ fontSize: '1rem' }}>kcal</span></div>
+          <div className="small dim" style={{ marginTop: 2 }}>
+            {t('{0} days logged of {1}, {2} weigh-ins, {3} kg a week', implied.days, implied.span + 1, implied.weighIns, fmtNum(implied.kgPerWeek))}
+          </div>
+        </div>
+        {typed !== implied.tdee &&
+          <Button size="sm" icon="bolt" onClick={() => setV(implied.tdee)}>{t('Use it')}</Button>}
+      </div>
+      {gap != null && Math.abs(gap) >= 150 && <div className="small" style={{ marginTop: 8, color: 'var(--orange)', lineHeight: 1.4 }}>
+        {gap > 0
+          ? t('You have entered {0} kcal more than your weight curve accounts for — every deficit here reads that much too large.', fmtNum(gap))
+          : t('You have entered {0} kcal less than your weight curve accounts for — every deficit here reads that much too small.', fmtNum(-gap))}
+      </div>}
+      <div className="dim small" style={{ marginTop: 8, lineHeight: 1.45 }}>
+        {t('Read off your weigh-ins and your intake log over that period. It beats any formula, because it is measured on you.')}
+      </div>
+    </> : <>
+      <h4 className="sec">{t('What your own history says')}</h4>
+      <div className="dim small" style={{ lineHeight: 1.45 }}>
+        {t('Not enough logged yet to read maintenance off your own curve.')} {why || ''}
+      </div>
+    </>}
+
+    <div style={{ height: 14 }} />
+    <Button variant="primary" onClick={() => {
+      const n = validTDEE(v)
+      if (n == null) { toast(t('A maintenance figure sits between {0} and {1} kcal.', TDEE_MIN, TDEE_MAX)); return }
+      update(s => { s.tdee = n }); close(); toast(t('Maintenance set'))
+    }}>{t('Save')}</Button>
+    {st.tdee && <><div style={{ height: 8 }} />
+      <Button variant="danger" onClick={() => { update(s => { s.tdee = null }); close(); toast(t('Maintenance cleared')) }}>{t('Delete')}</Button></>}
+  </>
+}
+export const tdeeSheet = () => ui().openSheet(close => <TdeeSheet close={close} />)
 
 /* ============================ exercise detail ============================ */
 // Estimated 1RM for one exercise (issue #18): what the log already implies, plus a calculator
@@ -866,6 +933,7 @@ function HealthImport({ close }) {
   const [text, setText] = useState('')
   const [err, setErr] = useState(null)
   const [recipe, setRecipe] = useState(false)
+  const [spec, setSpec] = useState(false)
   const [review, setReview] = useState(null)
   const [done, setDone] = useState(null)
   const fileRef = useRef(null)
@@ -900,6 +968,10 @@ function HealthImport({ close }) {
   const copyRecipe = async () => {
     try { await navigator.clipboard.writeText(SHORTCUT_RECIPE); toast(t('Recipe copied')) }
     catch (e) { setRecipe(true) }
+  }
+  const copySpec = async () => {
+    try { await navigator.clipboard.writeText(HISTORY_SPEC); toast(t('Format copied')) }
+    catch (e) { setSpec(true) }
   }
 
   if (done) return <>
@@ -957,6 +1029,12 @@ function HealthImport({ close }) {
     <div style={{ height: 8 }} />
     <Button variant="ghost" icon="folder" onClick={() => fileRef.current?.click()}>{t('Open a file')}</Button>
     <input ref={fileRef} type="file" accept=".csv,.json,.txt,text/csv,application/json,text/plain" onChange={pickFile} hidden />
+    <h4 className="sec">{t('Your history, from wherever it is written down')}</h4>
+    <div className="dim small" style={{ marginBottom: 10, lineHeight: 1.45 }}>
+      {t('Weigh-ins, intake, training energy — as far back as it goes, one row per day. Ask for it as CSV: an empty cell stays empty, which is the whole point, because a day nobody logged must not arrive as a zero.')}
+    </div>
+    <Button variant="ghost" icon="clipboard" onClick={copySpec}>{t('Copy the file format')}</Button>
+    {spec && <TextArea rows={14} readOnly value={HISTORY_SPEC} style={{ marginTop: 10 }} />}
     <h4 className="sec">{t('Whoop, Fitbit, Garmin, Oura, Polar…')}</h4>
     <div className="dim small" style={{ marginBottom: 10, lineHeight: 1.45 }}>
       {t('Export your data from the tracker’s own app or website and open the CSV here. openGym reads the columns it recognises — sleep, steps, energy, resting heart rate, weight — and shows you the mapping before writing anything.')}

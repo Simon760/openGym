@@ -37,6 +37,19 @@ const SLEEP_BASE = 7.2
 const SLEEP_SKIPPED = 0.18             // share of nights never logged
 const SLEEP_UNRATED = 0.35             // …plus this share logged without a feel rating
 
+// --- Activity and maintenance -----------------------------------------------------------
+// What a watch would have recorded: steps and active energy, more of both on a training day.
+// Without it the energy card shows a training deficit of exactly zero — which is the one
+// thing that card exists to show, and the demo would be quietly arguing training does
+// nothing. TDEE is maintenance *without* training, chosen so that it plus the activity below
+// minus the intake above comes out at the weight trend at the top of this file: the demo has
+// to be arithmetically honest or the cross-check it ships with contradicts it.
+const TDEE = 2200
+const ACT_BASE = 190                   // active kcal on a rest day
+const ACT_TRAINING = 320               // …plus this on a day with a session
+const STEPS_BASE = 6000
+const ACT_SKIPPED = 0.08               // share of days the watch was not worn
+
 // --- Effort -----------------------------------------------------------------------------
 // The demo has to show the effort stats, not just the volume ones, so the history carries
 // ratings. Flat ratings would draw a flat trend and prove nothing, so this fabricates the
@@ -97,6 +110,7 @@ export function buildDemoState() {
   const bodyweight = []
   const nutrition = []
   const sleep = []
+  const health = []
   const exWeights = {}
   const best = {}
 
@@ -131,6 +145,17 @@ export function buildDemoState() {
     // food log that only existed on training days would draw a false weekly pattern.
     const trains = !!byWeekday[day.getDay()]
     const isToday = iso === isoOf(today)
+    if (rnd() > ACT_SKIPPED) {
+      health.push({
+        d: iso,
+        kcal: Math.round(ACT_BASE + (trains ? ACT_TRAINING : 0) + (rnd() - 0.5) * 180),
+        steps: Math.round(STEPS_BASE + (trains ? 1800 : 0) + (rnd() - 0.5) * 3600),
+        // Resting heart rate drifts down across the cut, the way it does
+        rhr: Math.round(54 - 3 * p + (rnd() - 0.5) * 4),
+        t: at(day, 22, 0)
+      })
+    }
+
     if (rnd() > NUTRI_SKIPPED) {
       const kcal = Math.round(NUTRI_BASE + (trains ? NUTRI_TRAINING_BONUS : 0) + (rnd() - 0.5) * 420)
       // Today is logged as a day in progress rather than a finished one — the reading that
@@ -218,8 +243,9 @@ export function buildDemoState() {
     routines: [push, pull, legs],
     week: { 1: push.id, 3: pull.id, 5: legs.id },
     dayPlan,
-    workouts, bodyweight, exWeights, nutrition, sleep,
+    workouts, bodyweight, exWeights, nutrition, sleep, health,
     targetW: TARGET_W,
+    tdee: TDEE,
     nutriGoal: NUTRI_GOAL,
     sleepGoal: SLEEP_GOAL,
     // The history is rated, so the demo turns the column on and the stats get a scale to

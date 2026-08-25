@@ -4,9 +4,10 @@ import { useStore } from '../store/useStore.js'
 import { effectiveRoutine, effectiveRoutineId, streakWeeks, lastBW, setsDoneActive } from '../lib/history.js'
 import { fmtNum, fmtDate, todayISO, isoOf, weekKey, DAYS } from '../lib/format.js'
 import { t, dateLocale } from '../lib/i18n.js'
-import { bwSheet, goalSheet, dayOverrideSheet, calendarSheet, startFlow, loadStarterPlan, bwDeltaColor, nutriSheet, nutriGoalSheet, digestSheet, openPendingProgram, discardPendingProgram, sleepSheet } from '../sheets.jsx'
+import { bwSheet, goalSheet, dayOverrideSheet, calendarSheet, startFlow, loadStarterPlan, bwDeltaColor, nutriSheet, nutriGoalSheet, digestSheet, openPendingProgram, discardPendingProgram, sleepSheet, tdeeSheet } from '../sheets.jsx'
 import { entryFor, kcalFromMacros, macroSplit, remainingOf, MACROS, MACRO_NAME, MACRO_COLOR } from '../lib/nutrition.js'
 import { composition, todaySleep, lastSleep, sleepHours } from '../lib/body.js'
+import { dayBalance } from '../lib/energy.js'
 import LineChart from '../components/LineChart.jsx'
 import Icon from '../components/Icon.jsx'
 import { Button } from '../components/ui.jsx'
@@ -49,6 +50,10 @@ export default function Home() {
   const lastNight = sleptToday || lastSleep(S)
   const todayNutri = entryFor(S, todayISO())
   const nutriLeft = remainingOf(todayNutri, S.nutriGoal)
+  // Null unless there is both a maintenance figure and calories logged today — a balance
+  // is a subtraction, and half of one is not worth a line on the card.
+  const bal = todayNutri ? dayBalance(S, todayISO()) : null
+  const balance = bal && bal.deficit != null ? bal : null
   const macroSplitToday = macroSplit(todayNutri)
 
   // today's session shown right under the week strip
@@ -201,6 +206,23 @@ export default function Home() {
           </div>
         </>}
       </> : <div className="muted small">{t('Nothing logged today — add your calories to keep the picture complete.')}</div>}
+
+      {/* The day's balance: (maintenance + training) − intake. It sits under the intake
+          rather than in its own card because it is the same question — what today came to —
+          and splitting it in two would make you scroll to answer half of it. */}
+      {balance ? <div className="row between" style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--sep)', gap: 10 }}>
+        <div style={{ minWidth: 0 }}>
+          <div className="lbl2">{balance.deficit >= 0 ? t('Deficit today') : t('Surplus today')}</div>
+          <div className="dim small" style={{ marginTop: 2 }}>
+            {t('{0} + {1} sport − {2} eaten', fmtNum(balance.tdee), fmtNum(balance.sport), fmtNum(balance.intake))}
+          </div>
+        </div>
+        <div className="stat-v" style={{ color: balance.deficit >= 0 ? 'var(--acc)' : 'var(--orange)', flexShrink: 0 }}>
+          {fmtNum(Math.abs(balance.deficit))} <span className="muted" style={{ fontSize: '.9rem' }}>kcal</span>
+        </div>
+      </div> : S.tdee || !todayNutri ? null : <div style={{ marginTop: 10 }}>
+        <Button size="sm" icon="flame" onClick={tdeeSheet}>{t('Set your maintenance')}</Button>
+      </div>}
     </div>
 
     <div className="card tappable" style={{ cursor: 'pointer' }} onClick={() => calendarSheet()}>

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { parseHealth, applyHealth, putHealth, healthFor, parseHealthCSV, applyHealthDays } from './health.js'
+import { entryFor } from './nutrition.js'
 import { sleepHours } from './body.js'
 import { todayISO } from './format.js'
 
@@ -197,5 +198,66 @@ describe('applyHealthDays', () => {
     const S = base()
     const { payloads } = parseHealthCSV('Date,Body fat\n2026-08-22,18.6\n2026-08-23,18.4')
     expect(applyHealthDays(S, payloads).skipped).toHaveLength(1)
+  })
+})
+
+describe('parseHealthCSV — a retroactive history', () => {
+  it('reads the file format the app hands you to ask for', () => {
+    const csv = [
+      'Date,Weight,Body fat,Intake kcal,Protein,Carbs,Fat,Sport kcal,Steps',
+      '2026-08-22,78.4,18.6,1940,155,180,62,480,9420',
+      '2026-08-23,78.1,,2210,140,,,,7110'
+    ].join('\n')
+    const { payloads, ignored } = parseHealthCSV(csv)
+    expect(ignored).toEqual([])
+    expect(payloads[0]).toMatchObject({
+      d: '2026-08-22', weight: 78.4, bodyFat: 18.6,
+      intake: 1940, protein: 155, carbs: 180, fat: 62, kcal: 480, steps: 9420
+    })
+    // an empty cell is a day nobody recorded, not a day of none
+    expect('bodyFat' in payloads[1]).toBe(false)
+    expect('protein' in payloads[1]).toBe(true)
+    expect('carbs' in payloads[1]).toBe(false)
+  })
+
+  it('tells the fat you ate from the fat you are made of', () => {
+    // "Fat" and "Body fat" both end in the same three letters, and reading 62 g of dietary
+    // fat as 62 % body fat would be the most confident wrong number the app could draw
+    const { payloads } = parseHealthCSV('Date,Body fat,Fat\n2026-08-22,18.6,62')
+    expect(payloads[0]).toMatchObject({ bodyFat: 18.6, fat: 62 })
+    const pct = parseHealthCSV('Date,Fat %\n2026-08-22,18.6').payloads[0]
+    expect(pct).toMatchObject({ bodyFat: 18.6 })
+    expect('fat' in pct).toBe(false)
+  })
+
+  it('reads a file written in French, because the conversation that wrote it was', () => {
+    const csv = 'Date,Poids,Masse grasse,Apports,Protéines,Glucides,Lipides,Pas\n2026-08-22,78.4,18.6,1940,155,180,62,9420'
+    expect(parseHealthCSV(csv).payloads[0]).toMatchObject({
+      weight: 78.4, bodyFat: 18.6, intake: 1940, protein: 155, carbs: 180, fat: 62, steps: 9420
+    })
+  })
+
+  it('keeps eating apart from burning when a file carries both', () => {
+    const { payloads } = parseHealthCSV('Date,Intake kcal,Calories burned\n2026-08-22,1940,480')
+    expect(payloads[0]).toMatchObject({ intake: 1940, kcal: 480 })
+  })
+})
+
+describe('applyHealthDays — an imported history', () => {
+  it('writes the intake through the same door the nutrition sheet uses', () => {
+    const S = base()
+    const { payloads } = parseHealthCSV(
+      'Date,Weight,Intake kcal,Protein\n2026-08-22,78.4,1940,155\n2026-08-23,78.1,2210,140')
+    const r = applyHealthDays(S, payloads)
+    expect(r.wrote).toHaveLength(2)
+    expect(entryFor(S, '2026-08-22')).toMatchObject({ kcal: 1940, p: 155 })
+    expect(S.bodyweight).toHaveLength(2)
+  })
+
+  it('merges into a day already logged rather than wiping what it does not carry', () => {
+    // a history file with only the calories must not delete the macros already there
+    const S = base({ nutrition: [{ d: D, kcal: 1800, p: 150, c: 170, f: 60 }] })
+    applyHealthDays(S, parseHealthCSV(`Date,Intake kcal\n${D},1940`).payloads)
+    expect(entryFor(S, D)).toMatchObject({ kcal: 1940, p: 150, c: 170, f: 60 })
   })
 })

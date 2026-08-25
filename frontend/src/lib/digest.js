@@ -21,6 +21,7 @@ import { effortSummary, displayScale, scaleName, toScale } from './effort.js'
 import { entryFor, avgOver, MACROS, MACRO_NAME } from './nutrition.js'
 import { sleepFor, sleepHours } from './body.js'
 import { healthFor } from './health.js'
+import { dayBalance, deficitTotals } from './energy.js'
 import { fmtNum, fmtDate, todayISO, isoOf } from './format.js'
 import { t } from './i18n.js'
 
@@ -128,6 +129,15 @@ export function dailyDigest(S, iso = todayISO(), now = Date.now()) {
     if (b.length) out.push(t('Activity') + ' ' + b.join(' · '))
   }
 
+  // The balance, spelled out rather than left as a total: the conversation reading this
+  // needs to see which of the three numbers moved, not just the result.
+  const bal = dayBalance(S, iso)
+  if (bal && bal.deficit != null) {
+    out.push(t('Balance') + ' ' + fmtNum(bal.tdee) + ' + ' + fmtNum(bal.sport) + ' ' + t('sport')
+      + ' − ' + fmtNum(bal.intake) + ' = ' + sign(bal.deficit) + ' kcal'
+      + ' (' + (bal.deficit >= 0 ? t('deficit') : t('surplus')) + ')')
+  }
+
   const w = (S.workouts || []).find(x => x.d === iso)
   if (w) {
     out.push('')
@@ -153,6 +163,20 @@ export function dailyDigest(S, iso = todayISO(), now = Date.now()) {
   if (tr) out.push('  ' + t('Weight') + ' ' + sign(tr[1].w - tr[0].w) + ' ' + S.unit)
   const wk = (S.workouts || []).filter(x => inWindow(x.d, 7, now))
   out.push('  ' + t('Sessions') + ' ' + wk.length)
+
+  // Since the beginning, split the way it is worth splitting. The running total is the
+  // number a weight-loss conversation is actually keeping, and recomputing it there from a
+  // month of daily messages is how it drifts.
+  // Through the day being reported, not through yesterday: this digest is what closes it.
+  const tot = deficitTotals(S, S.tdee, 0, now, iso)
+  if (tot) {
+    out.push('')
+    out.push(t('Since {0}', fmtDate(tot.from, true)))
+    out.push('  ' + t('Deficit') + ' ' + fmtNum(tot.total) + ' kcal ≈ ' + fmtNum(tot.kg) + ' kg'
+      + ' (' + t('eating') + ' ' + fmtNum(tot.nutrition) + ' · ' + t('training') + ' ' + fmtNum(tot.sport) + ')')
+    out.push('  ' + t('over {0} logged days of {1}', tot.days, tot.span)
+      + (tot.unmeasured ? ' · ' + t('{0} sessions unmeasured', tot.unmeasured) : ''))
+  }
   return out.join('\n')
 }
 
