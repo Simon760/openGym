@@ -61,11 +61,29 @@ describe('applyHealth', () => {
     expect(r.wrote.join(' ')).toContain('Push Day')
   })
 
-  it('says so when there is no session to attach the watch figures to', () => {
+  it('keeps the watch figures when no session was logged, without inventing one', () => {
+    // A watch measuring a session is evidence the session happened. Dropping the figures
+    // because the app has no record of it loses the only measurement there was — but an
+    // empty workout in the log would count as trained in every streak that reads it.
     const S = base()
-    const r = applyHealth(S, parseHealth({ date: D, workout: { minutes: 52 } }))
+    const r = applyHealth(S, parseHealth({ date: D, workout: { minutes: 47, kcal: 612 } }))
     expect(S.workouts).toHaveLength(0)
+    expect(r.skipped).toHaveLength(0)
+    expect(r.wrote).toHaveLength(1)
+    expect(healthFor(S, D)).toMatchObject({ sport: 612, sportMin: 47 })
+  })
+
+  it('still says so when the session details carry no figures at all', () => {
+    const S = base()
+    const r = applyHealth(S, { d: D, workout: { type: 'HIIT' } })
     expect(r.skipped).toHaveLength(1)
+  })
+
+  it('prefers the logged session when there is one', () => {
+    const S = base({ workouts: [{ d: D, id: 'w', name: 'Push A', entries: [] }] })
+    applyHealth(S, parseHealth({ date: D, workout: { minutes: 47, kcal: 612 } }))
+    expect(S.workouts[0].watch).toMatchObject({ kcal: 612, minutes: 47 })
+    expect(healthFor(S, D)).toBe(null)
   })
 
   it('keeps the daily figures even when the session part has nowhere to go', () => {

@@ -71,3 +71,37 @@ describe('sportKcal — measured NEAT beats declared', () => {
     expect(sp.kcal).toBe(Math.round(1000 * 0.72) - Math.round(400 * 0.72))
   })
 })
+
+describe('sportKcal — a session the app never logged', () => {
+  it('reads training energy filed against the day, and takes no NEAT off it', () => {
+    // Someone trained without the app. The figure is training and nothing else, exactly as
+    // it would be if a session had been logged to carry it.
+    const S = {
+      watchTrim: 0, tdee: { bmr: 1700, neat: 450, sport: 350 }, workouts: [],
+      nutrition: [], bodyweight: [],
+      health: [{ d: D(15), sport: 612, sportMin: 47 }]
+    }
+    expect(sportKcal(S, D(15), 0, S.tdee, NOW)).toMatchObject({ kcal: 612, neat: 0, source: 'session' })
+  })
+
+  it('lets a logged session outrank it', () => {
+    const S = {
+      watchTrim: 0, tdee: { bmr: 1700, neat: 450, sport: 350 },
+      workouts: [{ d: D(15), id: 'w', watch: { kcal: 700 } }], nutrition: [], bodyweight: [],
+      health: [{ d: D(15), sport: 612 }]
+    }
+    expect(sportKcal(S, D(15), 0, S.tdee, NOW).kcal).toBe(700)
+  })
+
+  it('leaves the day’s NEAT alone when the steps were never logged', () => {
+    // An absent figure is absent, not zero: a day nobody counted must not read as a day of
+    // no movement, which is what the rest-day baseline is built from.
+    const S = {
+      watchTrim: 0, tdee: { bmr: 1700, neat: 450, sport: 350 }, workouts: [],
+      nutrition: [], bodyweight: [],
+      health: [{ d: D(15), sport: 612 }]      // no steps, no day total
+    }
+    expect(observedNEAT(S, 90, NOW)).toBe(null)          // nothing measured it
+    expect(sportKcal(S, D(15), 0, S.tdee, NOW).kcal).toBe(612)
+  })
+})

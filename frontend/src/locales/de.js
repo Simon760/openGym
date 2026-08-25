@@ -912,4 +912,6 @@ export default {
   '{0} kcal active': '{0} kcal active',
   'Nothing was saved': 'Nothing was saved',
   'Type today’s figures in': 'Type today’s figures in',
+  '{0} kcal of training on a day with no session logged': '{0} kcal of training on a day with no session logged',
+  '{0} min of training on a day with no session logged': '{0} min of training on a day with no session logged',
 }

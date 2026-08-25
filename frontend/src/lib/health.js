@@ -117,7 +117,7 @@ export function parseHealth(raw) {
 export function putHealth(list, entry) {
   const rest = (list || []).filter(e => e.d !== entry.d)
   const kept = { d: entry.d, t: entry.t || Date.now() }
-  for (const k of ['steps', 'kcal', 'rhr', 'exerciseMin']) if (entry[k] != null) kept[k] = entry[k]
+  for (const k of ['steps', 'kcal', 'rhr', 'exerciseMin', 'sport', 'sportMin']) if (entry[k] != null) kept[k] = entry[k]
   if (Object.keys(kept).length <= 2) return rest.sort(byDate)
   return [...rest, kept].sort(byDate)
 }
@@ -192,7 +192,23 @@ export function applyHealth(S, p) {
       w.watch = { ...(w.watch || {}), ...p.workout }
       report.wrote.push(t('session details onto {0}', w.name))
     } else {
-      report.skipped.push(t('the session details — nothing was logged in BodyEvolve that day'))
+      // No session logged that day, and this used to be the end of it — the figures were
+      // reported as skipped and dropped. But a watch measuring a session is evidence that
+      // the session happened, whether or not it was logged here: someone who trained
+      // without the app, or has not logged it yet, still burned what the watch says. The
+      // energy is filed against the day instead. It is training energy either way, so
+      // nothing takes NEAT off it. What is NOT done is inventing a workout to hang it on:
+      // an empty session in the log would count as trained in every streak and every
+      // volume figure that reads it.
+      const kcal = p.workout.kcal, min = p.workout.minutes
+      if (kcal != null || min != null) {
+        S.health = putHealth(S.health, { ...(healthFor(S, p.d) || {}), d: p.d, sport: kcal, sportMin: min })
+        report.wrote.push(kcal != null
+          ? t('{0} kcal of training on a day with no session logged', kcal)
+          : t('{0} min of training on a day with no session logged', min))
+      } else {
+        report.skipped.push(t('the session details — nothing was logged in BodyEvolve that day'))
+      }
     }
   }
   return report

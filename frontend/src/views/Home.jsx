@@ -64,8 +64,12 @@ export default function Home() {
     const w = (S.workouts || []).find(x => x.d === iso && x.watch)
     const h = (S.health || []).find(x => x.d === iso)
     const bits = []
-    if (w && w.watch.kcal) bits.push(fmtNum(w.watch.kcal) + ' kcal')
-    if (w && w.watch.minutes) bits.push(fmtNum(w.watch.minutes) + ' min')
+    // The session's figures, wherever they ended up: on the workout when one was logged,
+    // on the day itself when the training happened without one.
+    const kcal = (w && w.watch.kcal) ?? (h && h.sport)
+    const min = (w && w.watch.minutes) ?? (h && h.sportMin)
+    if (kcal) bits.push(fmtNum(kcal) + ' kcal')
+    if (min) bits.push(fmtNum(min) + ' min')
     if (h && h.kcal) bits.push(t('{0} kcal active', fmtNum(h.kcal)))
     if (h && h.steps) bits.push(fmtNum(h.steps) + ' ' + t('steps'))
     return bits.length ? bits.join(' · ') : null

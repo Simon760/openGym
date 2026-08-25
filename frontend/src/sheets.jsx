@@ -1004,8 +1004,7 @@ const healthFieldLabel = () => ({
 const WATCH_FIELDS = [
   { k: 'sport', label: 'Session energy', unit: 'kcal' },
   { k: 'min', label: 'Session length', unit: 'min' },
-  { k: 'steps', label: 'Steps', unit: '' },
-  { k: 'sleep', label: 'Sleep', unit: 'h', decimal: true }
+  { k: 'steps', label: 'Steps', unit: '' }
 ]
 
 function NumRow({ label, unit, value, onChange, decimal = false }) {
@@ -1035,7 +1034,7 @@ function NumRow({ label, unit, value, onChange, decimal = false }) {
 function ManualEntry({ onDone, close }) {
   const [v, setV] = useState({})
   const set = (k, n) => setV(x => ({ ...x, [k]: n }))
-  const any = ['sport', 'min', 'steps', 'sleep'].some(k => v[k] > 0)
+  const any = WATCH_FIELDS.some(f => v[f.k] > 0)
 
   const save = () => {
     const p = { d: todayISO() }
@@ -1044,8 +1043,9 @@ function ManualEntry({ onDone, close }) {
       if (v.sport > 0) p.workout.kcal = Math.round(v.sport)
       if (v.min > 0) p.workout.minutes = Math.round(v.min)
     }
+    // Absent, never zero. A field left empty is a figure nobody measured, and a zero here
+    // would be read as a day of no movement — which is what the NEAT baseline is built from.
     if (v.steps > 0) p.steps = Math.round(v.steps)
-    if (v.sleep > 0) p.sleepHours = v.sleep
     let report
     update(s => { report = applyHealth(s, p) })
     onDone(report)

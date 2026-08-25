@@ -170,6 +170,11 @@ export function sportKcal(S, iso, trim = WATCH_TRIM, tdee = S && S.tdee, now = D
   if (w) return cut(w.watch.kcal, 'session')
 
   const hd = healthFor(S, iso)
+  // The same figure, filed against the day because no session was logged to carry it. Still
+  // training and nothing else, so still nothing to take off it.
+  const loose = num(hd && hd.sport)
+  if (loose != null) return cut(loose, 'session')
+
   const day = num(hd && hd.kcal)
   if (day != null) {
     // Measured beats declared: the rest-day baseline is this person's own, in the watch's

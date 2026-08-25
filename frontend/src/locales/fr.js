@@ -887,4 +887,6 @@ export default {
   '{0} kcal active': '{0} kcal actives',
   'Nothing was saved': 'Rien n’a été enregistré',
   'Type today’s figures in': 'Saisir les chiffres du jour',
+  '{0} kcal of training on a day with no session logged': '{0} kcal d’entraînement sur un jour sans séance enregistrée',
+  '{0} min of training on a day with no session logged': '{0} min d’entraînement sur un jour sans séance enregistrée',
 }
