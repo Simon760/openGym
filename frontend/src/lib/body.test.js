@@ -3,7 +3,7 @@ import {
   validBodyFat, lastComposition, composition, compositionTrend, bodyFatSeries,
   validSleep, sleepFor, lastSleep, putSleep, sleepAverage, sleepDebt, sleepSeries,
   hoursBetween, sleepHours, validTime,
-  BF_MIN, BF_MAX, SLEEP_MIN, SLEEP_MAX, whenOf, dayTime } from './body.js'
+  BF_MIN, BF_MAX, SLEEP_MIN, SLEEP_MAX, whenOf, dayTime, sinceStart } from './body.js'
 import { isoOf } from './format.js'
 
 const daysAgo = n => { const d = new Date(); d.setDate(d.getDate() - n); return d }
@@ -262,5 +262,41 @@ describe('whenOf — where an entry sits on a time axis', () => {
   it('falls back to the written time when there is no day at all', () => {
     expect(whenOf({ t: 1234 })).toBe(1234)
     expect(whenOf(null)).toBe(0)
+  })
+})
+
+describe('sinceStart — the whole journey', () => {
+  const S = over => ({ bodyweight: [], ...over })
+
+  it('measures the latest weigh-in against the very first', () => {
+    // Not the delta beside the number, which compares one weigh-in to the one before it.
+    // Six kilos across five months reads as nothing when it arrives 0.2 at a time.
+    const j = sinceStart(S({ bodyweight: [
+      { d: '2026-03-16', w: 86.2 }, { d: '2026-05-02', w: 82 }, { d: '2026-08-24', w: 79.5 }
+    ] }))
+    expect(j.kg).toBe(-6.7)
+    expect(j.from.d).toBe('2026-03-16')
+    expect(j.to.d).toBe('2026-08-24')
+    expect(j.readings).toBe(3)
+    expect(j.days).toBe(161)
+  })
+
+  it('reports a gain as a gain', () => {
+    expect(sinceStart(S({ bodyweight: [{ d: '2026-01-01', w: 70 }, { d: '2026-06-01', w: 76.4 }] })).kg).toBe(6.4)
+  })
+
+  it('says nothing from a single reading — that is a measurement, not a journey', () => {
+    expect(sinceStart(S({ bodyweight: [{ d: '2026-01-01', w: 80 }] }))).toBe(null)
+    expect(sinceStart(S())).toBe(null)
+    expect(sinceStart({})).toBe(null)
+  })
+
+  it('ignores an entry with no weight on it', () => {
+    // a body-fat reading can ride alone on a day; it is not a weigh-in
+    const j = sinceStart(S({ bodyweight: [
+      { d: '2026-01-01', w: 80 }, { d: '2026-02-01', bf: 22 }, { d: '2026-03-01', w: 77 }
+    ] }))
+    expect(j.kg).toBe(-3)
+    expect(j.readings).toBe(2)
   })
 })

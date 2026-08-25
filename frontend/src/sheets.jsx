@@ -25,8 +25,8 @@ import { nextPrescription, applyPrescription, policyFor, defaultIncrement, POLIC
 import { MOBILE, shareExport, shareText, canShareText } from './lib/mobile.js'
 import { entryFor, hasMacros, kcalFromMacros, derivedMismatch, remainingOf, putEntry, MACROS, MACRO_NAME } from './lib/nutrition.js'
 import { validBodyFat, composition, sleepFor, putSleep, validSleep, sleepHours, hoursBetween, validTime, BF_MIN, BF_MAX, SLEEP_MIN, SLEEP_MAX } from './lib/body.js'
-import { parseHealth, applyHealth, parseHealthCSV, applyHealthDays, shortcutRecipe, shortcutLink, historySpec } from './lib/health.js'
-import { impliedTDEE, tdeeParts, trimOf, TDEE_PARTS, TDEE_MIN, TDEE_MAX, TRIM_MAX, IMPLIED_MIN_SPAN, IMPLIED_MIN_DAYS, IMPLIED_MIN_WEIGHINS } from './lib/energy.js'
+import { parseHealth, applyHealth, healthFor, parseHealthCSV, applyHealthDays, shortcutRecipe, shortcutLink, historySpec } from './lib/health.js'
+import { impliedTDEE, tdeeParts, trimOf, dayBalance, TDEE_PARTS, TDEE_MIN, TDEE_MAX, TRIM_MAX, IMPLIED_MIN_SPAN, IMPLIED_MIN_DAYS, IMPLIED_MIN_WEIGHINS } from './lib/energy.js'
 import { APP_NAME, FILE_PREFIX } from './lib/brand.js'
 
 const S = () => useStore.getState().S
@@ -1482,6 +1482,91 @@ export const discardPendingProgram = () => confirmSheet({
   onConfirm: () => update(s => { delete s.pendingProgram })
 })
 
+
+/**
+ * Everything a day holds, in one place.
+ *
+ * Tapping a day in the week strip used to open the routine picker and nothing else, which
+ * answered "what am I training" and refused every other question — what did I eat, what did
+ * the watch say, how did I sleep, what did the day cost. Those figures were all recorded and
+ * none of them were readable anywhere except by scrolling three cards on the home screen,
+ * and only for today.
+ *
+ * Sections with nothing in them are still listed, dimmed. A day with no intake logged is a
+ * fact about the day, and hiding the row makes it look like a day that did not need one.
+ */
+function DayRow({ icon, label, value, dim, onClick, tint }) {
+  return (
+    <div className={'today-row wrap' + (onClick ? '' : ' still')} style={{ marginTop: 8 }} onClick={onClick}>
+      <div className="row" style={{ gap: 9, minWidth: 0 }}>
+        <span className="lrow-i" style={{ background: dim ? 'var(--surface-3)' : (tint || 'var(--acc)') }}><Icon name={icon} /></span>
+        <div style={{ minWidth: 0 }}>
+          <div className="lbl2">{label}</div>
+          <div className="ttl" style={dim ? { color: 'var(--label-3)' } : undefined}>{value}</div>
+        </div>
+      </div>
+      {onClick && <Icon name="chevronRight" className="chev" />}
+    </div>
+  )
+}
+
+function DaySummary({ iso, close }) {
+  const st = useStore(s => s.S)
+  const none = t('Not logged')
+
+  const w = (st.workouts || []).find(x => x.d === iso)
+  const plannedId = effectiveRoutineId(st, iso)
+  const planned = st.routines.find(r => r.id === plannedId)
+  const training = w
+    ? [w.name, setsDone(w) + ' ' + t('sets'), fmtVol(workoutVolume(w), st.unit)].filter(Boolean).join(' · ')
+    : planned ? t('Planned: {0}', planned.name) : t('Rest day')
+
+  const h = healthFor(st, iso)
+  const sp = [
+    (w && w.watch && w.watch.kcal) || (h && h.sport),
+    (w && w.watch && w.watch.minutes) || (h && h.sportMin)
+  ]
+  const watch = [
+    sp[0] ? fmtNum(sp[0]) + ' kcal' : null,
+    sp[1] ? fmtNum(sp[1]) + ' min' : null,
+    h && h.kcal ? t('{0} kcal active', fmtNum(h.kcal)) : null,
+    h && h.steps ? fmtNum(h.steps) + ' ' + t('steps') : null,
+    h && h.rhr ? t('HR {0} rest', h.rhr) : null
+  ].filter(Boolean).join(' · ')
+
+  const n = entryFor(st, iso)
+  const food = n && (n.kcal || hasMacros(n))
+    ? [fmtNum(n.kcal || kcalFromMacros(n)) + ' kcal',
+      ...MACROS.filter(m => n[m]).map(m => t(MACRO_NAME[m]) + ' ' + fmtNum(n[m]) + ' g')].join(' · ')
+    : null
+
+  const sl = sleepFor(st, iso)
+  const sleep = sl ? fmtNum(sleepHours(sl)) + ' h' + (sl.bed && sl.wake ? ' · ' + sl.bed + ' → ' + sl.wake : '') : null
+
+  const b = (st.bodyweight || []).find(x => x.d === iso)
+  const weight = b ? fmtNum(b.w) + ' ' + st.unit + (b.bf ? ' · ' + fmtNum(b.bf) + ' %' : '') : null
+
+  const bal = dayBalance(st, iso)
+  const balance = bal && bal.deficit != null
+    ? t('{0} kcal', (bal.deficit > 0 ? '+' : '') + fmtNum(bal.deficit)) + ' · '
+      + (bal.deficit > 0 ? t('deficit') : t('surplus'))
+    : null
+
+  return <>
+    <h3>{fmtDate(iso, true)}</h3>
+    <DayRow icon={w ? 'checkCircle' : planned ? 'dumbbell' : 'moon'} label={t('Training')} value={training}
+      dim={!w && !planned} tint={w ? 'var(--acc)' : 'var(--surface-3)'}
+      onClick={w ? () => { close(); workoutDetailSheet(w) } : undefined} />
+    <DayRow icon="flame" label={t('My watch')} value={watch || none} dim={!watch} tint="var(--red)" />
+    <DayRow icon="plate" label={t('Nutrition')} value={food || none} dim={!food} tint="var(--orange)" />
+    <DayRow icon="moon" label={t('Sleep')} value={sleep || none} dim={!sleep} tint="var(--indigo)" />
+    <DayRow icon="scale" label={t('Body weight')} value={weight || none} dim={!weight} tint="var(--teal)" />
+    {balance && <DayRow icon="chartLine" label={t('Balance')} value={balance} tint="var(--yellow)" />}
+    <div style={{ height: 14 }} />
+    <Button icon="calendar" onClick={() => { close(); dayOverrideSheet(iso) }}>{t('Change what’s planned')}</Button>
+  </>
+}
+export const daySheet = iso => ui().openSheet(close => <DaySummary iso={iso} close={close} />)
 
 function DayOverride({ iso, close }) {
   const st = useStore(s => s.S)

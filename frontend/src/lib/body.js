@@ -51,6 +51,28 @@ export const dayTime = d => new Date(String(d) + 'T12:00:00').getTime()
  */
 export const whenOf = e => (e && e.d ? dayTime(e.d) : (e && (e.t || e.start)) || 0)
 
+/**
+ * The whole journey: the first weigh-in ever recorded against the latest.
+ *
+ * Different from the delta beside the number, which compares one weigh-in to the one before
+ * it and therefore says what a single week did. Over a cut the number that matters is the one
+ * nobody sees day to day — six kilos across five months reads as nothing at all when it
+ * arrives 0.2 at a time.
+ *
+ * Null with fewer than two weigh-ins: one reading is a measurement, not a journey.
+ */
+export function sinceStart(S) {
+  const list = (S.bodyweight || []).filter(b => num(b.w) != null)
+  if (list.length < 2) return null
+  const from = list[0], to = list[list.length - 1]
+  return {
+    from, to,
+    kg: Math.round((num(to.w) - num(from.w)) * 10) / 10,
+    days: Math.round(dayTime(to.d) / 86400000 - dayTime(from.d) / 86400000),
+    readings: list.length
+  }
+}
+
 /** The most recent weigh-in carrying a body-fat reading, or null. */
 export function lastComposition(S) {
   const list = (S.bodyweight || []).filter(b => validBodyFat(b.bf) != null)

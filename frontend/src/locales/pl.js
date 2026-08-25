@@ -897,4 +897,10 @@ export default {
   'Type today’s figures in': 'Type today’s figures in',
   '{0} kcal of training on a day with no session logged': '{0} kcal of training on a day with no session logged',
   '{0} min of training on a day with no session logged': '{0} min of training on a day with no session logged',
+  '{0} since {1}': '{0} since {1}',
+  'Planned: {0}': 'Planned: {0}',
+  'sets': 'sets',
+  'HR {0} rest': 'HR {0} rest',
+  '{0} kcal': '{0} kcal',
+  'Change what’s planned': 'Change what’s planned',
 }

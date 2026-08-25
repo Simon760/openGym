@@ -4,9 +4,9 @@ import { useStore } from '../store/useStore.js'
 import { effectiveRoutine, effectiveRoutineId, streakWeeks, lastBW, setsDoneActive } from '../lib/history.js'
 import { fmtNum, fmtDate, todayISO, isoOf, weekKey, DAYS } from '../lib/format.js'
 import { t, dateLocale } from '../lib/i18n.js'
-import { bwSheet, goalSheet, dayOverrideSheet, calendarSheet, startFlow, loadStarterPlan, bwDeltaColor, nutriSheet, nutriGoalSheet, digestSheet, openPendingProgram, discardPendingProgram, sleepSheet, tdeeSheet, watchSheet } from '../sheets.jsx'
+import { bwSheet, goalSheet, dayOverrideSheet, daySheet, calendarSheet, startFlow, loadStarterPlan, bwDeltaColor, nutriSheet, nutriGoalSheet, digestSheet, openPendingProgram, discardPendingProgram, sleepSheet, tdeeSheet, watchSheet } from '../sheets.jsx'
 import { entryFor, kcalFromMacros, macroSplit, remainingOf, MACROS, MACRO_NAME, MACRO_COLOR } from '../lib/nutrition.js'
-import { composition, todaySleep, lastSleep, sleepHours, whenOf } from '../lib/body.js'
+import { composition, todaySleep, lastSleep, sleepHours, whenOf, sinceStart } from '../lib/body.js'
 import { dayBalance } from '../lib/energy.js'
 import LineChart from '../components/LineChart.jsx'
 import Icon from '../components/Icon.jsx'
@@ -36,7 +36,7 @@ export default function Home() {
     const iso = isoOf(d)
     const eff = effectiveRoutineId(S, iso), ovr = S.dayPlan[iso] !== undefined, done = doneDays.has(iso)
     const dot = done ? ' done' : ovr && eff ? ' ovr' : eff ? ' plan' : ''
-    strip.push(<div key={i} className={'wday' + (iso === todayISO() ? ' today' : '')} onClick={() => dayOverrideSheet(iso)}>
+    strip.push(<div key={i} className={'wday' + (iso === todayISO() ? ' today' : '')} onClick={() => daySheet(iso)}>
       <div className="lbl">{t(DAYS[d.getDay()])}</div><div className="num">{d.getDate()}</div><div className={'dot' + dot} /></div>)
   }
   const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6)
@@ -47,6 +47,7 @@ export default function Home() {
   const bwPoints = S.bodyweight.slice(-30).map(b => ({ t: whenOf(b), y: b.w, d: b.d }))
 
   const comp = composition(bw)
+  const journey = sinceStart(S)
   const sleptToday = todaySleep(S)
   const lastNight = sleptToday || lastSleep(S)
   const todayNutri = entryFor(S, todayISO())
@@ -179,6 +180,14 @@ export default function Home() {
           <div className="small row" style={{ color: 'var(--label-2)', marginTop: 4, gap: 5 }}>
             <Icon name="figureStrength" style={{ fontSize: 13 }} />
             <span>{fmtNum(comp.bf)} % · {t('{0} fat · {1} lean', fmtNum(comp.fat) + ' ' + S.unit, fmtNum(comp.lean) + ' ' + S.unit)}</span>
+          </div>
+        )}
+        {/* The whole journey, which is the number nobody sees day to day: six kilos across
+            five months reads as nothing at all when it arrives 0.2 at a time. */}
+        {journey && (
+          <div className="small row" style={{ color: bwDeltaColor(journey.kg, bw.w), marginTop: 4, gap: 5 }}>
+            <Icon name={journey.kg > 0 ? 'arrowUp' : 'arrowDown'} style={{ fontSize: 13 }} />
+            <span>{t('{0} since {1}', (journey.kg > 0 ? '+' : '−') + fmtNum(Math.abs(journey.kg)) + ' ' + S.unit, fmtDate(journey.from.d, true))}</span>
           </div>
         )}
         {S.targetW && (

@@ -889,4 +889,10 @@ export default {
   'Type today’s figures in': 'Saisir les chiffres du jour',
   '{0} kcal of training on a day with no session logged': '{0} kcal d’entraînement sur un jour sans séance enregistrée',
   '{0} min of training on a day with no session logged': '{0} min d’entraînement sur un jour sans séance enregistrée',
+  '{0} since {1}': '{0} depuis le {1}',
+  'Planned: {0}': 'Prévu : {0}',
+  'sets': 'séries',
+  'HR {0} rest': 'FC repos {0}',
+  '{0} kcal': '{0} kcal',
+  'Change what’s planned': 'Changer ce qui est prévu',
 }
