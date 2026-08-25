@@ -9,6 +9,8 @@
 // one most lifters have seen; all of them agree closely at low reps and diverge as reps rise,
 // which is exactly why REP_CAP exists.
 
+import { whenOf } from './body.js'
+
 // Above this many reps an estimate says more about work capacity than about maximal strength,
 // and the formulas disagree by double digits. Refusing to guess beats printing a fantasy.
 export const REP_CAP = 12
@@ -59,7 +61,7 @@ export function e1rmSeries(S, exId, formula = DEFAULT_FORMULA) {
     const entry = w.entries.find(e => e.id === exId)
     if (!entry) return
     const best = bestSetOf(entry, formula)
-    if (best) pts.push({ t: w.start, d: w.d, y: best.est, w: best.w, r: best.r })
+    if (best) pts.push({ t: whenOf(w), d: w.d, y: best.est, w: best.w, r: best.r })
   })
   return pts
 }

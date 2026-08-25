@@ -42,8 +42,14 @@ export const validBodyFat = v => {
  */
 export const dayTime = d => new Date(String(d) + 'T12:00:00').getTime()
 
-/** The same, tolerant of an entry that somehow has no day. */
-export const whenOf = e => (e && e.d ? dayTime(e.d) : (e && e.t) || 0)
+/**
+ * The same, for anything filed under a day: a weigh-in, a night, a workout.
+ *
+ * The day comes first and the clock only fills in behind it, because the day is the thing
+ * every one of these records is actually about, and the clock is missing often enough that a
+ * chart reading it directly emits NaN coordinates — which SVG reports and then draws nothing.
+ */
+export const whenOf = e => (e && e.d ? dayTime(e.d) : (e && (e.t || e.start)) || 0)
 
 /** The most recent weigh-in carrying a body-fat reading, or null. */
 export function lastComposition(S) {

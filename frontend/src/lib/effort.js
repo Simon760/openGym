@@ -8,6 +8,7 @@
 // floor of 6 is only a convention about which sets are worth rating. RPE 8 == RIR 2.
 import { EFFORT, effortOf } from './history.js'
 import { weekKey } from './format.js'
+import { whenOf } from './body.js'
 
 // At or below this a set is close enough to failure to be the kind that drives adaptation.
 // 3 rather than 2: the line is a convention, and drawn one rep too generously it still
@@ -50,7 +51,7 @@ function eachDoneSet(S, fn) {
 // A window in days, counted back from now. 0 = everything, which is also what an empty
 // history means for every caller here.
 const inWindow = (w, days) =>
-  !days || (w.start || new Date(w.d).getTime()) > Date.now() - days * 86400000
+  !days || whenOf(w) > Date.now() - days * 86400000
 
 export const avgRir = sets => {
   const vs = (sets || []).map(rirOf).filter(v => v != null)

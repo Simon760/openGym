@@ -112,7 +112,15 @@ describe('e1rmSeries / best1RM', () => {
   })
 
   it('reports the all-time best with the set behind it', () => {
-    expect(best1RM(S, 'bench')).toEqual({ est: 105, w: 90, r: 5, d: '2026-01-15', t: 3 })
+    // `t` is where the point sits on a time axis, which is the day it belongs to and not the
+    // clock the workout happened to start on — a workout without one used to draw NaN.
+    expect(best1RM(S, 'bench')).toMatchObject({ est: 105, w: 90, r: 5, d: '2026-01-15' })
+    expect(best1RM(S, 'bench').t).toBe(new Date('2026-01-15T12:00:00').getTime())
+  })
+
+  it('places a workout that never recorded a clock time', () => {
+    const noClock = { ...S, workouts: S.workouts.map(w => { const c = { ...w }; delete c.start; return c }) }
+    for (const p of e1rmSeries(noClock, 'bench')) expect(Number.isFinite(p.t)).toBe(true)
   })
 
   it('has nothing to say about cardio or an unknown exercise', () => {
