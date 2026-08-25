@@ -7,7 +7,7 @@ import { effortOf } from '../lib/history.js'
 import { api, webauthnOK, passkeyLogin, passkeyRegister, IS_ANDROID } from '../lib/api.js'
 import { pushSupported, enablePush, disablePush, sendTestPush } from '../lib/push.js'
 import { wakeLockSupported } from '../lib/wakelock.js'
-import { t, LANGS, INSTR_LANGS } from '../lib/i18n.js'
+import { t, LANGS, INSTR_LANGS, ONLY_LANG } from '../lib/i18n.js'
 import { DEMO, SOLO, REPO } from '../lib/demo.js'
 import { FIREBASE } from '../lib/firebase.js'
 import { MOBILE, shareExport, syncReminder } from '../lib/mobile.js'
@@ -113,14 +113,16 @@ export default function Settings() {
 
     {/* ---------- general ---------- */}
     <Section title={t('General')} footer={t('Note: switching units only changes the label — logged numbers are not converted.')}>
-      <SelectRow
+      {/* A build that ships one language has nothing to pick between, and a row offering the
+          choice would be a control that changes nothing. See ONLY_LANG in lib/i18n.js. */}
+      {!ONLY_LANG && <SelectRow
         icon="globe" iconTint="var(--blue)" title={t('Language')}
         value={S.lang || 'en'} onChange={v => update(s => { s.lang = v })}
         options={Object.entries(LANGS).map(([k, name]) => ({
           value: k, label: name,
           subtitle: INSTR_LANGS.includes(k) ? null : t("Exercise instructions aren't available in this language yet — they stay in English."),
         }))}
-      />
+      />}
       <Row icon="scale" iconTint="var(--teal)" title={t('Weight unit')}>
         <Segmented className="seg-inline"
           options={[{ value: 'kg', label: 'kg' }, { value: 'lb', label: 'lb' }]}
