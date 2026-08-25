@@ -206,42 +206,113 @@ carrying only calories will not wipe macros already logged for that day.
 
 ## Maintenance, and the deficit
 
-Set your maintenance in *Stats → Energy*, or from the day's balance on the home screen. It is
-the one figure in the app that nothing can measure for you, and everything else follows from
-it:
+Set it in *Stats → Energy*, or from the day's balance on the home screen. It is entered as
+its parts, because that is how it is arrived at — and because a single number hides which
+part was wrong when the total turns out to be:
+
+| | |
+| --- | --- |
+| **BMR** | what the body spends doing nothing at all |
+| **NEAT** | walking, standing, fidgeting — everything that is not a session |
+| **Other** | digestion, the cold, anything else you count separately |
+| **Sport already included** | the training this total already budgets for |
+
+That last row is what changes the arithmetic. The total is what a day costs **with the
+planned session in it**, so a day trained as planned sits exactly at maintenance and only
+the difference moves the balance:
 
 ```
-deficit = (maintenance + sport) − intake
+deficit = (total + (sport done − sport planned)) − intake
 ```
 
-**Maintenance here means a day with no training in it.** Sport is added on top, from the
-watch's all-day active energy where there is one, else from the session's own figure. So do
-not paste in a TDEE that came out of a formula with an activity multiplier — Mifflin-St Jeor
-× 1.55 and its relatives already contain the training, and adding sport to one of those counts
-every session twice. Every day then reads 300–600 kcal better than it went, and the cut stalls
-for no visible reason.
+Train as planned and the sport term is zero. Skip the session and it goes negative — which
+is correct, and is the reading nothing else gives you: the day cost less than the budget
+assumed, so the deficit is smaller than the food alone suggests.
 
-You do not have to guess it for long. Once there are four weigh-ins across three weeks and
-intake logged on at least 60 % of the days, the app reads maintenance off your own history:
+### The watch reads high
+
+Consumer wrist devices are good at heart rate and poor at energy: validation work puts their
+heart-rate error in the low single digits of a percent and their energy error in the twenties
+to forties, and almost always high. So **30 % of the watch's active-energy figure is thrown
+away by default**, adjustable in the same sheet, and set to zero if you want the raw number.
+
+It is a deliberately blunt instrument. The point is not to be exact — it is to stop a cut
+being planned around four hundred calories that were never burned. What the watch said is
+kept beside what was counted everywhere the figure appears, so the discount is always
+checkable rather than something the app did quietly.
+
+### Reading it back off your own history
+
+You do not have to guess maintenance for long. Once there are four weigh-ins across three
+weeks and intake logged on at least 60 % of the days, the app reads it off your own curve:
 
 ```
-expenditure  = mean intake + (weight lost × 7 700) / days
-maintenance  = expenditure − mean sport
+expenditure = mean intake + (weight lost × 7 700) / days
+maintenance = expenditure − mean sport done + sport planned
 ```
 
-That figure is measured on you, so it beats every formula. The sheet shows it beside the one
-you typed and offers to take it.
+The last step is what makes it comparable to what you typed: the curve knows what the days
+actually cost, including whatever training happened, while your figure is what a day costs
+with the *planned* session in it. So the training that really happened comes out and the
+planned amount goes back in.
 
-The Energy card totals the whole thing three ways — the deficit eating created, the deficit
-training created, and the two together — over the days that logged an intake, with the day
-count travelling beside the totals. A day nobody logged has no balance rather than a balance
-of zero, and today is left out until it is over: at four in the afternoon the log holds lunch,
-and counting it would book a deficit dinner is about to erase.
+That figure is measured on you, so it beats every formula. The sheet shows it beside your own
+and offers to take it.
+
+### The totals
+
+The Energy card totals the whole thing over the days that logged an intake, with the day
+count travelling beside the numbers: **eating against the budget**, **sport against the
+budget**, and the two together. The training a plan already budgets for lives inside the
+eating number — that is what budgeting for it means — so how much training there actually
+was, and how much the figure assumed, are printed underneath rather than left implied.
+
+A day nobody logged has no balance rather than a balance of zero, and today is left out until
+it is over: at four in the afternoon the log holds lunch, and counting it would book a deficit
+dinner is about to erase.
 
 Finally the card puts the predicted loss next to what the scale actually did. The two never
 match exactly — 7 700 kcal per kilo assumes an expenditure that does not fall as you get
 lighter — so a kilo or two of gap is the model. Four is a maintenance figure that needs
 correcting, and the card says which way.
+
+## The evening digest
+
+*Home → the share button* produces "Today" as plain text, to paste into whatever coaches you:
+
+```
+openGym — Today — Tue 25 Aug
+
+Activity
+  Push Day · 53 min · 430 kcal · HR 128 avg
+Active energy 780 kcal from the watch → 546 counted, 30 % taken off
+Intake 1,940 kcal · Carbs 180 g · Protein 155 g · Fat 62 g · target 2,200 (-260)
+Sleep 7.2 h (the night before) · felt 4/5
+Weight 78.4 kg (-0.4) · target 77 kg (-1.4)
+Balance 2,500 maintenance +346 sport vs plan − 1,940 eaten = +906 kcal (deficit)
+
+Last 7 days
+  Intake 2,043 kcal/day over 6 logged days
+  Weight -0.4 kg
+
+Since Tue 2 Jun
+  Deficit 29,172 kcal ≈ 3.8 kg
+  eating 28,314 · sport vs plan +858 (16,358 kcal trained, 15,600 budgeted)
+  over 78 logged days of 85
+```
+
+Facts first, in the order a coach reads them, then the three things the app works out that no
+message could: the weigh-in in context, the balance spelled out rather than handed over as a
+total, and the running deficit — because a conversation asked to keep a running total across
+a month of daily messages will drift, and this one is recomputed from the log every time.
+
+No set-by-set detail. That is a different question asked by a different conversation, and
+*Plan → Share → training digest* is where it lives, with what was prescribed against what was
+done and what the app will prescribe next.
+
+Text, not JSON. Both a person and a model read it, and the person reads it first — they are
+about to paste it somewhere, and a wall of braces is not something you check before you do
+that.
 
 ## Sleep is two clock times, not a number of hours
 

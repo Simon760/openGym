@@ -22,12 +22,16 @@ export const DEF = {
   // a half-finished one. Both absent on every profile written before they existed, and
   // absent reads as "never logged", so nothing needs migrating.
   nutrition: [], nutriGoal: null,
-  // tdee: what you spend on a day with no training, entered by hand — the one figure in the
-  // app nothing can measure for you. Training is added on top of it from the watch, so a
-  // TDEE that already includes an "activity multiplier" would count training twice. null
-  // until it is set, and every deficit reading simply stays absent until then rather than
-  // guessing. See lib/energy.js.
-  tdee: null,
+  // tdee: maintenance as its parts — { bmr, neat, other, sport } — entered by hand, the one
+  // figure in the app nothing can measure for you. `sport` is the training the figure already
+  // budgets for, so only the difference between it and what was actually done moves a day's
+  // balance. A profile written before the breakdown holds a bare number, which meant
+  // expenditure without training and is read as a breakdown budgeting none. null until it is
+  // set, and every balance stays absent rather than guessing.
+  // watchTrim: the share of a watch's active-energy figure to throw away — wrist devices read
+  // energy 20–40 % high. null means the default; an explicit 0 means the user chose to trust
+  // the watch as it comes. See lib/energy.js.
+  tdee: null, watchTrim: null,
   // Nights slept, filed under the day you woke up: { d, h, q?, t } — see lib/body.js.
   // Body fat rides on the weigh-in itself (an optional `bf` on a bodyweight entry) rather
   // than living here, because that is how a scale reports it. Both absent on every profile

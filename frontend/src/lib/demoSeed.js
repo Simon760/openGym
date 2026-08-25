@@ -44,7 +44,10 @@ const SLEEP_UNRATED = 0.35             // …plus this share logged without a fe
 // nothing. TDEE is maintenance *without* training, chosen so that it plus the activity below
 // minus the intake above comes out at the weight trend at the top of this file: the demo has
 // to be arithmetically honest or the cross-check it ships with contradicts it.
-const TDEE = 2200
+// Split the way the sheet asks for it, with 300 kcal of training already budgeted in, so the
+// demo shows the part that makes this model different: a day trained as planned sits at
+// maintenance, and a session skipped takes 200 kcal off the day.
+const TDEE = { bmr: 1700, neat: 600, other: 0, sport: 200 }
 const ACT_BASE = 190                   // active kcal on a rest day
 const ACT_TRAINING = 320               // …plus this on a day with a session
 const STEPS_BASE = 6000

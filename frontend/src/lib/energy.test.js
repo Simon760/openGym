@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import {
-  validTDEE, sportKcal, dayBalance, deficitTotals, impliedTDEE, predictedVsActual,
-  deficitSeries, KCAL_PER_KG_FAT, TDEE_MIN, TDEE_MAX
+  validTDEE, tdeeParts, sportKcal, dayBalance, deficitTotals, impliedTDEE, predictedVsActual,
+  deficitSeries, trimOf, KCAL_PER_KG_FAT, TDEE_MIN, TDEE_MAX, WATCH_TRIM
 } from './energy.js'
 
-const S = (over = {}) => ({ nutrition: [], health: [], workouts: [], bodyweight: [], ...over })
+const S = (over = {}) => ({ nutrition: [], health: [], workouts: [], bodyweight: [], watchTrim: 0, ...over })
 
 // A fixed calendar, so nothing here depends on the day the suite runs.
 const day = n => {
@@ -29,35 +29,88 @@ describe('validTDEE', () => {
   })
 })
 
+describe('tdeeParts', () => {
+  it('adds the parts up and keeps them', () => {
+    expect(tdeeParts({ bmr: 1700, neat: 600, other: 0, sport: 300 }))
+      .toEqual({ bmr: 1700, neat: 600, other: 0, sport: 300, total: 2600 })
+  })
+
+  it('reads a profile written before the breakdown existed', () => {
+    // a bare number meant expenditure without training, which is a breakdown budgeting none
+    expect(tdeeParts(2400)).toEqual({ bmr: 0, neat: 0, other: 2400, sport: 0, total: 2400 })
+  })
+
+  it('refuses a total no body could spend, however it was arrived at', () => {
+    expect(tdeeParts({ bmr: 400, neat: 100 })).toBe(null)
+    expect(tdeeParts({ bmr: 9000, sport: 2000 })).toBe(null)
+    expect(tdeeParts(null)).toBe(null)
+  })
+})
+
 describe('sportKcal', () => {
   it('prefers the watch’s whole day over the session alone', () => {
-    // the session is not the day: the walk home is training energy too, and the formula
-    // adds sport to a TDEE that deliberately excludes all of it
+    // the session is not the day: the walk home is training energy too
     const st = S({
       health: [{ d: day(0), kcal: 780 }],
       workouts: [{ d: day(0), id: 'w', watch: { kcal: 430 } }]
     })
-    expect(sportKcal(st, day(0))).toEqual({ kcal: 780, source: 'watch' })
+    expect(sportKcal(st, day(0), 0)).toMatchObject({ kcal: 780, raw: 780, source: 'watch' })
   })
 
   it('falls back to the session when the day was never measured', () => {
     const st = S({ workouts: [{ d: day(0), id: 'w', watch: { kcal: 430 } }] })
-    expect(sportKcal(st, day(0))).toEqual({ kcal: 430, source: 'session' })
+    expect(sportKcal(st, day(0), 0)).toMatchObject({ kcal: 430, source: 'session' })
   })
 
   it('separates a rest day from a session nobody measured', () => {
     // both come to zero, and only one of them is true
-    expect(sportKcal(S(), day(0))).toEqual({ kcal: 0, source: 'rest' })
-    expect(sportKcal(S({ workouts: [{ d: day(0), id: 'w' }] }), day(0)))
-      .toEqual({ kcal: 0, source: 'missing' })
+    expect(sportKcal(S(), day(0), 0)).toMatchObject({ kcal: 0, source: 'rest' })
+    expect(sportKcal(S({ workouts: [{ d: day(0), id: 'w' }] }), day(0), 0))
+      .toMatchObject({ kcal: 0, source: 'missing' })
+  })
+
+  it('throws away the share of a watch reading nobody should trust', () => {
+    // wrist devices read energy 20–40 % high; the raw figure stays so the cut is checkable
+    const st = S({ health: [{ d: day(0), kcal: 700 }] })
+    expect(sportKcal(st, day(0), 0.3)).toMatchObject({ kcal: 490, raw: 700, trim: 0.3 })
+    expect(sportKcal(st, day(0))).toMatchObject({ kcal: Math.round(700 * (1 - WATCH_TRIM)) })
+  })
+
+  it('defaults the trim on rather than off, and takes an explicit zero as a choice', () => {
+    expect(trimOf({})).toBe(WATCH_TRIM)
+    expect(trimOf({ watchTrim: 0 })).toBe(0)
+    expect(trimOf({ watchTrim: 0.15 })).toBe(0.15)
+    expect(trimOf({ watchTrim: 5 })).toBe(WATCH_TRIM)      // out of range is not a choice
   })
 })
 
 describe('dayBalance', () => {
-  it('computes (TDEE + sport) − intake', () => {
+  it('adds only the difference from the training the figure already budgets for', () => {
+    const st = S({ nutrition: [{ d: day(0), kcal: 1900 }], health: [{ d: day(0), kcal: 620 }] })
+    const tdee = { bmr: 1700, neat: 400, sport: 400 }   // 2 500 total, 400 of it training
+    expect(dayBalance(st, day(0), tdee)).toMatchObject({
+      tdee: 2500, planned: 400, sport: 620, delta: 220, out: 2720, intake: 1900, deficit: 820
+    })
+  })
+
+  it('takes the day off the balance when the session was skipped', () => {
+    // the budget assumed 400 kcal of training that did not happen — the day cost that much
+    // less, and a deficit that ignored it would be 400 kcal of fiction
+    const st = S({ nutrition: [{ d: day(0), kcal: 1900 }] })
+    expect(dayBalance(st, day(0), { bmr: 1700, neat: 400, sport: 400 }))
+      .toMatchObject({ delta: -400, out: 2100, deficit: 200 })
+  })
+
+  it('is a plain food-against-maintenance day when training went to plan', () => {
+    const st = S({ nutrition: [{ d: day(0), kcal: 2000 }], health: [{ d: day(0), kcal: 400 }] })
+    expect(dayBalance(st, day(0), { bmr: 1700, neat: 400, sport: 400 }))
+      .toMatchObject({ delta: 0, out: 2500, deficit: 500 })
+  })
+
+  it('still reads a profile that stored a single number', () => {
     const st = S({ nutrition: [{ d: day(0), kcal: 1900 }], health: [{ d: day(0), kcal: 620 }] })
     expect(dayBalance(st, day(0), 2100)).toMatchObject({
-      tdee: 2100, sport: 620, out: 2720, intake: 1900, deficit: 820
+      tdee: 2100, planned: 0, sport: 620, delta: 620, out: 2720, deficit: 820
     })
   })
 
@@ -90,13 +143,23 @@ describe('deficitTotals', () => {
     workouts: [{ d: day(3), id: 'w' }]     // trained, but nothing measured it
   })
 
-  it('splits the deficit into what eating made and what training made', () => {
+  it('splits the deficit into eating against the budget and training against it', () => {
     const t = deficitTotals(st, 2000)
     expect(t.nutrition).toBe(500)          // +500 +200 −200
-    expect(t.sport).toBe(600)
+    expect(t.sportDelta).toBe(600)         // nothing budgeted for sport, so all of it counts
     expect(t.total).toBe(1100)
-    // the two parts have to add up to the whole, or the third number means nothing
-    expect(t.nutrition + t.sport).toBe(t.total)
+    // the two parts have to add up to the whole, or neither number means anything
+    expect(t.nutrition + t.sportDelta).toBe(t.total)
+  })
+
+  it('carries the training that happened beside the training the figure assumed', () => {
+    // with sport budgeted in, the deficit it creates lives inside `nutrition` — a card that
+    // only had `sportDelta` would report zero training on a cut built entirely on training
+    const t = deficitTotals(st, { bmr: 1600, neat: 200, sport: 200 })
+    expect(t.sportLogged).toBe(600)
+    expect(t.sportPlanned).toBe(600)       // 200 a day across the three logged days
+    expect(t.sportDelta).toBe(0)
+    expect(t.nutrition + t.sportDelta).toBe(t.total)
   })
 
   it('carries the days it speaks for, and the days it had to skip', () => {

@@ -21,7 +21,9 @@ const session = (n, { reps = [8, 8, 8, 8], w = 75, name = 'Push Day', prs = [] }
 
 const base = (over = {}) => ({
   unit: 'kg', workouts: [], bodyweight: [], nutrition: [], routines: [], week: {}, dayPlan: {},
-  exWeights: {}, customEx: [], ...over
+  // trim off by default here: these tests are about the digest, not about how much of a
+  // watch reading survives. One test below is about exactly that.
+  exWeights: {}, customEx: [], watchTrim: 0, ...over
 })
 
 describe('dailyDigest', () => {
@@ -53,19 +55,48 @@ describe('dailyDigest', () => {
     expect(out).not.toContain('0 kcal')
   })
 
-  it('separates a rest day from a session that was planned and missed', () => {
+  it('reports what was done, not what a plan expected', () => {
+    // a plan is not a fact about the day, and this digest carries facts. What a missed
+    // session cost shows up where it belongs: in the balance, as a negative delta.
     const r = { id: 'r1', name: 'Push Day', ex: [] }
     const wd = daysAgo(0).getDay()
-    const planned = dailyDigest(base({ routines: [r], week: { [wd]: 'r1' } }), iso(0))
-    expect(planned).toContain('Push Day')
-    const rest = dailyDigest(base(), iso(0))
-    expect(rest).not.toContain('Push Day')
+    expect(dailyDigest(base({ routines: [r], week: { [wd]: 'r1' } }), iso(0))).not.toContain('Push Day')
   })
 
-  it('prints the session it did log, with its sets', () => {
-    const out = dailyDigest(base({ workouts: [session(0)] }), iso(0))
+  it('names each activity with its duration and what the watch said it cost', () => {
+    const w = { ...session(0), watch: { minutes: 53, kcal: 430, hrAvg: 128 } }
+    const out = dailyDigest(base({ workouts: [w] }), iso(0))
     expect(out).toContain('Push Day')
-    expect(out).toContain('75')
+    expect(out).toContain('53 min')
+    expect(out).toContain('430 kcal')
+  })
+
+  it('lists both of them when a day held two', () => {
+    const a = { ...session(0), id: 'a', name: 'Push Day' }
+    const b = { ...session(0), id: 'b', name: 'Run', watch: { minutes: 34, km: 6.2 } }
+    const out = dailyDigest(base({ workouts: [a, b] }), iso(0))
+    expect(out).toContain('Push Day')
+    expect(out).toContain('Run')
+    expect(out).toContain('6.2 km')
+  })
+
+  it('leaves the set-by-set detail to the digest that is asked for it', () => {
+    // the coach reading this one wants the shape of the day, not the load on the bar
+    const out = dailyDigest(base({ workouts: [session(0)] }), iso(0))
+    expect(out).not.toContain('4x8')
+    expect(out).not.toContain('75 kg')
+  })
+
+  it('reads the macros back carbs first, the way a food log is read', () => {
+    const S = base({ nutrition: [{ d: iso(0), kcal: 1940, p: 155, c: 180, f: 62 }] })
+    const line = dailyDigest(S, iso(0)).split('\n').find(l => l.startsWith('Intake'))
+    expect(line.indexOf('Carbs')).toBeLessThan(line.indexOf('Protein'))
+    expect(line.indexOf('Protein')).toBeLessThan(line.indexOf('Fat'))
+  })
+
+  it('says the night it is reporting is the one before', () => {
+    const S = base({ sleep: [{ d: iso(0), bed: '23:00', wake: '07:00' }] })
+    expect(dailyDigest(S, iso(0))).toContain('8 h')
   })
 
   it('carries the denominator with the weekly intake average', () => {
@@ -84,9 +115,27 @@ describe('dailyDigest — the energy balance', () => {
       health: [{ d: iso(0), kcal: 620 }]
     })
     const out = dailyDigest(S, iso(0))
-    expect(out).toContain('2,100 + 620')
+    expect(out).toContain('2,100 maintenance +620')
     expect(out).toContain('1,900')
     expect(out).toContain('+820')
+  })
+
+  it('adds only what the day differed from the training the figure budgets for', () => {
+    const S = base({
+      tdee: { bmr: 1700, neat: 400, sport: 400 },
+      nutrition: [{ d: iso(0), kcal: 1900 }],
+      health: [{ d: iso(0), kcal: 620 }]
+    })
+    expect(dailyDigest(S, iso(0))).toContain('2,500 maintenance +220')
+  })
+
+  it('shows what the watch said beside what was counted', () => {
+    // a trimmed figure nobody can trace back to the reading is a number nobody can check
+    const S = base({ watchTrim: 0.3, tdee: 2100, health: [{ d: iso(0), kcal: 700 }] })
+    const out = dailyDigest(S, iso(0))
+    expect(out).toContain('700 kcal')
+    expect(out).toContain('490')
+    expect(out).toContain('30')
   })
 
   it('says nothing about a balance it cannot compute', () => {

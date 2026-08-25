@@ -21,7 +21,7 @@ import { effortSummary, displayScale, scaleName, toScale } from './effort.js'
 import { entryFor, avgOver, MACROS, MACRO_NAME } from './nutrition.js'
 import { sleepFor, sleepHours } from './body.js'
 import { healthFor } from './health.js'
-import { dayBalance, deficitTotals } from './energy.js'
+import { dayBalance, deficitTotals, sportKcal, trimOf } from './energy.js'
 import { fmtNum, fmtDate, todayISO, isoOf } from './format.js'
 import { t } from './i18n.js'
 
@@ -89,23 +89,70 @@ function sessionBlock(w, { targets = true } = {}) {
   return lines.join('\n')
 }
 
-/** Intake for a day, or null when nothing was logged. */
-function intakeLine(S, iso) {
-  const e = entryFor(S, iso)
-  if (!e) return null
-  const bits = [fmtNum(e.kcal || 0) + ' kcal']
-  MACROS.forEach(m => { if (e[m]) bits.push(t(MACRO_NAME[m]) + ' ' + fmtNum(e[m]) + ' g') })
-  const goal = S.nutriGoal && S.nutriGoal.kcal
-  if (goal) bits.push(t('target {0}', fmtNum(goal)) + ' (' + sign((e.kcal || 0) - goal) + ')')
-  return bits.join(' · ')
-}
+// Carbs first, then protein, then fat — how a day's eating is read back, and not the order
+// the app stores them in.
+const DIGEST_MACROS = ['c', 'p', 'f']
+const hasAnyMacro = e => MACROS.some(m => e[m])
 
 /**
- * The evening check-in: where the weight is, what was eaten, whether there was a session,
- * and a week of context so a single day is never read as a trend.
+ * The evening check-in — "Today", as one page of plain facts.
+ *
+ * The order is the order a coach reads them in: what was done, what was eaten, how the
+ * night before went. Then the three things the app works out that no message could: the
+ * weigh-in in context, the day's balance spelled out rather than handed over as a total,
+ * and the running deficit — because a conversation asked to keep a running total across a
+ * month of daily messages will drift, and this one is recomputed from the log every time.
+ *
+ * No set-by-set detail. That is a different question asked by a different conversation, and
+ * trainingDigest below is where it lives.
  */
 export function dailyDigest(S, iso = todayISO(), now = Date.now()) {
-  const out = ['openGym — ' + fmtDate(iso, true)]
+  const out = ['openGym — ' + t('Today') + ' — ' + fmtDate(iso, true)]
+  out.push('')
+
+  // What was done. One line per activity, because a day can hold more than one.
+  const acts = (S.workouts || []).filter(w => w.d === iso)
+  if (!acts.length) {
+    out.push(t('Activity') + ' ' + t('nothing logged'))
+  } else {
+    out.push(t('Activity'))
+    acts.forEach(w => {
+      const b = [w.name]
+      const mins = (w.watch && w.watch.minutes) || (w.end && w.start ? Math.round((w.end - w.start) / 60000) : null)
+      if (mins) b.push(mins + ' min')
+      if (w.watch && w.watch.kcal) b.push(fmtNum(w.watch.kcal) + ' kcal')
+      if (w.watch && w.watch.km) b.push(fmtNum(w.watch.km) + ' km')
+      if (w.watch && w.watch.hrAvg) b.push(t('HR {0} avg', w.watch.hrAvg))
+      out.push('  ' + b.join(' · '))
+    })
+  }
+
+  // The energy that actually enters the arithmetic, with what the watch said beside it: a
+  // trimmed figure nobody can trace back to the reading is a number nobody can check.
+  const sp = sportKcal(S, iso, trimOf(S))
+  if (sp.raw) {
+    out.push(t('Active energy') + ' ' + fmtNum(sp.raw) + ' kcal ' + t('from the watch')
+      + (sp.trim ? ' → ' + fmtNum(sp.kcal) + ' ' + t('counted, {0} % taken off', Math.round(sp.trim * 100)) : ''))
+  } else if (sp.source === 'missing') {
+    out.push(t('Active energy') + ' ' + t('not measured'))
+  }
+
+  const e = entryFor(S, iso)
+  if (e && (e.kcal || hasAnyMacro(e))) {
+    const bits = [fmtNum(e.kcal || 0) + ' kcal']
+    // Carbs, protein, fat — the order a food log is read back in.
+    DIGEST_MACROS.forEach(m => { if (e[m]) bits.push(t(MACRO_NAME[m]) + ' ' + fmtNum(e[m]) + ' g') })
+    const goal = S.nutriGoal && S.nutriGoal.kcal
+    if (goal) bits.push(t('target {0}', fmtNum(goal)) + ' (' + sign((e.kcal || 0) - goal) + ')')
+    out.push(t('Intake') + ' ' + bits.join(' · '))
+  } else {
+    out.push(t('Intake') + ' ' + t('nothing logged'))
+  }
+
+  const sl = sleepFor(S, iso)
+  const slH = sleepHours(sl)
+  out.push(t('Sleep') + ' ' + (slH == null ? t('nothing logged')
+    : fmtNum(slH) + ' h ' + t('(the night before)') + (sl.q ? ' · ' + t('felt {0}/5', sl.q) : '')))
 
   const bw = bwAt(S, iso)
   if (bw) {
@@ -115,40 +162,16 @@ export function dailyDigest(S, iso = todayISO(), now = Date.now()) {
     out.push(t('Weight') + ' ' + bits.join(' · '))
   }
 
-  const intake = intakeLine(S, iso)
-  out.push(t('Intake') + ' ' + (intake || t('nothing logged')))
-
-  const sl = sleepFor(S, iso)
-  if (sl) out.push(t('Sleep') + ' ' + fmtNum(sleepHours(sl)) + ' h' + (sl.q ? ' · ' + t('felt {0}/5', sl.q) : ''))
-  const hd = healthFor(S, iso)
-  if (hd) {
-    const b = []
-    if (hd.steps) b.push(fmtNum(hd.steps) + ' ' + t('steps'))
-    if (hd.kcal) b.push(fmtNum(hd.kcal) + ' kcal ' + t('burned'))
-    if (hd.rhr) b.push(t('resting HR {0}', hd.rhr))
-    if (b.length) out.push(t('Activity') + ' ' + b.join(' · '))
-  }
-
-  // The balance, spelled out rather than left as a total: the conversation reading this
-  // needs to see which of the three numbers moved, not just the result.
+  // Spelled out rather than handed over as a total: the reader has to be able to see which
+  // of the three numbers moved. The middle term is the day against the plan, not the day's
+  // training — maintenance already budgets for the planned session.
   const bal = dayBalance(S, iso)
   if (bal && bal.deficit != null) {
-    out.push(t('Balance') + ' ' + fmtNum(bal.tdee) + ' + ' + fmtNum(bal.sport) + ' ' + t('sport')
-      + ' − ' + fmtNum(bal.intake) + ' = ' + sign(bal.deficit) + ' kcal'
+    out.push(t('Balance') + ' ' + fmtNum(bal.tdee) + ' ' + t('maintenance')
+      + ' ' + sign(bal.delta) + ' ' + t('sport vs plan')
+      + ' − ' + fmtNum(bal.intake) + ' ' + t('eaten')
+      + ' = ' + sign(bal.deficit) + ' kcal'
       + ' (' + (bal.deficit >= 0 ? t('deficit') : t('surplus')) + ')')
-  }
-
-  const w = (S.workouts || []).find(x => x.d === iso)
-  if (w) {
-    out.push('')
-    out.push(sessionBlock(w))
-    out.push('  ' + fmtNum(workoutVolume(w)) + ' ' + S.unit)
-  } else {
-    // A rest day and a missed session are different facts, and the difference is the one a
-    // coach acts on — so the plan is consulted rather than reporting a bare "no session".
-    const planned = effectiveRoutineId(S, iso)
-    const r = planned && (S.routines || []).find(x => x.id === planned)
-    out.push(t('Session') + ' ' + (r ? t('{0} planned, not logged', r.name) : t('rest day')))
   }
 
   out.push('')
@@ -161,19 +184,15 @@ export function dailyDigest(S, iso = todayISO(), now = Date.now()) {
     : fmtNum(avg.kcal) + ' kcal/' + t('day') + ' ' + t('over {0} logged days', avg.kcalDays)))
   const tr = bwTrend(S, 7, now)
   if (tr) out.push('  ' + t('Weight') + ' ' + sign(tr[1].w - tr[0].w) + ' ' + S.unit)
-  const wk = (S.workouts || []).filter(x => inWindow(x.d, 7, now))
-  out.push('  ' + t('Sessions') + ' ' + wk.length)
 
-  // Since the beginning, split the way it is worth splitting. The running total is the
-  // number a weight-loss conversation is actually keeping, and recomputing it there from a
-  // month of daily messages is how it drifts.
-  // Through the day being reported, not through yesterday: this digest is what closes it.
+  // Since the beginning, through the day being reported — this digest is what closes it.
   const tot = deficitTotals(S, S.tdee, 0, now, iso)
   if (tot) {
     out.push('')
     out.push(t('Since {0}', fmtDate(tot.from, true)))
-    out.push('  ' + t('Deficit') + ' ' + fmtNum(tot.total) + ' kcal ≈ ' + fmtNum(tot.kg) + ' kg'
-      + ' (' + t('eating') + ' ' + fmtNum(tot.nutrition) + ' · ' + t('training') + ' ' + fmtNum(tot.sport) + ')')
+    out.push('  ' + t('Deficit') + ' ' + fmtNum(tot.total) + ' kcal ≈ ' + fmtNum(tot.kg) + ' kg')
+    out.push('  ' + t('eating') + ' ' + fmtNum(tot.nutrition) + ' · ' + t('sport vs plan') + ' ' + sign(tot.sportDelta)
+      + ' (' + t('{0} kcal trained, {1} budgeted', fmtNum(tot.sportLogged), fmtNum(tot.sportPlanned)) + ')')
     out.push('  ' + t('over {0} logged days of {1}', tot.days, tot.span)
       + (tot.unmeasured ? ' · ' + t('{0} sessions unmeasured', tot.unmeasured) : ''))
   }

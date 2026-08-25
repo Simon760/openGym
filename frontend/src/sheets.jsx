@@ -25,7 +25,7 @@ import { MOBILE, shareExport, shareText, canShareText } from './lib/mobile.js'
 import { entryFor, hasMacros, kcalFromMacros, derivedMismatch, remainingOf, putEntry, MACROS, MACRO_NAME } from './lib/nutrition.js'
 import { validBodyFat, composition, sleepFor, putSleep, validSleep, sleepHours, hoursBetween, validTime, BF_MIN, BF_MAX, SLEEP_MIN, SLEEP_MAX } from './lib/body.js'
 import { parseHealth, applyHealth, parseHealthCSV, applyHealthDays, SHORTCUT_RECIPE, HISTORY_SPEC } from './lib/health.js'
-import { impliedTDEE, validTDEE, TDEE_MIN, TDEE_MAX, IMPLIED_MIN_SPAN, IMPLIED_MIN_DAYS, IMPLIED_MIN_WEIGHINS } from './lib/energy.js'
+import { impliedTDEE, tdeeParts, trimOf, TDEE_PARTS, TDEE_MIN, TDEE_MAX, TRIM_MAX, IMPLIED_MIN_SPAN, IMPLIED_MIN_DAYS, IMPLIED_MIN_WEIGHINS } from './lib/energy.js'
 
 const S = () => useStore.getState().S
 const update = (...a) => useStore.getState().update(...a)
@@ -387,10 +387,16 @@ export const nutriGoalSheet = () => ui().openSheet(close => <NutriGoalSheet clos
 // on top, and for how the implied figure below is derived.
 function TdeeSheet({ close }) {
   const st = S()
-  const [v, setV] = useState(st.tdee || 0)
+  const [v, setV] = useState(() => {
+    const p = tdeeParts(st.tdee)
+    return p ? { bmr: p.bmr, neat: p.neat, other: p.other, sport: p.sport } : { bmr: 0, neat: 0, other: 0, sport: 0 }
+  })
+  const [trim, setTrim] = useState(() => Math.round(trimOf(st) * 100))
+  const set = (k, n) => setV(o => ({ ...o, [k]: Math.round(n || 0) }))
+  const total = TDEE_PARTS.reduce((a, k) => a + (v[k] || 0), 0)
+  const parts = tdeeParts(v)
   const implied = impliedTDEE(st)
-  const typed = validTDEE(v)
-  const gap = typed && implied.tdee ? typed - implied.tdee : null
+  const gap = parts && implied.tdee ? parts.total - implied.tdee : null
 
   const why = {
     weighIns: t('It needs at least {0} weigh-ins.', IMPLIED_MIN_WEIGHINS),
@@ -400,13 +406,38 @@ function TdeeSheet({ close }) {
     range: t('The figures do not come to anything a body could spend — check the log.')
   }[implied.why]
 
+  const FIELDS = [
+    ['bmr', t('BMR'), t('What the body spends doing nothing at all.')],
+    ['neat', t('NEAT'), t('Walking, standing, fidgeting — everything that is not a session.')],
+    ['other', t('Other'), t('Digestion, the cold, anything else you count separately.')],
+    ['sport', t('Sport already included'), t('The training this figure already budgets for. Only the difference from what you actually log moves a day.')]
+  ]
+
   return <>
     <h3>{t('Maintenance')}</h3>
     <div className="muted small" style={{ lineHeight: 1.45 }}>
-      {t('What you spend on a day with no training. Sport is added on top of it, from what your watch measured — so this figure must not already include your training.')}
+      {t('Entered as its parts, because that is how it is arrived at — and because a single number hides which part was wrong when the total turns out to be.')}
     </div>
     <div style={{ height: 12 }} />
-    <Stepper label={t('Calories per day')} unit="kcal" value={v} step={25} decimal={false} onChange={n => setV(n || 0)} />
+    {FIELDS.map(([k, label, hint]) => <div key={k} style={{ marginBottom: 4 }}>
+      <Stepper label={label} unit="kcal" value={v[k]} step={25} decimal={false} onChange={n => set(k, n)} />
+      <div className="dim small" style={{ margin: '2px 2px 8px', lineHeight: 1.4 }}>{hint}</div>
+    </div>)}
+
+    <div className="row between" style={{ padding: '8px 2px 0', borderTop: '1px solid var(--sep)' }}>
+      <span className="muted">{t('Total')}</span>
+      <b className="stat-v" style={{ fontSize: 20, color: parts ? 'var(--acc)' : 'var(--orange)' }}>{fmtNum(total)} kcal</b>
+    </div>
+    {v.sport > 0 && <div className="dim small" style={{ margin: '6px 2px 0', lineHeight: 1.45 }}>
+      {t('A day trained as planned sits at maintenance. A session skipped takes {0} kcal off the day, a longer one adds the difference.', fmtNum(v.sport))}
+    </div>}
+
+    <h4 className="sec">{t('Trust in the watch')}</h4>
+    <Stepper label={t('Discount its active energy by')} unit="%" value={trim} step={5} decimal={false}
+      onChange={n => setTrim(Math.max(0, Math.min(Math.round(TRIM_MAX * 100), Math.round(n || 0))))} />
+    <div className="dim small" style={{ margin: '6px 2px 0', lineHeight: 1.45 }}>
+      {t('Wrist devices are good at heart rate and poor at energy — they read it 20 to 40 % high, almost always high. Applied to what the watch reports, and to nothing you typed yourself. Zero trusts it as it comes.')}
+    </div>
 
     {implied.tdee ? <>
       <h4 className="sec">{t('What your own history says')}</h4>
@@ -417,8 +448,8 @@ function TdeeSheet({ close }) {
             {t('{0} days logged of {1}, {2} weigh-ins, {3} kg a week', implied.days, implied.span + 1, implied.weighIns, fmtNum(implied.kgPerWeek))}
           </div>
         </div>
-        {typed !== implied.tdee &&
-          <Button size="sm" icon="bolt" onClick={() => setV(implied.tdee)}>{t('Use it')}</Button>}
+        {total !== implied.tdee &&
+          <Button size="sm" icon="bolt" onClick={() => set('other', Math.max(0, (v.other || 0) + implied.tdee - total))}>{t('Use it')}</Button>}
       </div>
       {gap != null && Math.abs(gap) >= 150 && <div className="small" style={{ marginTop: 8, color: 'var(--orange)', lineHeight: 1.4 }}>
         {gap > 0
@@ -426,7 +457,7 @@ function TdeeSheet({ close }) {
           : t('You have entered {0} kcal less than your weight curve accounts for — every deficit here reads that much too small.', fmtNum(-gap))}
       </div>}
       <div className="dim small" style={{ marginTop: 8, lineHeight: 1.45 }}>
-        {t('Read off your weigh-ins and your intake log over that period. It beats any formula, because it is measured on you.')}
+        {t('Read off your weigh-ins and your intake log, with the training that actually happened taken out and your planned {0} kcal put back — so it lines up with the total above. It beats any formula, because it is measured on you.', fmtNum(implied.planned))}
       </div>
     </> : <>
       <h4 className="sec">{t('What your own history says')}</h4>
@@ -437,9 +468,12 @@ function TdeeSheet({ close }) {
 
     <div style={{ height: 14 }} />
     <Button variant="primary" onClick={() => {
-      const n = validTDEE(v)
-      if (n == null) { toast(t('A maintenance figure sits between {0} and {1} kcal.', TDEE_MIN, TDEE_MAX)); return }
-      update(s => { s.tdee = n }); close(); toast(t('Maintenance set'))
+      if (!parts) { toast(t('A maintenance figure sits between {0} and {1} kcal.', TDEE_MIN, TDEE_MAX)); return }
+      update(s => {
+        s.tdee = { bmr: parts.bmr, neat: parts.neat, other: parts.other, sport: parts.sport }
+        s.watchTrim = Math.round(trim) / 100
+      })
+      close(); toast(t('Maintenance set'))
     }}>{t('Save')}</Button>
     {st.tdee && <><div style={{ height: 8 }} />
       <Button variant="danger" onClick={() => { update(s => { s.tdee = null }); close(); toast(t('Maintenance cleared')) }}>{t('Delete')}</Button></>}

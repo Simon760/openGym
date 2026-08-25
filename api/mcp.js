@@ -130,6 +130,22 @@ function planOut(S) {
 const num = v => (Number.isFinite(+v) && +v > 0 ? +v : null);
 const byDay = (a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : 0);
 
+// Maintenance as the app stores it. A profile written before the breakdown holds a bare
+// number, which meant expenditure without training — a breakdown budgeting none.
+const TDEE_PARTS = ['bmr', 'neat', 'other', 'sport'];
+function tdeeOut(v) {
+  if (v == null) return null;
+  if (typeof v === 'number') return { bmr: 0, neat: 0, other: v, sport: 0, total: v };
+  if (typeof v !== 'object') return null;
+  const p = {};
+  let total = 0;
+  for (const k of TDEE_PARTS) { p[k] = Math.round(num(v[k]) || 0); total += p[k]; }
+  return total > 0 ? { ...p, total } : null;
+}
+// An explicit 0 is a choice to trust the watch, not a missing value.
+const watchTrim = S =>
+  (Number.isFinite(+S.watchTrim) && +S.watchTrim >= 0 && +S.watchTrim <= 0.6 ? +S.watchTrim : 0.3);
+
 export const TOOLS = [
   {
     name: 'get_training_log',
@@ -137,9 +153,14 @@ export const TOOLS = [
       'Read logged workouts, body weight, daily calorie/macro intake and daily activity for ' +
       'the last N days. Each exercise carries what the session prescribed alongside what was ' +
       'actually done, so you can tell whether it hit its target. `tdee` is the user\'s ' +
-      'maintenance without training, so a day\'s energy balance is ' +
-      '(tdee + activity.kcal) - intake.kcal; it is null until they set one, and a day with ' +
-      'no intake logged has no balance rather than a balance of zero.',
+      'maintenance, broken into bmr / neat / other / sport with its total; `tdee.sport` is ' +
+      'the training that total already budgets for, so a day\'s balance is ' +
+      '(tdee.total + (activity.kcal - tdee.sport)) - intake.kcal — train as planned and it ' +
+      'is simply total - intake. `activity.kcal` is already discounted by `watch_trim`, the ' +
+      'share of the watch\'s active-energy reading the user does not trust (wrist devices ' +
+      'read energy 20-40% high); `activity.kcal_raw` is what the watch actually said. Both ' +
+      'tdee and a day with no intake logged can be null, and null means no balance rather ' +
+      'than a balance of zero.',
     inputSchema: {
       type: 'object',
       properties: { days: { type: 'integer', description: 'Days back from today. 0 for everything. Default 30.' } }
@@ -229,9 +250,15 @@ function callTool(name, args, S) {
         unit: S.unit || 'kg',
         weight_goal: S.targetW || null,
         intake_goal: S.nutriGoal || null,
-        tdee: S.tdee || null,
+        tdee: tdeeOut(S.tdee),
+        watch_trim: watchTrim(S),
         activity: (S.health || []).filter(e => inWindow(e.d, days, now))
-          .map(e => compact({ date: e.d, kcal: e.kcal, steps: e.steps, resting_hr: e.rhr })),
+          .map(e => compact({
+            date: e.d,
+            kcal: e.kcal ? Math.round(e.kcal * (1 - watchTrim(S))) : null,
+            kcal_raw: e.kcal || null,
+            steps: e.steps, resting_hr: e.rhr
+          })),
         sleep: (S.sleep || []).filter(e => inWindow(e.d, days, now))
           .map(e => compact({ date: e.d, bed: e.bed, wake: e.wake, awake_min: e.awake, hours: e.h, felt: e.q })),
         body_weight: (S.bodyweight || []).filter(b => inWindow(b.d, days, now)).map(b => ({ date: b.d, kg: b.w })),

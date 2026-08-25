@@ -19,7 +19,7 @@ import {
 } from '../lib/effort.js'
 import { avgOver, seriesOf, MACROS, MACRO_NAME, MACRO_COLOR } from '../lib/nutrition.js'
 import { bodyFatSeries, compositionTrend, sleepSeries, sleepAverage, sleepDebt, lastComposition } from '../lib/body.js'
-import { deficitTotals, deficitSeries, impliedTDEE, predictedVsActual, KCAL_PER_KG_FAT } from '../lib/energy.js'
+import { deficitTotals, deficitSeries, impliedTDEE, predictedVsActual, tdeeParts, KCAL_PER_KG_FAT } from '../lib/energy.js'
 import { Button, Segmented, SelectRow } from '../components/ui.jsx'
 
 // Which muscles the training in a window actually hit — and, the point of the card,
@@ -194,18 +194,19 @@ function EnergyCard({ S }) {
   const pts = deficitSeries(S, S.tdee, win)
   const cmp = predictedVsActual(S, S.tdee, win)
   const implied = impliedTDEE(S, win)
+  const tdee = tdeeParts(S.tdee)
 
   return <div className="card">
     <div className="row between" style={{ marginBottom: 8 }}>
       <h2 style={{ margin: 0 }}>{t('Energy')}</h2>
-      <Button size="sm" icon="flame" style={S.tdee ? { color: 'var(--yellow)' } : undefined} onClick={tdeeSheet}>
-        {S.tdee ? fmtNum(S.tdee) : t('Maintenance')}
+      <Button size="sm" icon="flame" style={tdee ? { color: 'var(--yellow)' } : undefined} onClick={tdeeSheet}>
+        {tdee ? fmtNum(tdee.total) : t('Maintenance')}
       </Button>
     </div>
 
-    {!S.tdee
+    {!tdee
       ? <div className="muted small" style={{ lineHeight: 1.45 }}>
-        {t('Set what you spend on a day with no training and every day here gets a balance: (maintenance + sport) − what you ate.')}
+        {t('Set your daily expenditure — BMR, NEAT, and the training it already budgets for — and every day here gets a balance.')}
       </div>
       : <>
         <Segmented className="seg-range" value={win} onChange={setWin}
@@ -229,9 +230,9 @@ function EnergyCard({ S }) {
               of the two rather than against the total, so a component that worked *against*
               the deficit still has a bar and still reads as a size. */}
           <div style={{ marginTop: 12 }}>
-            {[['nutrition', t('Eating'), 'var(--orange)'], ['sport', t('Training'), 'var(--blue)']].map(([k, label, col]) => {
+            {[['nutrition', t('Eating'), 'var(--orange)'], ['sportDelta', t('Sport vs plan'), 'var(--blue)']].map(([k, label, col]) => {
               const v = tot[k]
-              const peak = Math.max(Math.abs(tot.nutrition), Math.abs(tot.sport)) || 1
+              const peak = Math.max(Math.abs(tot.nutrition), Math.abs(tot.sportDelta)) || 1
               return <div key={k} style={{ marginBottom: 8 }}>
                 <div className="row between small" style={{ marginBottom: 4 }}>
                   <span className="muted">{label}</span>
@@ -243,6 +244,12 @@ function EnergyCard({ S }) {
               </div>
             })}
           </div>
+          {/* The training a maintenance figure budgets for lives inside the eating number,
+              because that is what budgeting for it means. Spelled out, or the sport row
+              reads as "training did nothing" on a cut built entirely on training. */}
+          {tot.sportPlanned > 0 && <div className="dim small" style={{ lineHeight: 1.45 }}>
+            {t('{0} kcal of training measured, against {1} your maintenance already counts.', fmtNum(tot.sportLogged), fmtNum(tot.sportPlanned))}
+          </div>}
           {tot.nutrition < 0 && <div className="small" style={{ color: 'var(--orange)', lineHeight: 1.45 }}>
             {t('Eating sat above maintenance across this period — every gram lost came from training.')}
           </div>}
@@ -274,7 +281,7 @@ function EnergyCard({ S }) {
             </div>
           </>}
 
-          {implied.tdee != null && implied.tdee !== S.tdee && <div className="small" style={{ marginTop: 10 }}>
+          {implied.tdee != null && tdee && implied.tdee !== tdee.total && <div className="small" style={{ marginTop: 10 }}>
             <span className="muted">{t('Your weight curve puts maintenance at')} </span>
             <b>{fmtNum(implied.tdee)} kcal</b>
             <Button size="sm" icon="bolt" style={{ marginLeft: 8 }} onClick={tdeeSheet}>{t('Adjust')}</Button>

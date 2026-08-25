@@ -214,7 +214,10 @@ export default function Home() {
         <div style={{ minWidth: 0 }}>
           <div className="lbl2">{balance.deficit >= 0 ? t('Deficit today') : t('Surplus today')}</div>
           <div className="dim small" style={{ marginTop: 2 }}>
-            {t('{0} + {1} sport − {2} eaten', fmtNum(balance.tdee), fmtNum(balance.sport), fmtNum(balance.intake))}
+            {t('{0} maintenance {1} sport vs plan − {2} eaten',
+              fmtNum(balance.tdee),
+              (balance.delta > 0 ? '+' : '') + fmtNum(balance.delta),
+              fmtNum(balance.intake))}
           </div>
         </div>
         <div className="stat-v" style={{ color: balance.deficit >= 0 ? 'var(--acc)' : 'var(--orange)', flexShrink: 0 }}>
