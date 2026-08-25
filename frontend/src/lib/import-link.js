@@ -1,3 +1,5 @@
+import { toMinutes } from './import-csv.js'
+
 /**
  * What a watch measured, arriving as a link rather than a paste.
  *
@@ -33,6 +35,27 @@ const DAY = {
 }
 const SESSION = { sport: 'kcal', min: 'minutes', km: 'distance_km', hr: 'hr_avg', type: 'type' }
 
+/**
+ * A value as a Shortcut actually hands it over.
+ *
+ * A Health variable is display text, not a number: Active Energy arrives as "612 kcal",
+ * Duration as "0:47:00" or "47 min", a weight as "79,5 kg" on a French phone. Dropped into
+ * the URL that is exactly what lands in it, and a parser that wanted a bare number reports
+ * an empty payload — which reads, wrongly, as "you did not drop the variable in".
+ *
+ * Clock times and dates are left alone: "23:14" is not a duration, and stripping it to
+ * digits would make it one.
+ */
+const RAW = new Set(['bed', 'wake', 'date', 'type'])
+const clean = (key, v) => {
+  if (RAW.has(key)) return v
+  if (key === 'min') { const m = toMinutes(v); return m > 0 ? String(m) : v }
+  // Everything else is a plain number wearing a unit. A comma is a decimal point here:
+  // no figure a watch reports groups its thousands.
+  const n = v.replace(/[^\d.,-]/g, '').replace(',', '.').replace(/\.(?=.*\.)/g, '')
+  return n === '' || n === '-' ? v : n
+}
+
 /** A link that had a query but nothing in it — see views/Import.jsx. */
 export const EMPTY_LINK = { empty: true }
 
@@ -50,10 +73,11 @@ export function payloadFromQuery(query) {
     if (!val) continue
     try { val = decodeURIComponent(val) } catch { /* already plain */ }
     val = val.trim()
+    if (!val) continue
     if (key === 'd') { try { return JSON.parse(val) } catch { return null } }
     if (key === 'b') { try { return JSON.parse(b64(val)) } catch { return null } }
-    if (DAY[key]) out[DAY[key]] = val
-    else if (SESSION[key]) workout[SESSION[key]] = val
+    if (DAY[key]) out[DAY[key]] = clean(key, val)
+    else if (SESSION[key]) workout[SESSION[key]] = clean(key, val)
   }
   if (Object.keys(workout).length) out.workout = workout
   return Object.keys(out).length ? out : null

@@ -866,7 +866,7 @@ export default {
   'Exercise minutes': 'Minutes d’exercice',
   'Session': 'Séance',
   'Set the automation up once and your watch fills this in by itself — no copying, no pasting.': 'Configure l’automatisation une fois et ta montre remplit tout ça toute seule — sans copier-coller.',
-  'That link carried no figures. In the Open URL action, the watch’s variables have to sit right after each “=”.': 'Ce lien ne portait aucun chiffre. Dans l’action Ouvrir l’URL, les variables de la montre doivent être juste après chaque « = ».',
+  'That link carried no figures. Either the variables were never dropped in after each “=”, or the action above found nothing to give them — check that Shortcuts has access to Health, and that the workout you are looking for is in it.': 'Ce lien ne portait aucun chiffre. Soit les variables n’ont jamais été déposées après chaque « = », soit l’action au-dessus n’avait rien à leur donner — vérifie que Raccourcis a accès à Santé, et que la séance que tu cherches y est bien.',
   'Link copied — paste it into Open URL': 'Lien copié — colle-le dans « Ouvrir l’URL »',
   'Copy the end-of-workout link': 'Copier le lien de fin de séance',
   'Copy the nightly link': 'Copier le lien du soir',

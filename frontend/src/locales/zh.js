@@ -874,7 +874,7 @@ export default {
   'Exercise minutes': 'Exercise minutes',
   'Session': 'Session',
   'Set the automation up once and your watch fills this in by itself — no copying, no pasting.': 'Set the automation up once and your watch fills this in by itself — no copying, no pasting.',
-  'That link carried no figures. In the Open URL action, the watch’s variables have to sit right after each “=”.': 'That link carried no figures. In the Open URL action, the watch’s variables have to sit right after each “=”.',
+  'That link carried no figures. Either the variables were never dropped in after each “=”, or the action above found nothing to give them — check that Shortcuts has access to Health, and that the workout you are looking for is in it.': 'That link carried no figures. Either the variables were never dropped in after each “=”, or the action above found nothing to give them — check that Shortcuts has access to Health, and that the workout you are looking for is in it.',
   'Link copied — paste it into Open URL': 'Link copied — paste it into Open URL',
   'Copy the end-of-workout link': 'Copy the end-of-workout link',
   'Copy the nightly link': 'Copy the nightly link',

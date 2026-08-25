@@ -51,4 +51,33 @@ describe('payloadFromQuery — what a Shortcut can hand over in a link', () => {
     expect(payloadFromQuery('b=!!!!')).toBe(null)
     expect(() => payloadFromQuery('steps=%E0%A4%A')).not.toThrow()
   })
+
+  // A Health variable is display text, not a number. This is what actually lands in the URL
+  // when someone drops "Active Energy" and "Duration" into it, and it used to read as empty.
+  it('takes a value with its unit still attached', () => {
+    const p = parseHealth(payloadFromQuery('sport=612 kcal&min=47 min'))
+    expect(p.workout).toMatchObject({ kcal: 612, minutes: 47 })
+  })
+
+  it('reads a duration however the watch formatted it', () => {
+    for (const [v, min] of [['0:47:00', 47], ['47 min', 47], ['1:12:30', 72.5], ['2h 38m', 158], ['47', 47]])
+      expect(parseHealth(payloadFromQuery('min=' + v)).workout.minutes).toBe(Math.round(min))
+  })
+
+  it('reads a French decimal comma', () => {
+    expect(parseHealth(payloadFromQuery('weight=79,5 kg')).weight).toBe(79.5)
+    expect(parseHealth(payloadFromQuery('sleep=7,25 h')).sleepHours).toBe(7.25)
+  })
+
+  it('leaves a clock time and a date alone', () => {
+    // "23:14" is not a duration; stripped to digits it would become one.
+    expect(parseHealth(payloadFromQuery('bed=23:14&wake=07:02'))).toMatchObject({ bed: '23:14', wake: '07:02' })
+    expect(parseHealth(payloadFromQuery('steps=9420&date=2026-08-11')).d).toBe('2026-08-11')
+  })
+
+  it('still calls a link with only empty variables empty', () => {
+    // The variables were never dropped in, or the action they came from found nothing.
+    expect(payloadFromQuery('sport=&min=')).toBe(null)
+    expect(payloadFromQuery('sport=%20&min=')).toBe(null)
+  })
 })

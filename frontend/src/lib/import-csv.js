@@ -294,8 +294,8 @@ export function parseWhen(s) {
 }
 const hm = (h, mi) => (h === undefined ? null : (parseInt(h, 10) || 0) * 3600000 + (parseInt(mi, 10) || 0) * 60000)
 
-/** "HH:MM:SS" · "MM:SS" · "90" -> minutes */
-function toMinutes(v) {
+/** "HH:MM:SS" · "MM:SS" · "2h 38m" · "90" -> minutes */
+export function toMinutes(v) {
   const s = String(v ?? '').trim()
   if (!s) return 0
   if (s.includes(':')) {
