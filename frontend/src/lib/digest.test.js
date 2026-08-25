@@ -129,9 +129,12 @@ describe('dailyDigest — the energy balance', () => {
     const S = base({
       tdee: { bmr: 1700, neat: 400, sport: 400 },
       nutrition: [{ d: iso(0), kcal: 1900 }],
-      health: [{ d: iso(0), kcal: 620 }]
+      health: [{ d: iso(0), kcal: 1020 }]   // 400 of it is the NEAT the figure budgets
     })
-    expect(dailyDigest(S, iso(0))).toContain('2,500 maintenance +220')
+    const out = dailyDigest(S, iso(0))
+    expect(out).toContain('2,500 maintenance +220')
+    // and the subtraction is shown, not silently applied
+    expect(out).toContain('400 NEAT already in maintenance')
   })
 
   it('shows what the watch said beside what was counted', () => {

@@ -887,4 +887,7 @@ export default {
   'Type today’s figures in, or hand them over from a Shortcut. Session details are added to the workout you logged that day — never as a second one.': 'Type today’s figures in, or hand them over from a Shortcut. Session details are added to the workout you logged that day — never as a second one.',
   'From a Shortcut, or a tracker export': 'From a Shortcut, or a tracker export',
   'Paste what your Shortcut produced, or open the CSV your tracker exported.': 'Paste what your Shortcut produced, or open the CSV your tracker exported.',
+  '{0} % taken off': '{0} % taken off',
+  '{0} NEAT already in maintenance': '{0} NEAT already in maintenance',
+  'counted': 'counted',
 }

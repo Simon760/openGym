@@ -136,8 +136,15 @@ export function dailyDigest(S, iso = todayISO(), now = Date.now()) {
   // trimmed figure nobody can trace back to the reading is a number nobody can check.
   const sp = sportKcal(S, iso, trimOf(S))
   if (sp.raw) {
+    // Both corrections are named, and for the same reason: the watch's overcount, and the
+    // NEAT the maintenance figure already contains. A reader who cannot get from the
+    // reading to the counted number has to take it on faith.
+    const why = [
+      sp.trim ? t('{0} % taken off', Math.round(sp.trim * 100)) : null,
+      sp.neat ? t('{0} NEAT already in maintenance', fmtNum(sp.neat)) : null
+    ].filter(Boolean)
     out.push(t('Active energy') + ' ' + fmtNum(sp.raw) + ' kcal ' + t('from the watch')
-      + (sp.trim ? ' → ' + fmtNum(sp.kcal) + ' ' + t('counted, {0} % taken off', Math.round(sp.trim * 100)) : ''))
+      + (why.length ? ' → ' + fmtNum(sp.kcal) + ' ' + t('counted') + ' (' + why.join(', ') + ')' : ''))
   } else if (sp.source === 'missing') {
     out.push(t('Active energy') + ' ' + t('not measured'))
   }

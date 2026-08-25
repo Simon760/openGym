@@ -48,16 +48,36 @@ describe('tdeeParts', () => {
 })
 
 describe('sportKcal', () => {
-  it('prefers the watch’s whole day over the session alone', () => {
-    // the session is not the day: the walk home is training energy too
+  it('takes the session’s own figure over the whole day’s', () => {
+    // Apple's active energy is NEAT plus training, and maintenance already budgets NEAT.
+    // The session's figure is training and nothing else, so it needs no correcting.
     const st = S({
       health: [{ d: day(0), kcal: 780 }],
       workouts: [{ d: day(0), id: 'w', watch: { kcal: 430 } }]
     })
-    expect(sportKcal(st, day(0), 0)).toMatchObject({ kcal: 780, raw: 780, source: 'watch' })
+    expect(sportKcal(st, day(0), 0)).toMatchObject({ kcal: 430, raw: 430, source: 'session' })
   })
 
-  it('falls back to the session when the day was never measured', () => {
+  it('takes the budgeted NEAT back off a day total', () => {
+    // Handed over whole, the walk home counts twice: once inside maintenance, once as
+    // training. A deficit inflated by a few hundred kcal a day is the error to avoid.
+    const st = S({ health: [{ d: day(0), kcal: 780 }] })
+    expect(sportKcal(st, day(0), 0, { bmr: 1600, neat: 400, sport: 200 }))
+      .toMatchObject({ kcal: 380, raw: 780, neat: 400, source: 'watch' })
+  })
+
+  it('never turns a quiet day into negative training', () => {
+    const st = S({ health: [{ d: day(0), kcal: 250 }] })
+    expect(sportKcal(st, day(0), 0, { bmr: 1600, neat: 400 })).toMatchObject({ kcal: 0, raw: 250 })
+  })
+
+  it('subtracts nothing from a maintenance figure entered as one number', () => {
+    // A lump sum declares no NEAT, so there is nothing known to be double-counted.
+    const st = S({ health: [{ d: day(0), kcal: 780 }] })
+    expect(sportKcal(st, day(0), 0, 2100)).toMatchObject({ kcal: 780, neat: 0 })
+  })
+
+  it('uses the session when the day was never measured', () => {
     const st = S({ workouts: [{ d: day(0), id: 'w', watch: { kcal: 430 } }] })
     expect(sportKcal(st, day(0), 0)).toMatchObject({ kcal: 430, source: 'session' })
   })
@@ -86,7 +106,8 @@ describe('sportKcal', () => {
 
 describe('dayBalance', () => {
   it('adds only the difference from the training the figure already budgets for', () => {
-    const st = S({ nutrition: [{ d: day(0), kcal: 1900 }], health: [{ d: day(0), kcal: 620 }] })
+    // 1 020 of active energy, 400 of which the figure already counts as NEAT → 620 trained
+    const st = S({ nutrition: [{ d: day(0), kcal: 1900 }], health: [{ d: day(0), kcal: 1020 }] })
     const tdee = { bmr: 1700, neat: 400, sport: 400 }   // 2 500 total, 400 of it training
     expect(dayBalance(st, day(0), tdee)).toMatchObject({
       tdee: 2500, planned: 400, sport: 620, delta: 220, out: 2720, intake: 1900, deficit: 820
@@ -102,7 +123,8 @@ describe('dayBalance', () => {
   })
 
   it('is a plain food-against-maintenance day when training went to plan', () => {
-    const st = S({ nutrition: [{ d: day(0), kcal: 2000 }], health: [{ d: day(0), kcal: 400 }] })
+    // 800 active: 400 the budgeted NEAT, 400 the budgeted training. Nothing to add.
+    const st = S({ nutrition: [{ d: day(0), kcal: 2000 }], health: [{ d: day(0), kcal: 800 }] })
     expect(dayBalance(st, day(0), { bmr: 1700, neat: 400, sport: 400 }))
       .toMatchObject({ delta: 0, out: 2500, deficit: 500 })
   })
@@ -139,7 +161,7 @@ describe('deficitTotals', () => {
       // day(2) never logged
       { d: day(3), kcal: 2200 }
     ],
-    health: [{ d: day(1), kcal: 600 }],
+    health: [{ d: day(1), kcal: 600 }],   // read net of NEAT once a figure declares one
     workouts: [{ d: day(3), id: 'w' }]     // trained, but nothing measured it
   })
 
@@ -155,10 +177,12 @@ describe('deficitTotals', () => {
   it('carries the training that happened beside the training the figure assumed', () => {
     // with sport budgeted in, the deficit it creates lives inside `nutrition` — a card that
     // only had `sportDelta` would report zero training on a cut built entirely on training
+    // 600 active on day(1), 200 of it the NEAT the figure already budgets → 400 trained,
+    // against 200 budgeted on each of the three logged days.
     const t = deficitTotals(st, { bmr: 1600, neat: 200, sport: 200 })
-    expect(t.sportLogged).toBe(600)
+    expect(t.sportLogged).toBe(400)
     expect(t.sportPlanned).toBe(600)       // 200 a day across the three logged days
-    expect(t.sportDelta).toBe(0)
+    expect(t.sportDelta).toBe(-200)
     expect(t.nutrition + t.sportDelta).toBe(t.total)
   })
 

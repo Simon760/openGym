@@ -107,21 +107,38 @@ export function tdeeParts(v) {
  * it because a trimmed figure that cannot be traced back to what the watch said is a number
  * nobody can check.
  *
- * A watch's all-day active energy is preferred over the session's own figure: it is the
- * whole of what was moved, and using the session alone would drop the walk home. A day with
- * a logged session but no energy figure anywhere reports 'missing' rather than quietly
- * passing 0 — that day's balance is understated and the totals say so.
+ * The session's own figure is preferred, and this used to be the other way round. A watch's
+ * all-day active energy looked like the better number — the whole of what was moved, walk
+ * home included — but that is precisely what makes it the wrong one here. Maintenance is
+ * entered as parts, and one of those parts is NEAT: the walking, standing and fidgeting of
+ * an ordinary day. Apple's active energy is NEAT plus training. Handed over whole it counts
+ * the walk home twice — once inside the maintenance figure, once again as training — and a
+ * deficit inflated by a few hundred kcal a day is the one error this app exists to avoid.
+ *
+ * So when only the day's total is known, the NEAT the maintenance figure already budgets
+ * comes back off it, and what is left is the training. Never below zero: a day that moved
+ * less than its own NEAT budget did no training, it did not do negative training.
+ *
+ * A day with a logged session but no energy figure anywhere reports 'missing' rather than
+ * quietly passing 0 — that day's balance is understated and the totals say so.
  */
-export function sportKcal(S, iso, trim = WATCH_TRIM) {
+export function sportKcal(S, iso, trim = WATCH_TRIM, tdee = S && S.tdee) {
   const t = validTrim(trim)
-  const cut = (raw, source) => ({ kcal: Math.round(raw * (1 - t)), raw: Math.round(raw), trim: t, source })
-  const hd = healthFor(S, iso)
-  const day = num(hd && hd.kcal)
-  if (day != null) return cut(day, 'watch')
+  const cut = (raw, source, neat = 0) => ({
+    kcal: Math.max(0, Math.round(raw * (1 - t)) - Math.round(neat)),
+    raw: Math.round(raw), trim: t, source, neat: Math.round(neat)
+  })
+
+  // The session's figure is already only the session: nothing is budgeted twice inside it.
   const w = (S.workouts || []).find(x => x.d === iso && num(x.watch && x.watch.kcal) != null)
   if (w) return cut(w.watch.kcal, 'session')
+
+  const hd = healthFor(S, iso)
+  const day = num(hd && hd.kcal)
+  if (day != null) return cut(day, 'watch', (tdeeParts(tdee) || {}).neat || 0)
+
   const trained = (S.workouts || []).some(x => x.d === iso)
-  return { kcal: 0, raw: 0, trim: t, source: trained ? 'missing' : 'rest' }
+  return { kcal: 0, raw: 0, trim: t, source: trained ? 'missing' : 'rest', neat: 0 }
 }
 
 /**
@@ -141,7 +158,7 @@ export function dayBalance(S, iso, tdee = S.tdee, trim) {
   if (!p) return null
   const e = entryFor(S, iso)
   const intake = num(e && e.kcal)
-  const sp = sportKcal(S, iso, trim != null ? trim : trimOf(S))
+  const sp = sportKcal(S, iso, trim != null ? trim : trimOf(S), tdee)
   const delta = sp.kcal - p.sport
   const out = p.total + delta
   return {
@@ -274,6 +291,11 @@ export function impliedTDEE(S, days = 0, now = Date.now()) {
   if (slope == null) return { tdee: null, why: 'span', span }
 
   const meanIntake = logged.reduce((a, e) => a + num(e.kcal), 0) / logged.length
+  // Training only — sportKcal takes the entered NEAT off a whole-day reading, so what comes
+  // out of `expenditure` here is BMR + NEAT + the rest, and adding the budgeted training
+  // back gives a figure directly comparable to the one that was entered. Reading the entered
+  // NEAT to judge the entered total is circular only in appearance: both sides are being
+  // held to the same accounting, which is the whole point of the comparison.
   const meanSport = logged.reduce((a, e) => a + sportKcal(S, e.d, trimOf(S)).kcal, 0) / logged.length
   // A negative slope is weight lost, which is expenditure the intake did not cover.
   const expenditure = meanIntake - slope * KCAL_PER_KG_FAT
