@@ -3,6 +3,7 @@ import { api } from '../lib/api.js'
 import { localTZ } from '../lib/format.js'
 import { registerCustom } from '../lib/exercises.js'
 import { DEMO, DEMO_SEEDED, SOLO } from '../lib/demo.js'
+import { FIREBASE, onAccount, cloudPull, cloudPush, signOutAccount } from '../lib/firebase.js'
 import { MOBILE, nativeLoad, nativeSave, syncReminder } from '../lib/mobile.js'
 
 const KEY = 'gym_state_v1'
@@ -37,7 +38,7 @@ export const DEF = {
   // than living here, because that is how a scale reports it. Both absent on every profile
   // written before they existed, and absent reads as never logged.
   sleep: [], sleepGoal: null,
-  // Daily figures a watch measured and BodyTransformation cannot: { d, steps, kcal, rhr, exerciseMin }.
+  // Daily figures a watch measured and BodyEvolve cannot: { d, steps, kcal, rhr, exerciseMin }.
   // A watch's reading of a *session* is not here — it annotates the workout already logged
   // that day (w.watch), because two records of one session must stay one session.
   health: []
@@ -127,14 +128,20 @@ export const useStore = create((set, get) => {
     },
 
     async pushState() {
-      if (!get().user) return
+      const u = get().user
+      if (!u) return
       clearTimeout(pushTm)
-      try { await api('/api/data', { method: 'PUT', body: JSON.stringify({ state: get().S }) }); localStorage.removeItem('gym_dirty') }
-      catch (e) { localStorage.setItem('gym_dirty', '1') }
+      try {
+        if (FIREBASE) await cloudPush(u.uid, get().S)
+        else await api('/api/data', { method: 'PUT', body: JSON.stringify({ state: get().S }) })
+        localStorage.removeItem('gym_dirty')
+      } catch (e) { localStorage.setItem('gym_dirty', '1') }
     },
     async pullState() {
       try {
-        const { state } = await api('/api/data')
+        const u = get().user
+        // Same shape from either back end: whatever this profile last stored, or nothing.
+        const state = FIREBASE ? (u ? await cloudPull(u.uid) : null) : (await api('/api/data')).state
         const S = get().S
         const dirty = localStorage.getItem('gym_dirty') === '1'
         if (state && (!hasData(S) || ((state._ts || 0) >= (S._ts || 0) && !dirty))) {
@@ -147,7 +154,11 @@ export const useStore = create((set, get) => {
     },
 
     async signOut() {
-      try { await get().pushState(); await api('/api/logout', { method: 'POST', body: '{}' }) } catch (e) { /* */ }
+      try {
+        await get().pushState()
+        if (FIREBASE) await signOutAccount()
+        else await api('/api/logout', { method: 'POST', body: '{}' })
+      } catch (e) { /* */ }
       clearLocalSession()
     },
 
@@ -185,6 +196,30 @@ export const useStore = create((set, get) => {
         get().setGuest(true)
         syncReminder(get().S)
         set({ ready: true })
+        return
+      }
+      // Firebase build: the account is restored asynchronously from persisted storage, so
+      // boot waits for the first callback rather than reading a value that is null for the
+      // first few hundred milliseconds of every cold start and flashing the sign-in screen.
+      // The same subscription then carries every later change — signing in, signing out, a
+      // token expiring — through one path.
+      if (FIREBASE) {
+        let first = true
+        const done = () => { if (first) { first = false; set({ ready: true }) } }
+        // Firebase restores the account from local storage, so this normally fires in
+        // milliseconds and without a network. "Normally" is not a guarantee worth hanging a
+        // splash screen on, though: if it has not spoken in six seconds, go in anyway. The
+        // signed-in state arrives later if it arrives, and nobody is left staring at a logo.
+        setTimeout(done, 6000)
+        onAccount(async acct => {
+          if (acct) {
+            get().setUser(acct)
+            await get().pullState()
+          } else {
+            get().setUser(null)
+          }
+          done()
+        }).catch(done)   // SDK unreachable: fall through to the sign-in screen
         return
       }
       // Solo build: no backend, and the data is the user's own — straight in, no API call to

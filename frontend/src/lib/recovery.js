@@ -1,6 +1,6 @@
 // Estimated muscle recovery.
 //
-// READ THIS FIRST: this is a model, not a measurement. Nothing BodyTransformation holds measures
+// READ THIS FIRST: this is a model, not a measurement. Nothing BodyEvolve holds measures
 // recovery. It knows which muscles a session worked, how many sets each got, how close to
 // failure those sets were, how you slept and what you ate — and turns that into an estimate
 // with a published rationale. It is useful for deciding what to train tomorrow. It is not a

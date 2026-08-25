@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — the BodyTransformation fork
+## Unreleased — the BodyEvolve fork
 
 A fork of openGym, renamed and extended. The upstream project, its licence and its attribution
 are unchanged; see NOTICE.md.
@@ -270,11 +270,11 @@ importer for your history from other apps.
 
 ### One codebase, two flavors
 
-BodyTransformation is also a standalone mobile app — and it ships as a direct APK download, not
+BodyEvolve is also a standalone mobile app — and it ships as a direct APK download, not
 through app stores.
 
 - 📱 **Standalone mobile app.** The same frontend now also builds as a native iPhone /
-  Android app (Capacitor) — the install-and-done flavor of BodyTransformation: no account, no server,
+  Android app (Capacitor) — the install-and-done flavor of BodyEvolve: no account, no server,
   no sync. Everything stays on the phone.
   - State is mirrored into a file in the app's private storage on every change, so your
     log survives even when the OS evicts WebView storage (iOS does).
@@ -334,7 +334,7 @@ A muscle map across the app, and a live demo you can try without installing anyt
 - 🐛 **Fixed: finishing a workout from its last exercise could blank the whole app.** The
   per-exercise weight sheet read the running workout without checking it was still there, and
   finishing clears it while that sheet is still on screen.
-- ▶️ **Live demo** at [duartesantos8.github.io/BodyTransformation](https://duartesantos8.github.io/BodyTransformation/) —
+- ▶️ **Live demo** at [duartesantos8.github.io/BodyEvolve](https://duartesantos8.github.io/BodyEvolve/) —
   a browser-only build (`VITE_DEMO=1`) published to GitHub Pages on every push to `main`. It boots
   into guest mode with a seeded example profile (12 weeks of Push/Pull/Legs, weigh-ins, PRs) so
   every screen has something to show, and it never talks to a server. Passkeys, sync and the admin

@@ -1,6 +1,6 @@
 # Building the mobile app (iOS / Android)
 
-BodyTransformation ships in two flavors from the same codebase:
+BodyEvolve ships in two flavors from the same codebase:
 
 | | **Self-hosted** (this repo's default) | **Mobile app** (`VITE_MOBILE=1`) |
 |---|---|---|
@@ -22,7 +22,7 @@ OS share sheet instead of a browser download.
 - **Android:** Android Studio (bundles the SDK). Java 21 for Gradle.
 - **iOS:** a Mac with Xcode 15+ and CocoaPods (`brew install cocoapods`). A free Apple ID
   is enough to run the app on your own iPhone (see below); paid membership is only needed
-  for App Store distribution, which BodyTransformation doesn't do.
+  for App Store distribution, which BodyEvolve doesn't do.
 
 ## Build & run
 
@@ -56,7 +56,7 @@ npx @capacitor/assets generate --iconBackgroundColor '#0c0e12' --splashBackgroun
 
 ## Distribution — deliberately no app stores
 
-BodyTransformation's mobile app is not on the Play Store or App Store, and that's a choice: no store
+BodyEvolve's mobile app is not on the Play Store or App Store, and that's a choice: no store
 accounts, no store rules, no yearly fees between you and an open-source app.
 
 ### Android — sideload the APK
@@ -77,7 +77,7 @@ keytool -genkeypair -keystore my.keystore -alias opengym -keyalg RSA -validity 1
 
 # align + sign (zipalign/apksigner ship with the Android SDK build-tools)
 zipalign -f -p 4 app-release-unsigned.apk aligned.apk
-apksigner sign --ks my.keystore --ks-key-alias opengym --out BodyTransformation.apk aligned.apk
+apksigner sign --ks my.keystore --ks-key-alias opengym --out BodyEvolve.apk aligned.apk
 ```
 
 ### iPhone — what's actually possible
@@ -96,7 +96,7 @@ that would simply install. Your free options:
 - Bump `versionName`/`versionCode` in `android/app/build.gradle` per release; keep them in
   step with `frontend/package.json`. `versionCode` must strictly increase or updates won't
   install over an existing APK.
-- **License:** BodyTransformation is AGPL-3.0, which by itself sits badly with app-store terms of
+- **License:** BodyEvolve is AGPL-3.0, which by itself sits badly with app-store terms of
   service. `NOTICE.md` carries an app-store exception (an additional permission under
   AGPL §7) granted by the copyright holder — relevant only if store distribution ever happens.
 - The app requests notification permission only when the workout-day reminder is switched
@@ -123,7 +123,7 @@ actions. In outline:
 6. `Copy to Clipboard` — or `Get Contents of URL` (POST) once your instance is online
 
 > Never query sleep on "Today". A night starts yesterday and ends today, so the obvious
-> filter cuts it in half. BodyTransformation files a night under the day you woke up, for the same
+> filter cuts it in half. BodyEvolve files a night under the day you woke up, for the same
 > reason — the two agree without anything having to be negotiated.
 
 **Two ways to fire it, one shortcut:**
@@ -136,7 +136,7 @@ actions. In outline:
 **What lands where.** Steps, active energy and resting heart rate become the day's activity
 figures; sleep goes to the sleep log; a weight (and body fat, if your scale reports it)
 becomes a weigh-in. The workout's duration, energy and heart rate are **added to the session
-you already logged in BodyTransformation that day** — never as a second session. Two records of one
+you already logged in BodyEvolve that day** — never as a second session. Two records of one
 training session have to stay one session, or every count in the app doubles. If nothing was
 logged that day, the import says the session details had nowhere to go and keeps the rest.
 
@@ -166,7 +166,7 @@ Where the export lives:
 
 **How the columns are read.** There is no per-vendor parser to go stale. The header is
 matched loosely — `Sleep onset`, `Bedtime start`, `Sleep start` all mean the same thing —
-against the handful of things BodyTransformation can store: the two sleep times, time awake, sleep
+against the handful of things BodyEvolve can store: the two sleep times, time awake, sleep
 duration, steps, energy burned, resting heart rate, weight, body fat. A duration is read as
 minutes or hours according to what the header says, and where it says nothing, by size:
 nobody sleeps four hundred hours.
@@ -200,7 +200,7 @@ Every column is optional except the date — `Date,Weight` alone is a complete f
 not have to match exactly: French names work, so do the usual tracker exports, and the mapping
 is shown before anything is written.
 
-Rows land day by day, replacing what BodyTransformation holds for that date rather than adding to it, so
+Rows land day by day, replacing what BodyEvolve holds for that date rather than adding to it, so
 re-importing a corrected file is a correction and not a duplicate. Intake merges: a file
 carrying only calories will not wipe macros already logged for that day.
 
@@ -281,7 +281,7 @@ correcting, and the card says which way.
 *Home → the share button* produces "Today" as plain text, to paste into whatever coaches you:
 
 ```
-BodyTransformation — Today — Tue 25 Aug
+BodyEvolve — Today — Tue 25 Aug
 
 Activity
   Push Day · 53 min · 430 kcal · HR 128 avg

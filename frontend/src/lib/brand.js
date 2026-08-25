@@ -8,9 +8,9 @@
 //
 // This app is a fork of openGym (AGPL-3.0) by DuarteSantos8. The licence requires that
 // attribution survive the rename, which is why UPSTREAM is here rather than deleted.
-export const APP_NAME = 'BodyTransformation'
+export const APP_NAME = 'BodyEvolve'
 export const UPSTREAM = 'openGym'
 export const UPSTREAM_REPO = 'https://github.com/DuarteSantos8/openGym'
 
 // Lowercase, hyphen-safe: what an exported backup or plan file is called on disk.
-export const FILE_PREFIX = 'bodytransformation'
+export const FILE_PREFIX = 'bodyevolve'

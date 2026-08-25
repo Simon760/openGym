@@ -1,6 +1,6 @@
 # Third-party notices
 
-BodyTransformation is a fork of **openGym** and is distributed under the same licence. The
+BodyEvolve is a fork of **openGym** and is distributed under the same licence. The
 upstream copyright below is unchanged and must stay with any copy of this code.
 
 openGym — Copyright (C) 2026 Duarte Santos.

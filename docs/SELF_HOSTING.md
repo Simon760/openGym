@@ -1,6 +1,6 @@
-# Self-hosting BodyTransformation
+# Self-hosting BodyEvolve
 
-BodyTransformation is two small containers (a web server and an API) plus a folder of your data.
+BodyEvolve is two small containers (a web server and an API) plus a folder of your data.
 This guide takes you from "just cloned it" to "using it from my phone over the internet".
 
 ## 0. The simplest deploy of all: one phone, no server
@@ -77,20 +77,20 @@ Logs: `docker compose logs -f`. Stop: `docker compose down`.
 
 ## 2. Understand the passkey requirement (important)
 
-BodyTransformation signs you in with **passkeys** (WebAuthn). Browsers enforce two rules:
+BodyEvolve signs you in with **passkeys** (WebAuthn). Browsers enforce two rules:
 
 1. Passkeys are bound to an exact **hostname** (`RP_ID`).
 2. They only work over **HTTPS** — with one exception: `http://localhost`.
 
 So `http://localhost:8080` works on the machine running Docker, but **another device (your
 phone) cannot use `http://<your-LAN-ip>:8080`** — that's neither localhost nor HTTPS, so the
-passkey prompt won't appear. To use BodyTransformation from your phone you need a real HTTPS hostname.
+passkey prompt won't appear. To use BodyEvolve from your phone you need a real HTTPS hostname.
 
 (You can still open it over LAN in **guest mode**, which stores data only in that browser.)
 
 ## 3. Expose it over HTTPS on your own domain
 
-Put BodyTransformation behind something that terminates TLS for a hostname you control, then point it at
+Put BodyEvolve behind something that terminates TLS for a hostname you control, then point it at
 the `web` container. Pick whichever you already run:
 
 ### Option A — Cloudflare Tunnel (no open ports)
@@ -109,7 +109,7 @@ gym.example.com {
 ### Option C — Traefik / nginx / Nginx Proxy Manager
 
 Route `gym.example.com` (HTTPS) → `web:80` (or `<docker-host>:8080`). Any reverse proxy works —
-BodyTransformation only needs the browser to reach it over `https://gym.example.com`.
+BodyEvolve only needs the browser to reach it over `https://gym.example.com`.
 
 Then set your domain in `.env` and restart:
 
@@ -118,7 +118,7 @@ Then set your domain in `.env` and restart:
 RP_ID=gym.example.com
 ORIGIN=https://gym.example.com
 WEB_PORT=8080
-RP_NAME=BodyTransformation
+RP_NAME=BodyEvolve
 ```
 
 ```bash
@@ -166,7 +166,7 @@ into the project folder. (Individual users can also export their own data as JSO
 
 ## 6. Notifications
 
-BodyTransformation can push two kinds of alert to your phone/desktop, even when the app isn't open:
+BodyEvolve can push two kinds of alert to your phone/desktop, even when the app isn't open:
 rest-timer-over, and a reminder on days you have a workout planned but haven't logged one yet.
 Turn it on per-profile in **Settings → Notifications** (requires a signed-in passkey profile and
 HTTPS — see section 3).
@@ -216,7 +216,7 @@ downloaded media are untouched.
 
 ## Connect a Claude conversation (MCP)
 
-BodyTransformation can expose your log to a Claude conversation as a **custom connector**, so a
+BodyEvolve can expose your log to a Claude conversation as a **custom connector**, so a
 conversation that coaches you reads your real training and intake instead of what you
 remember to paste — and can send programs back.
 
@@ -251,7 +251,7 @@ phone this does too.
 | `get_plan` | The weekly plan, and every exercise's sets, reps, weight and progression rule. |
 | `log_intake` | Record a day's calories and macros. |
 | `log_weight` | Record a weigh-in. |
-| `log_history` | Write a run of past days in one call — the retroactive import. Each day replaces what BodyTransformation holds for that date, so re-sending a day is a correction rather than a duplicate. An omitted field is left alone; a zero would be read as a measurement. |
+| `log_history` | Write a run of past days in one call — the retroactive import. Each day replaces what BodyEvolve holds for that date, so re-sending a day is a correction rather than a duplicate. An omitted field is left alone; a zero would be read as a measurement. |
 | `propose_program` | Send a program. It is **not** applied here: it waits in the app, where exercise names are matched against the library and the whole resolution is shown before anything is written. |
 
 ### The URL is the credential
@@ -261,7 +261,7 @@ path. That makes the URL a secret:
 
 - Anyone holding it can read your entire log and write to it. Don't paste it anywhere
   you wouldn't paste a password.
-- BodyTransformation's nginx doesn't log this path, but check any proxy or CDN in front of it
+- BodyEvolve's nginx doesn't log this path, but check any proxy or CDN in front of it
   doesn't either.
 - To rotate: change `MCP_TOKEN` and re-add the connector.
 

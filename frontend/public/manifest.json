@@ -1,6 +1,6 @@
 {
-  "name": "BodyTransformation",
-  "short_name": "BodyTransfo",
+  "name": "BodyEvolve",
+  "short_name": "BodyEvolve",
   "description": "Training, intake and body composition — tracked in one place",
   "start_url": "./",
   "scope": "./",

@@ -1,5 +1,5 @@
 /* ============================================================================
-   BodyTransformation — design system
+   BodyEvolve — design system
    ----------------------------------------------------------------------------
    Rebuilt around four rules, each aimed at a specific "generated" tell in the
    previous sheet:
@@ -173,7 +173,7 @@ body.resting #app{padding-bottom:calc(250px + var(--sab))}
 
 /* Large title, the way a nav bar does it.
    The title block has to be allowed to shrink. A flex item's default min-width is `auto`,
-   so a long title — "BodyTransformation", or "Hi Jean-Christophe" — sizes the row from its
+   so a long title — "BodyEvolve", or "Hi Jean-Christophe" — sizes the row from its
    own intrinsic width and pushes the icon buttons clean off a 390 px screen, where they are
    not merely cramped but unreachable: nothing scrolls sideways to bring them back. So the
    title may shrink and ellipsise, the button row may not, and the type scales with the

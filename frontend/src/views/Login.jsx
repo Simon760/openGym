@@ -4,6 +4,7 @@ import { webauthnOK, passkeyLogin, passkeyRegister, api, BIO } from '../lib/api.
 import { hasData } from '../store/useStore.js'
 import { t } from '../lib/i18n.js'
 import { DEMO, REPO } from '../lib/demo.js'
+import { FIREBASE, signInWithGoogle, signInWithPassword, signUpWithPassword, sendReset, authMessage } from '../lib/firebase.js'
 import { useState, useRef, useEffect } from 'react'
 import Icon from '../components/Icon.jsx'
 import { Button } from '../components/ui.jsx'
@@ -43,6 +44,92 @@ function RegisterSheet({ close }) {
   </>
 }
 
+/**
+ * The account screen for a Firebase build: an email and a password, because the app has to be
+ * handable to someone who does not have — or does not want to use — a Google account, and a
+ * Google button for the one tap when they do.
+ *
+ * One form for both signing in and signing up, switched by a link rather than split across two
+ * screens. Nobody arriving here is unsure which of the two they want, and the fields are the
+ * same either way; two screens would only add a wrong guess to recover from.
+ */
+function AccountForm() {
+  const { setUser, pullState } = useStore()
+  const [mode, setMode] = useState('in')          // 'in' | 'up'
+  const [email, setEmail] = useState('')
+  const [pw, setPw] = useState('')
+  const [name, setName] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState(null)
+  const toast = m => useUI.getState().toast(m)
+
+  // Signing in and signing up land in the same place: the store's own merge decides whether
+  // this device's data moves into a fresh account or the account's data comes down.
+  const land = async u => { setUser(u); await pullState(); toast(t('Welcome, {0}', u.name)) }
+
+  const submit = async e => {
+    e.preventDefault()
+    if (busy) return
+    setErr(null); setBusy(true)
+    try {
+      const u = mode === 'up'
+        ? await signUpWithPassword(email, pw, name)
+        : await signInWithPassword(email, pw)
+      await land(u)
+    } catch (ex) { setErr(t(authMessage(ex))) }
+    setBusy(false)
+  }
+
+  const google = async () => {
+    setErr(null); setBusy(true)
+    try { await land(await signInWithGoogle()) }
+    catch (ex) { if (!String(ex.code || '').includes('popup-closed')) setErr(t(authMessage(ex))) }
+    setBusy(false)
+  }
+
+  const reset = async () => {
+    if (!email.trim()) { setErr(t('Enter your email first, then ask for a new password.')); return }
+    setErr(null)
+    try { await sendReset(email); toast(t('Check your inbox — a reset link is on its way.')) }
+    catch (ex) { setErr(t(authMessage(ex))) }
+  }
+
+  return <form onSubmit={submit} style={{ textAlign: 'left' }}>
+    {mode === 'up' && <>
+      <input className="input" placeholder={t('Your name')} maxLength={40} autoComplete="name"
+        value={name} onChange={e => setName(e.target.value)} />
+      <div style={{ height: 10 }} />
+    </>}
+    <input className="input" type="email" inputMode="email" autoCapitalize="none" autoCorrect="off"
+      placeholder={t('Email')} autoComplete="email" value={email}
+      onChange={e => { setEmail(e.target.value); setErr(null) }} />
+    <div style={{ height: 10 }} />
+    <input className="input" type="password" placeholder={t('Password')}
+      autoComplete={mode === 'up' ? 'new-password' : 'current-password'} value={pw}
+      onChange={e => { setPw(e.target.value); setErr(null) }} />
+    {err && <div className="small" style={{ color: 'var(--red)', margin: '8px 2px 0', lineHeight: 1.4 }}>{err}</div>}
+    <div style={{ height: 12 }} />
+    <Button variant="primary" type="submit" disabled={busy || !email.trim() || !pw}>
+      {mode === 'up' ? t('Create my account') : t('Sign in')}
+    </Button>
+    <div style={{ height: 8 }} />
+    <Button variant="ghost" type="button" icon="person" disabled={busy} onClick={google}>
+      {t('Continue with Google')}
+    </Button>
+    {/* Two links when signing in, one when signing up — so the row centres rather than
+        leaving a lone link pinned to the left of an empty line. */}
+    <div className="row small" style={{ marginTop: 14, justifyContent: mode === 'in' ? 'space-between' : 'center' }}>
+      <button type="button" className="btn plain xs" style={{ padding: 0 }}
+        onClick={() => { setMode(m => (m === 'in' ? 'up' : 'in')); setErr(null) }}>
+        {mode === 'in' ? t('Create an account') : t('I already have an account')}
+      </button>
+      {mode === 'in' && <button type="button" className="btn plain xs dim" style={{ padding: 0 }} onClick={reset}>
+        {t('Forgotten password')}
+      </button>}
+    </div>
+  </form>
+}
+
 export default function Login() {
   const { setUser, pullState, setGuest } = useStore()
   const signIn = async () => {
@@ -62,10 +149,25 @@ export default function Login() {
       <div className="muted" style={{ marginBottom: 30 }}>{t('Live demo — everything stays in this browser.')}</div>
       <Button variant="primary" icon="sparkles" onClick={() => setGuest(true)}>{t('Start the demo')}</Button>
       <div className="card small muted" style={{ textAlign: 'left', marginTop: 16 }}>
-        {t('This demo runs entirely in your browser on example data — nothing is sent anywhere. Passkey sign-in and sync across your devices come with the BodyTransformation server, which you get by self-hosting it.')}
+        {t('This demo runs entirely in your browser on example data — nothing is sent anywhere. Passkey sign-in and sync across your devices come with the BodyEvolve server, which you get by self-hosting it.')}
       </div>
       <div className="dim small" style={{ marginTop: 22, lineHeight: 1.6 }}>
         <a href={REPO} target="_blank" rel="noopener">{t('Self-host it in a minute →')}</a>
+      </div>
+    </div>
+  )
+
+  // Firebase build: an account in the cloud, so the data survives this browser and follows
+  // you to the next device.
+  if (FIREBASE) return (
+    <div className="narrow" style={wrap}>
+      {head}
+      <div className="muted" style={{ marginBottom: 22 }}>{t('Your training, your intake, your weight — on every device you sign in on.')}</div>
+      <AccountForm />
+      <div style={{ height: 18 }} />
+      <Button variant="ghost" className="dim" onClick={() => setGuest(true)}>{t('Continue without account')}</Button>
+      <div className="dim small" style={{ marginTop: 14, lineHeight: 1.5 }}>
+        {t('Without an account everything stays in this browser — and only this one.')}
       </div>
     </div>
   )
@@ -79,7 +181,7 @@ export default function Login() {
         <div style={{ height: 10 }} />
         <Button icon="sparkles" onClick={() => useUI.getState().openSheet(close => <RegisterSheet close={close} />)}>{t('Create new profile')}</Button>
         <div style={{ height: 10 }} />
-      </> : <div className="card small muted" style={{ textAlign: 'left' }}>{t("This browser doesn't support passkeys — you can still use BodyTransformation locally on this device.")}</div>}
+      </> : <div className="card small muted" style={{ textAlign: 'left' }}>{t("This browser doesn't support passkeys — you can still use BodyEvolve locally on this device.")}</div>}
       <Button variant="ghost" className="dim" onClick={() => setGuest(true)}>{t('Continue without account')}</Button>
       <div className="dim small" style={{ marginTop: 26, lineHeight: 1.5 }}>{t('Passkeys use {0} — no passwords.', BIO)}<br />{t('Each profile keeps its own plan, workouts & body weight.')}</div>
     </div>

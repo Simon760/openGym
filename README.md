@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/banner.png" alt="BodyTransformation" width="720">
+<img src="assets/banner.png" alt="BodyEvolve" width="720">
 
 <br>
 
@@ -12,8 +12,12 @@ No account on someone else's server, no subscription, no ads.
 
 A fork of [openGym](https://github.com/DuarteSantos8/openGym), under the same AGPL-3.0.
 
-**Just you, on your phone?** `npm run build:solo` in `frontend/` gives you static files with
-no backend at all — drop them on Vercel or any static host and add it to your home screen.
+**Want an account and sync across devices?** `npm run build:firebase` — email + password or
+Google, one JSON subtree per account in Firebase's free tier, no server to run.
+See [docs/FIREBASE.md](docs/FIREBASE.md).
+
+**Just you, on one phone?** `npm run build:solo` gives static files with no backend at all —
+drop them on any static host and add it to your home screen.
 See [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md#0-the-simplest-deploy-of-all-one-phone-no-server).
 
 <br>
@@ -25,9 +29,9 @@ See [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md#0-the-simplest-deploy-of-all-one
 ![Docker](https://img.shields.io/badge/Docker-compose-2496ED?style=flat-square&logo=docker&logoColor=white)
 ![No tracking](https://img.shields.io/badge/telemetry-none-f472b6?style=flat-square)
 <br>
-![GitHub last commit](https://img.shields.io/github/last-commit/DuarteSantos8/BodyTransformation?style=flat-square)
-[![GitHub stars](https://img.shields.io/github/stars/DuarteSantos8/BodyTransformation?style=flat-square)](https://github.com/DuarteSantos8/openGym/stargazers)
-[![GitHub issues](https://img.shields.io/github/issues/DuarteSantos8/BodyTransformation?style=flat-square)](https://github.com/DuarteSantos8/openGym/issues)
+![GitHub last commit](https://img.shields.io/github/last-commit/DuarteSantos8/BodyEvolve?style=flat-square)
+[![GitHub stars](https://img.shields.io/github/stars/DuarteSantos8/BodyEvolve?style=flat-square)](https://github.com/DuarteSantos8/openGym/stargazers)
+[![GitHub issues](https://img.shields.io/github/issues/DuarteSantos8/BodyEvolve?style=flat-square)](https://github.com/DuarteSantos8/openGym/issues)
 
 </div>
 
@@ -45,7 +49,7 @@ See [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md#0-the-simplest-deploy-of-all-one
 
 <div align="center">
 
-### [🌐 opengym.duarte-santos.ch](https://opengym.duarte-santos.ch) · [▶ Try the live demo](https://duartesantos8.github.io/BodyTransformation/)
+### [🌐 opengym.duarte-santos.ch](https://opengym.duarte-santos.ch) · [▶ Try the live demo](https://duartesantos8.github.io/BodyEvolve/)
 
 No signup, nothing to install — it runs entirely in your browser on example data.<br>
 <sub>There's no server behind the demo, so passkey sign-in, sync across devices and the
@@ -56,7 +60,7 @@ admin dashboard only exist in a self-hosted instance.</sub>
 ## Why
 
 Most workout apps lock your data behind a login on their servers, nag you to upgrade, or
-disappear when the startup does. BodyTransformation is the opposite: **it runs on your box, your data
+disappear when the startup does. BodyEvolve is the opposite: **it runs on your box, your data
 stays in a folder you control, and it's yours to fork.** It still feels modern — installable
 as a home-screen app, passkey sign-in, offline support, sync across your phone and laptop.
 
@@ -95,7 +99,7 @@ You need [Docker](https://docs.docker.com/get-docker/) with Compose.
 
 ```bash
 git clone https://github.com/DuarteSantos8/openGym
-cd BodyTransformation
+cd BodyEvolve
 cp .env.example .env
 docker compose pull   # grab prebuilt images (amd64 + arm64) — skip to build from source instead
 docker compose up -d
@@ -117,7 +121,7 @@ backups. Self-hosting gets you multi-device sync and profiles for friends & fami
 mobile app is the install-and-done flavor.
 
 - **Android:** [**download the APK**](https://opengym.duarte-santos.ch) and sideload it —
-  BodyTransformation is deliberately not on the Play Store. Or build it yourself: **[docs/MOBILE.md](docs/MOBILE.md)**.
+  BodyEvolve is deliberately not on the Play Store. Or build it yourself: **[docs/MOBILE.md](docs/MOBILE.md)**.
 - **iPhone:** Apple doesn't allow installing apps outside the App Store, so there is no iOS
   download. Self-host and add it to your home screen from Safari (it's a full PWA), or build
   the native app onto your own device from Xcode — see **[docs/MOBILE.md](docs/MOBILE.md)**.
@@ -157,7 +161,7 @@ All via `.env` (see `.env.example`):
 | `RP_ID`       | Hostname passkeys are bound to                       | `localhost`             |
 | `ORIGIN`      | Full URL the app is served from                      | `http://localhost:8080` |
 | `WEB_PORT`    | Host port for the web UI                             | `8080`                  |
-| `RP_NAME`     | Name shown in the passkey prompt                     | `BodyTransformation`               |
+| `RP_NAME`     | Name shown in the passkey prompt                     | `BodyEvolve`               |
 | `ADMIN_UIDS`  | User ids that get the admin dashboard (comma-separated) | *(none)*             |
 | `INVITE_ONLY` | Require an invite code to create a profile           | *(off)*                 |
 
@@ -207,7 +211,7 @@ React, the router and Zustand.
 Issues and PRs welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Good first issues: more starter
 plans, exercise-data languages, import from other trackers. **A ⭐ helps more people find it.**
 
-BodyTransformation is free and stays free: AGPL, no subscription, no paid tier, nothing held back for
+BodyEvolve is free and stays free: AGPL, no subscription, no paid tier, nothing held back for
 sponsors. If it replaced a paid tracker for you and you want to chip in, the Sponsor button at the
 top of the page is there — a star, a bug report or a PR is worth just as much.
 
@@ -215,6 +219,6 @@ top of the page is there — a star, a bug report or a PR is worth just as much.
 
 [GNU AGPL v3.0](LICENSE) — free and open source. You can self-host, use, modify and share it;
 if you run a modified version as a network service, you must offer that version's source under
-the same license. Nobody can turn BodyTransformation into a closed, proprietary product.
+the same license. Nobody can turn BodyEvolve into a closed, proprietary product.
 
 Exercise images/GIFs are fetched from the upstream dataset and keep their own terms — see [NOTICE.md](NOTICE.md).
