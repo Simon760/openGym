@@ -6,7 +6,7 @@ import { fmtNum, fmtDate, todayISO, isoOf, weekKey, DAYS } from '../lib/format.j
 import { t, dateLocale } from '../lib/i18n.js'
 import { bwSheet, goalSheet, dayOverrideSheet, calendarSheet, startFlow, loadStarterPlan, bwDeltaColor, nutriSheet, nutriGoalSheet, digestSheet, openPendingProgram, discardPendingProgram, sleepSheet, tdeeSheet } from '../sheets.jsx'
 import { entryFor, kcalFromMacros, macroSplit, remainingOf, MACROS, MACRO_NAME, MACRO_COLOR } from '../lib/nutrition.js'
-import { composition, todaySleep, lastSleep, sleepHours } from '../lib/body.js'
+import { composition, todaySleep, lastSleep, sleepHours, whenOf } from '../lib/body.js'
 import { dayBalance } from '../lib/energy.js'
 import LineChart from '../components/LineChart.jsx'
 import Icon from '../components/Icon.jsx'
@@ -44,7 +44,7 @@ export default function Home() {
 
   const wThisWeek = S.workouts.filter(w => weekKey(w.d) === weekKey(todayISO())).length
   const plannedPerWeek = Object.keys(S.week).filter(k => S.week[k]).length
-  const bwPoints = S.bodyweight.slice(-30).map(b => ({ t: b.t || new Date(b.d).getTime(), y: b.w, d: b.d }))
+  const bwPoints = S.bodyweight.slice(-30).map(b => ({ t: whenOf(b), y: b.w, d: b.d }))
 
   const comp = composition(bw)
   const sleptToday = todaySleep(S)

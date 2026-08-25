@@ -5,6 +5,7 @@ import { registerCustom } from '../lib/exercises.js'
 import { DEMO, DEMO_SEEDED, SOLO } from '../lib/demo.js'
 import { FIREBASE, onAccount, cloudPull, cloudPush, signOutAccount } from '../lib/firebase.js'
 import { MOBILE, nativeLoad, nativeSave, syncReminder } from '../lib/mobile.js'
+import { hydrate } from '../lib/hydrate.js'
 
 const KEY = 'gym_state_v1'
 export const DEF = {
@@ -45,10 +46,18 @@ export const DEF = {
 }
 const clone = o => JSON.parse(JSON.stringify(o))
 
+/**
+ * Every state entering the app from outside its own memory goes through here: DEF supplies
+ * the fields a profile has never written, hydrate() repairs the shapes a round trip broke.
+ * Both are needed — DEF only fills the top level, and what Realtime Database drops is
+ * nested (a routine's `ex`, a workout's `entries`). See lib/hydrate.js.
+ */
+const adopt = state => hydrate(Object.assign(clone(DEF), state))
+
 function loadState() {
   try {
     const raw = localStorage.getItem(KEY)
-    if (raw) return Object.assign(clone(DEF), JSON.parse(raw))
+    if (raw) return adopt(JSON.parse(raw))
   } catch (e) { /* ignore */ }
   return clone(DEF)
 }
@@ -146,7 +155,7 @@ export const useStore = create((set, get) => {
         const dirty = localStorage.getItem('gym_dirty') === '1'
         if (state && (!hasData(S) || ((state._ts || 0) >= (S._ts || 0) && !dirty))) {
           const active = S.active
-          const next = Object.assign(clone(DEF), state)
+          const next = adopt(state)
           if (active) next.active = active
           persist(next, false)
         } else if (hasData(S)) { await get().pushState() }

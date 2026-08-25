@@ -121,23 +121,59 @@ export async function currentAccount() {
 const path = uid => 'users/' + uid + '/state'
 
 /**
+ * How the state is stored. Version 1 was the state itself, as a tree of Firebase nodes, and
+ * that turned out to be lossy in a way nothing warns you about: **Realtime Database cannot
+ * hold an empty container**. Writing `ex: []` does not write an empty array, it deletes the
+ * key — the same as writing null — so a routine with no exercises came back with no `ex`, and
+ * the first `r.ex.length` took the Plan tab down behind the error boundary. Arrays are also
+ * stored as objects keyed "0","1","2" and only rebuilt as arrays when those keys run
+ * contiguously from zero, so a list with a hole comes back as an object and `.map` is gone.
+ *
+ * Both are documented behaviour, and neither can be prevented on the write side. Version 2
+ * therefore stores one opaque JSON string, which no store can reshape. `_ts` stays a real
+ * number beside it so boot can compare stamps without downloading the state.
+ */
+export const STATE_FMT = 2
+
+/**
  * Read this account's state, or null when the account has never written one — which is what a
  * fresh sign-up looks like, and is different from an empty state.
+ *
+ * A version-1 tree is still read: every account that predates this carries one, and it is
+ * exactly the shape hydrate() exists to repair.
  */
 export async function cloudPull(uid) {
   const m = await load()
   const snap = await m.db.get(m.db.ref(m.dbRef, path(uid)))
-  return snap.exists() ? snap.val() : null
+  if (!snap.exists()) return null
+  const val = snap.val()
+  if (val && typeof val.json === 'string') {
+    try { return JSON.parse(val.json) } catch { return null }
+  }
+  return val
 }
 
 /**
  * Write this account's state. Firebase refuses `undefined` anywhere in the tree, and a React
  * state object collects them the moment a field is cleared, so the whole thing goes through
- * JSON first — which drops them, exactly as the local storage path already does.
+ * JSON first — which drops them, exactly as the local storage path already does. Here that
+ * serialisation is also what gets stored: see STATE_FMT.
  */
 export async function cloudPush(uid, state) {
   const m = await load()
-  await m.db.set(m.db.ref(m.dbRef, path(uid)), JSON.parse(JSON.stringify(state)))
+  const plain = JSON.parse(JSON.stringify(state))
+  // The version-1 tree is written alongside the string, and deliberately. A device still
+  // running a cached build reads this node the old way; handed only `{v, _ts, json}` it
+  // would find no routines, no workouts and nothing else it knows, decide the account is
+  // empty, and push that emptiness back over a good copy. Duplicating the state costs a few
+  // hundred kilobytes against a 16 MB write limit, and buys the guarantee that no bundle
+  // still in someone's cache can delete an account's history. Drop it once none can.
+  await m.db.set(m.db.ref(m.dbRef, path(uid)), {
+    ...plain,
+    v: STATE_FMT,
+    _ts: +state._ts || Date.now(),
+    json: JSON.stringify(plain)
+  })
 }
 
 /**

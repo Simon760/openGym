@@ -3,8 +3,7 @@ import {
   validBodyFat, lastComposition, composition, compositionTrend, bodyFatSeries,
   validSleep, sleepFor, lastSleep, putSleep, sleepAverage, sleepDebt, sleepSeries,
   hoursBetween, sleepHours, validTime,
-  BF_MIN, BF_MAX, SLEEP_MIN, SLEEP_MAX
-} from './body.js'
+  BF_MIN, BF_MAX, SLEEP_MIN, SLEEP_MAX, whenOf, dayTime } from './body.js'
 import { isoOf } from './format.js'
 
 const daysAgo = n => { const d = new Date(); d.setDate(d.getDate() - n); return d }
@@ -236,5 +235,32 @@ describe('putSleep with times', () => {
   it('feeds the averages through the derived hours', () => {
     const st = { sleep: putSleep([], { d: isoOf(daysAgo(1)), bed: '23:00', wake: '06:00', awake: 30 }) }
     expect(sleepAverage(st, 7).hours).toBe(6.5)
+  })
+})
+
+// The bug this fixes: an imported history stamps every row with the moment of the import,
+// so a year of weigh-ins all landed on today — the curve collapsed to a vertical line and
+// all three date labels on the axis read the same day.
+describe('whenOf — where an entry sits on a time axis', () => {
+  it('is the day the entry records, not the moment it was written', () => {
+    const imported = { d: '2025-04-10', w: 86.2, t: Date.parse('2026-08-25T09:14:00Z') }
+    expect(whenOf(imported)).toBe(dayTime('2025-04-10'))
+    expect(new Date(whenOf(imported)).getMonth()).toBe(3)          // April, not August
+  })
+
+  it('separates two entries a whole import apart', () => {
+    const t = Date.now()
+    const a = { d: '2025-04-10', w: 86.2, t }, b = { d: '2025-08-11', w: 79.5, t }
+    expect(whenOf(b) - whenOf(a)).toBeGreaterThan(120 * 86400000)
+  })
+
+  it('lands at noon, so a timezone cannot push a point into the day before', () => {
+    expect(new Date(dayTime('2025-04-10')).getDate()).toBe(10)
+    expect(new Date(dayTime('2025-04-10')).getHours()).toBe(12)
+  })
+
+  it('falls back to the written time when there is no day at all', () => {
+    expect(whenOf({ t: 1234 })).toBe(1234)
+    expect(whenOf(null)).toBe(0)
   })
 })

@@ -18,7 +18,7 @@ import {
   effortHistogram, isHardSet, HARD_RIR
 } from '../lib/effort.js'
 import { avgOver, seriesOf, MACROS, MACRO_NAME, MACRO_COLOR } from '../lib/nutrition.js'
-import { bodyFatSeries, compositionTrend, sleepSeries, sleepAverage, sleepDebt, lastComposition } from '../lib/body.js'
+import { bodyFatSeries, compositionTrend, sleepSeries, sleepAverage, sleepDebt, lastComposition, whenOf } from '../lib/body.js'
 import { deficitTotals, deficitSeries, impliedTDEE, predictedVsActual, tdeeParts, KCAL_PER_KG_FAT } from '../lib/energy.js'
 import { Button, Segmented, SelectRow } from '../components/ui.jsx'
 
@@ -397,8 +397,8 @@ export default function Stats() {
   const kind = displayScale(S)
   const hd = scaleName(kind)
 
-  const bwPts = S.bodyweight.filter(b => range === 0 || (b.t || new Date(b.d).getTime()) > now - range * 86400000)
-    .map(b => ({ t: b.t || new Date(b.d).getTime(), y: b.w, d: b.d }))
+  const bwPts = S.bodyweight.filter(b => range === 0 || whenOf(b) > now - range * 86400000)
+    .map(b => ({ t: whenOf(b), y: b.w, d: b.d }))
   const bfPts = bodyFatSeries(S, range, now)
   const leanPts = bfPts.map(p => {
     const b = S.bodyweight.find(x => x.d === p.d)
@@ -406,7 +406,7 @@ export default function Stats() {
   })
   const hasBf = !!lastComposition(S)
   const compTrend = compositionTrend(S, range, now)
-  const bw30 = S.bodyweight.filter(b => (b.t || new Date(b.d).getTime()) > now - 30 * 86400000)
+  const bw30 = S.bodyweight.filter(b => whenOf(b) > now - 30 * 86400000)
   const bwDelta30 = bw30.length > 1 ? bw30[bw30.length - 1].w - bw30[0].w : null
   const monthW = S.workouts.filter(w => w.d.slice(0, 7) === todayISO().slice(0, 7)).length
 

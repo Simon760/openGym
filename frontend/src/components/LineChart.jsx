@@ -71,8 +71,16 @@ export default function LineChart({ points, h = 150, unit = '', color = 'var(--a
     const ticks = []
     let m = new Date(d0.getFullYear(), d0.getMonth() + 1, 1)
     while (m <= d1) { ticks.push({ t: +m, txt: t(MONTHS[m.getMonth()]) }); m = new Date(m.getFullYear(), m.getMonth() + 1, 1) }
+    // Under a month, month names give nothing, so the span is labelled by its own dates.
+    // Under a day it has no span to divide: three ticks there print one date three times,
+    // which is what a chart looks like when every point wrongly shares a timestamp — the
+    // axis should say "one day", not imply a range that is not there.
+    const DAY = 86400000
     if (ticks.length === 0 && !single) {
-      for (let i = 0; i <= 2; i++) {
+      if (t1 - t0 < DAY) {
+        const dd = new Date(t0)
+        ticks.push({ t: (t0 + t1) / 2, txt: dd.getDate() + ' ' + t(MONTHS[dd.getMonth()]), anchor: 'middle' })
+      } else for (let i = 0; i <= 2; i++) {
         const tv = t0 + (t1 - t0) * i / 2, dd = new Date(tv)
         ticks.push({ t: tv, txt: dd.getDate() + ' ' + t(MONTHS[dd.getMonth()]), anchor: i === 0 ? 'start' : i === 2 ? 'end' : 'middle' })
       }

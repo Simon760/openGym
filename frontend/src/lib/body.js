@@ -31,6 +31,20 @@ export const validBodyFat = v => {
   return n != null && n >= BF_MIN && n <= BF_MAX ? n : null
 }
 
+/**
+ * Where an entry sits on a time axis: the calendar day it records, at noon.
+ *
+ * Not `t`, which is when the row was *written*. For anything typed today the two agree, and
+ * for an imported history they do not agree at all — every row of a year of weigh-ins carries
+ * the moment of the import, so the whole curve collapses onto today and all three date labels
+ * on the axis read the same. Noon rather than midnight so a point never falls on the wrong
+ * side of a day boundary once a timezone is applied.
+ */
+export const dayTime = d => new Date(String(d) + 'T12:00:00').getTime()
+
+/** The same, tolerant of an entry that somehow has no day. */
+export const whenOf = e => (e && e.d ? dayTime(e.d) : (e && e.t) || 0)
+
 /** The most recent weigh-in carrying a body-fat reading, or null. */
 export function lastComposition(S) {
   const list = (S.bodyweight || []).filter(b => validBodyFat(b.bf) != null)
@@ -74,7 +88,7 @@ export function compositionTrend(S, days, now = Date.now()) {
 export const bodyFatSeries = (S, days, now = Date.now()) =>
   (S.bodyweight || [])
     .filter(b => validBodyFat(b.bf) != null && inWindow(b.d, days, now))
-    .map(b => ({ t: b.t || new Date(b.d + 'T12:00:00').getTime(), y: validBodyFat(b.bf), d: b.d }))
+    .map(b => ({ t: whenOf(b), y: validBodyFat(b.bf), d: b.d }))
 
 /* ------------------------------------------------------------------ sleep -- */
 
