@@ -65,8 +65,25 @@ domain. Sign-in refuses to run on an address that is not in that list.
 
 ## Deploying
 
-`vercel.json` already builds the Firebase variant (`npm run build:firebase`). Push and Vercel
-redeploys; nothing else to configure.
+There are two `vercel.json` files and that is deliberate: Vercel reads the one inside its
+**Root Directory** setting, and both possible settings are covered. Leave Root Directory empty
+and the repository-root file runs the build from `frontend/`; set it to `frontend` and the file
+in there runs the same build addressed from inside. Either way it is
+`npm run build:firebase` — never plain `npm run build`, which is the self-hosted variant and
+would ship an app calling `/api/…` on a host with no API behind it.
+
+### If a fresh deploy returns 404: NOT_FOUND
+
+That is not a build failure. It is Vercel serving a commit that has nothing to serve.
+
+**Check the production branch first.** *Settings → Git → Production Branch*. Vercel deploys the
+repository's default branch unless told otherwise, and a branch without this project's
+`vercel.json` gives Vercel no build command, no framework to detect (there is no `package.json`
+at the repository root) and no `index.html` — so it publishes an empty directory and every URL
+in it is a 404. Point it at the branch the work is actually on, or merge that branch in.
+
+A real build failure looks different: the deployment is marked **Error** and the log says why.
+A 404 on a deployment marked **Ready** means the build produced nothing.
 
 The project's identifiers live in `frontend/src/lib/firebase.js`. **They are not secrets** —
 they are visible in the JavaScript of every Firebase app ever shipped, and Google's guidance is
