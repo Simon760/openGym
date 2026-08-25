@@ -872,4 +872,11 @@ export default {
   'Copy the nightly link': 'Copier le lien du soir',
   'Paste it into the shortcut’s Open URL action, then drop your watch’s variables right after each “=”. If the field will not take a paste, it already holds a variable — delete that first.': 'Colle-le dans l’action « Ouvrir l’URL » du raccourci, puis dépose les variables de ta montre juste après chaque « = ». Si le champ refuse le collage, c’est qu’il contient déjà une variable — supprime-la d’abord.',
   'What the link actually carried': 'Ce que le lien portait réellement',
+  'Read them off your watch and type them in. Leave a field empty when you have nothing for it.': 'Lis-les sur ta montre et tape-les. Laisse un champ vide quand tu n’as rien pour lui.',
+  'Session energy': 'Énergie de la séance',
+  'Session length': 'Durée de la séance',
+  'Save for today': 'Enregistrer pour aujourd’hui',
+  'Type today’s figures in, or hand them over from a Shortcut. Session details are added to the workout you logged that day — never as a second one.': 'Tape les chiffres du jour, ou fais-les passer par un raccourci. Les détails de séance sont ajoutés à l’entraînement déjà enregistré ce jour-là — jamais en double.',
+  'From a Shortcut, or a tracker export': 'Depuis un raccourci, ou un export de bracelet',
+  'Paste what your Shortcut produced, or open the CSV your tracker exported.': 'Colle ce que ton raccourci a produit, ou ouvre le CSV exporté par ton bracelet.',
 }

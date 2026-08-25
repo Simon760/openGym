@@ -405,6 +405,18 @@ h4.sec{
 .field::placeholder,.input::placeholder{color:var(--label-3)}
 .field:focus,.input:focus{box-shadow:inset 0 0 0 2px var(--acc)}
 .field.area,textarea.input{min-height:92px;resize:vertical;line-height:1.42}
+/* A number typed into a row of its own — outside a stepper, .num has no styling at all and
+   falls back to the browser's white box, which on a dark sheet reads as a bug. */
+.numf{
+  width:84px;background:var(--surface-2);border:none;border-radius:9px;height:38px;
+  padding:0 11px;text-align:right;font-size:17px;font-weight:500;letter-spacing:-.012em;
+  outline:none;color:var(--label);transition:box-shadow var(--fast);
+  -moz-appearance:textfield;appearance:textfield;
+}
+.numf::placeholder{color:var(--label-3);font-weight:400}
+.numf:focus{box-shadow:inset 0 0 0 2px var(--acc)}
+.numf::-webkit-inner-spin-button{display:none}
+
 /* A clock time reads as a value, not as typing: same height and weight as a stepper. */
 .field.tm{background:var(--surface-2);height:44px;padding:0 10px;text-align:center;font-weight:500}
 .field.tm::-webkit-calendar-picker-indicator{opacity:.45;margin:0}

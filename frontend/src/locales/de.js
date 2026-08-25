@@ -897,4 +897,11 @@ export default {
   'Copy the nightly link': 'Copy the nightly link',
   'Paste it into the shortcut’s Open URL action, then drop your watch’s variables right after each “=”. If the field will not take a paste, it already holds a variable — delete that first.': 'Paste it into the shortcut’s Open URL action, then drop your watch’s variables right after each “=”. If the field will not take a paste, it already holds a variable — delete that first.',
   'What the link actually carried': 'What the link actually carried',
+  'Read them off your watch and type them in. Leave a field empty when you have nothing for it.': 'Read them off your watch and type them in. Leave a field empty when you have nothing for it.',
+  'Session energy': 'Session energy',
+  'Session length': 'Session length',
+  'Save for today': 'Save for today',
+  'Type today’s figures in, or hand them over from a Shortcut. Session details are added to the workout you logged that day — never as a second one.': 'Type today’s figures in, or hand them over from a Shortcut. Session details are added to the workout you logged that day — never as a second one.',
+  'From a Shortcut, or a tracker export': 'From a Shortcut, or a tracker export',
+  'Paste what your Shortcut produced, or open the CSV your tracker exported.': 'Paste what your Shortcut produced, or open the CSV your tracker exported.',
 }

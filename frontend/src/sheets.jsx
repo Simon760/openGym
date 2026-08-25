@@ -11,7 +11,7 @@ import { starterRoutines } from './lib/starter.js'
 import Media, { Thumb } from './components/Media.jsx'
 import Stepper from './components/Stepper.jsx'
 import Icon from './components/Icon.jsx'
-import { Button, Slider, Switch, Segmented, SelectRow, Row, TextArea } from './components/ui.jsx'
+import { Button, Slider, Switch, Segmented, SelectRow, Row, TextArea, NumberField } from './components/ui.jsx'
 import { glyphOf, GLYPH_GROUPS, DEFAULT_GLYPH } from './lib/glyphs.js'
 import BodyMap from './components/BodyMap.jsx'
 import { loadOfWorkouts, musclesOf, MUSCLE_NAME } from './lib/muscles.js'
@@ -994,6 +994,60 @@ const healthFieldLabel = () => ({
   intake: t('Calories eaten'), protein: t('Protein'), carbs: t('Carbs'), fat: t('Fat')
 })
 
+/**
+ * The watch's figures, typed in.
+ *
+ * The Shortcut is the good path and it stays. But it is built inside Apple's editor, where a
+ * missing action or a variable that will not drop in leaves someone with no way to record the
+ * one number they came to record — and "wait until the automation works" is not an answer to
+ * "what did today cost me". Four fields, no clipboard, no permissions, no automation.
+ *
+ * Blank means absent, not zero: a day with no steps entered is a day nobody counted, and a
+ * zero would drag every average that reads it.
+ */
+function ManualEntry({ onDone }) {
+  const [v, setV] = useState({})
+  const set = (k, n) => setV(x => ({ ...x, [k]: n }))
+  const any = ['sport', 'min', 'steps', 'sleep'].some(k => v[k] > 0)
+
+  const save = () => {
+    const p = { d: todayISO() }
+    if (v.sport > 0 || v.min > 0) {
+      p.workout = {}
+      if (v.sport > 0) p.workout.kcal = Math.round(v.sport)
+      if (v.min > 0) p.workout.minutes = Math.round(v.min)
+    }
+    if (v.steps > 0) p.steps = Math.round(v.steps)
+    if (v.sleep > 0) p.sleepHours = v.sleep
+    let report
+    update(s => { report = applyHealth(s, p) })
+    onDone(report)
+  }
+
+  const Row = ({ k, label, unit, decimal = false }) => (
+    <div className="row between" style={{ padding: '9px 2px', borderBottom: '1px solid var(--sep)', gap: 12 }}>
+      <span style={{ fontSize: 15 }}>{label}</span>
+      <span className="row" style={{ gap: 6, flex: 'none' }}>
+        <NumberField className="numf" value={v[k] ?? null} nullable decimal={decimal}
+          onChange={n => set(k, n)} placeholder="—" />
+        <span className="dim small" style={{ width: 28 }}>{unit}</span>
+      </span>
+    </div>
+  )
+
+  return <>
+    <div className="dim small" style={{ margin: '0 2px 6px', lineHeight: 1.45 }}>
+      {t('Read them off your watch and type them in. Leave a field empty when you have nothing for it.')}
+    </div>
+    <Row k="sport" label={t('Session energy')} unit="kcal" />
+    <Row k="min" label={t('Session length')} unit="min" />
+    <Row k="steps" label={t('Steps')} unit="" />
+    <Row k="sleep" label={t('Sleep')} unit="h" decimal />
+    <div style={{ height: 12 }} />
+    <Button variant="primary" icon="check" disabled={!any} onClick={save}>{t('Save for today')}</Button>
+  </>
+}
+
 function HealthImport({ close, arrived }) {
   const [text, setText] = useState('')
   const [err, setErr] = useState(null)
@@ -1154,7 +1208,12 @@ function HealthImport({ close, arrived }) {
   return <>
     <h3>{t('Import health data')}</h3>
     <div className="muted small" style={{ marginBottom: 12, lineHeight: 1.45 }}>
-      {t('Paste what your Shortcut produced, or open the CSV your tracker exported. Session details are added to the workout you logged that day — never as a second one.')}
+      {t('Type today’s figures in, or hand them over from a Shortcut. Session details are added to the workout you logged that day — never as a second one.')}
+    </div>
+    <ManualEntry onDone={setDone} />
+    <h4 className="sec">{t('From a Shortcut, or a tracker export')}</h4>
+    <div className="dim small" style={{ marginBottom: 10, lineHeight: 1.45 }}>
+      {t('Paste what your Shortcut produced, or open the CSV your tracker exported.')}
     </div>
     <TextArea rows={7} value={text} placeholder={'{ "steps": 9420, "sleep_hours": 7.25 }'}
       onChange={e => { setText(e.target.value); setErr(null) }} />
