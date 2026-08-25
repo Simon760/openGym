@@ -890,4 +890,5 @@ export default {
   '{0} % taken off': '{0} % taken off',
   '{0} NEAT already in maintenance': '{0} NEAT already in maintenance',
   'counted': 'counted',
+  '{0} NEAT, your median across {1} rest days': '{0} NEAT, your median across {1} rest days',
 }

@@ -101,6 +101,42 @@ export function tdeeParts(v) {
   return total == null ? null : { ...p, total }
 }
 
+/* How a person's own NEAT is read off their rest days. Fewer than this and the median is
+   one unusual Sunday; the window is long enough to carry a habit and short enough to follow
+   a change in one. */
+export const NEAT_MIN_DAYS = 4
+export const NEAT_WINDOW = 90
+
+const median = xs => {
+  const a = [...xs].sort((x, y) => x - y)
+  const m = a.length >> 1
+  return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2
+}
+
+/**
+ * The NEAT this person's watch actually reads, measured rather than declared.
+ *
+ * The entered maintenance figure carries a NEAT, but it is one number typed once: it cannot
+ * know that Tuesday was a desk day and Saturday was eleven kilometres of walking. Subtracting
+ * it flat understates training on quiet days and lets walking through as training on busy
+ * ones.
+ *
+ * A rest day answers the question directly. On a day with no session logged, the watch's
+ * whole active-energy figure *is* NEAT — there is nothing else in it. The median of those
+ * days is this person's own baseline, in the watch's own units, and it moves when their life
+ * does. Median and not mean, because one Sunday hike would drag a mean for a month.
+ *
+ * Null when there are not enough rest days to speak from, and the declared figure stands.
+ */
+export function observedNEAT(S, days = NEAT_WINDOW, now = Date.now()) {
+  const trained = new Set((S.workouts || []).map(w => w.d))
+  const rest = (S.health || [])
+    .filter(h => num(h.kcal) != null && !trained.has(h.d) && inWindow(h.d, days, now))
+    .map(h => num(h.kcal))
+  if (rest.length < NEAT_MIN_DAYS) return null
+  return { kcal: Math.round(median(rest)), days: rest.length }
+}
+
 /**
  * What training actually cost on a given day, and where the figure came from — the source
  * travels with the number because they are not equally trustworthy, and `raw` travels with
@@ -122,11 +158,11 @@ export function tdeeParts(v) {
  * A day with a logged session but no energy figure anywhere reports 'missing' rather than
  * quietly passing 0 — that day's balance is understated and the totals say so.
  */
-export function sportKcal(S, iso, trim = WATCH_TRIM, tdee = S && S.tdee) {
+export function sportKcal(S, iso, trim = WATCH_TRIM, tdee = S && S.tdee, now = Date.now()) {
   const t = validTrim(trim)
-  const cut = (raw, source, neat = 0) => ({
+  const cut = (raw, source, neat = 0, neatFrom = null) => ({
     kcal: Math.max(0, Math.round(raw * (1 - t)) - Math.round(neat)),
-    raw: Math.round(raw), trim: t, source, neat: Math.round(neat)
+    raw: Math.round(raw), trim: t, source, neat: Math.round(neat), neatFrom
   })
 
   // The session's figure is already only the session: nothing is budgeted twice inside it.
@@ -135,10 +171,19 @@ export function sportKcal(S, iso, trim = WATCH_TRIM, tdee = S && S.tdee) {
 
   const hd = healthFor(S, iso)
   const day = num(hd && hd.kcal)
-  if (day != null) return cut(day, 'watch', (tdeeParts(tdee) || {}).neat || 0)
+  if (day != null) {
+    // Measured beats declared: the rest-day baseline is this person's own, in the watch's
+    // own units, where the entered figure is a guess typed once. The declared one still
+    // stands until there are enough rest days to speak from.
+    const seen = observedNEAT(S, NEAT_WINDOW, now)
+    const trimmedRest = seen ? Math.round(seen.kcal * (1 - t)) : null
+    return trimmedRest != null
+      ? cut(day, 'watch', trimmedRest, { kind: 'rest', days: seen.days })
+      : cut(day, 'watch', (tdeeParts(tdee) || {}).neat || 0, { kind: 'declared' })
+  }
 
   const trained = (S.workouts || []).some(x => x.d === iso)
-  return { kcal: 0, raw: 0, trim: t, source: trained ? 'missing' : 'rest', neat: 0 }
+  return { kcal: 0, raw: 0, trim: t, source: trained ? 'missing' : 'rest', neat: 0, neatFrom: null }
 }
 
 /**
@@ -153,12 +198,12 @@ export function sportKcal(S, iso, trim = WATCH_TRIM, tdee = S && S.tdee) {
  * nobody knows about, and calling it break-even would quietly credit the cut with a deficit
  * of an entire maintenance, which is the largest lie the arithmetic can tell.
  */
-export function dayBalance(S, iso, tdee = S.tdee, trim) {
+export function dayBalance(S, iso, tdee = S.tdee, trim, now = Date.now()) {
   const p = tdeeParts(tdee)
   if (!p) return null
   const e = entryFor(S, iso)
   const intake = num(e && e.kcal)
-  const sp = sportKcal(S, iso, trim != null ? trim : trimOf(S), tdee)
+  const sp = sportKcal(S, iso, trim != null ? trim : trimOf(S), tdee, now)
   const delta = sp.kcal - p.sport
   const out = p.total + delta
   return {

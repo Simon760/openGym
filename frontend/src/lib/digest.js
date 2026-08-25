@@ -141,7 +141,11 @@ export function dailyDigest(S, iso = todayISO(), now = Date.now()) {
     // reading to the counted number has to take it on faith.
     const why = [
       sp.trim ? t('{0} % taken off', Math.round(sp.trim * 100)) : null,
-      sp.neat ? t('{0} NEAT already in maintenance', fmtNum(sp.neat)) : null
+      sp.neat
+        ? (sp.neatFrom && sp.neatFrom.kind === 'rest'
+          ? t('{0} NEAT, your median across {1} rest days', fmtNum(sp.neat), sp.neatFrom.days)
+          : t('{0} NEAT already in maintenance', fmtNum(sp.neat)))
+        : null
     ].filter(Boolean)
     out.push(t('Active energy') + ' ' + fmtNum(sp.raw) + ' kcal ' + t('from the watch')
       + (why.length ? ' → ' + fmtNum(sp.kcal) + ' ' + t('counted') + ' (' + why.join(', ') + ')' : ''))

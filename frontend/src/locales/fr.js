@@ -882,4 +882,5 @@ export default {
   '{0} % taken off': '{0} % retirés',
   '{0} NEAT already in maintenance': '{0} de NEAT déjà dans la dépense',
   'counted': 'comptées',
+  '{0} NEAT, your median across {1} rest days': '{0} de NEAT, ta médiane sur {1} jours de repos',
 }
