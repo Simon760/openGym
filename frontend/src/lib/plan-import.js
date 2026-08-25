@@ -254,9 +254,17 @@ export const PROGRAM_SPEC = `{
   ]
 }
 
-Exercise names are matched against BodyEvolve's 1324-exercise catalogue, so write them
-normally ("Bench Press", "Leg Press (Machine)"); anything unrecognised is kept as a
-custom exercise rather than dropped.
+Write exercise names **in English**. They are matched against BodyEvolve's 1324-exercise
+catalogue — "Bench Press", "Leg Press (Machine)" — and a match brings the animation, the
+muscles worked and the whole progression history with it. A French name matches nothing:
+it is kept as a custom exercise rather than dropped, but it arrives with no muscles and no
+history. When you do invent one, say which body part it works:
+
+  { "name": "Sled Push", "bodyPart": "legs", "sets": 4, "seconds": 30 }
+
+chest · back · shoulders · arms · biceps · triceps · forearms · legs · quads · hamstrings ·
+glutes · calves · abs · core · cardio · neck. Left out, it lands in the catch-all — and that
+guess is what colours the muscle map and feeds the recovery estimate.
 
 Per exercise: sets, reps, weight (kg) · seconds for a hold · minutes + speed for cardio ·
 repsMin/repsMax for a rep range · progression: off | linear | greyskull | double | time ·

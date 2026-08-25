@@ -931,7 +931,11 @@ function PlanImport({ bundle, report, onApplied, close }) {
         {t(report.created.length === 1
           ? '{0} name wasn’t recognised and is kept as your own exercise:'
           : '{0} names weren’t recognised and are kept as your own exercises:', report.created.length)}
-        {' '}{report.created.map(c => c.name).join(', ')}
+        {/* With the body part it filed each one under. That guess is not cosmetic — it is
+            what the muscle map colours and what the recovery model counts — and an
+            unrecognised name defaults to the catch-all, so it is worth seeing before it
+            silently paints the wrong half of the body. */}
+        {' '}{report.created.map(c => c.name + ' (' + t(c.bp) + ')').join(', ')}
       </div>}
       {report.warnings.map((w, i) => <div key={i} className="dim" style={{ marginTop: 4 }}>{w}</div>)}
     </div>}
