@@ -33,6 +33,9 @@ const DAY = {
 }
 const SESSION = { sport: 'kcal', min: 'minutes', km: 'distance_km', hr: 'hr_avg', type: 'type' }
 
+/** A link that had a query but nothing in it — see views/Import.jsx. */
+export const EMPTY_LINK = { empty: true }
+
 const b64 = v => new TextDecoder().decode(Uint8Array.from(atob(v), c => c.charCodeAt(0)))
 
 /** The query off the hash, read by hand: a "+" a Shortcut wrote is a plus sign, not a space. */

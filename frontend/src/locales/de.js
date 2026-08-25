@@ -891,4 +891,5 @@ export default {
   'Exercise minutes': 'Exercise minutes',
   'Session': 'Session',
   'Set the automation up once and your watch fills this in by itself — no copying, no pasting.': 'Set the automation up once and your watch fills this in by itself — no copying, no pasting.',
+  'That link carried no figures. In the Open URL action, the watch’s variables have to sit right after each “=”.': 'That link carried no figures. In the Open URL action, the watch’s variables have to sit right after each “=”.',
 }

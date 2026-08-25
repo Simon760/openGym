@@ -1009,6 +1009,7 @@ function HealthImport({ close, arrived }) {
   // than written on sight: a URL is whatever opened it, and this one writes to the log.
   useEffect(() => {
     if (!arrived) return
+    if (arrived.empty) { setErr(t('That link carried no figures. In the Open URL action, the watch’s variables have to sit right after each “=”.')); return }
     try {
       if (typeof arrived === 'object') setPending(parseHealth(arrived))
       else if (arrived.includes('{')) setPending(parseHealth(arrived))

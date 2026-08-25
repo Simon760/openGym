@@ -866,4 +866,5 @@ export default {
   'Exercise minutes': 'Minutes d’exercice',
   'Session': 'Séance',
   'Set the automation up once and your watch fills this in by itself — no copying, no pasting.': 'Configure l’automatisation une fois et ta montre remplit tout ça toute seule — sans copier-coller.',
+  'That link carried no figures. In the Open URL action, the watch’s variables have to sit right after each “=”.': 'Ce lien ne portait aucun chiffre. Dans l’action Ouvrir l’URL, les variables de la montre doivent être juste après chaque « = ».',
 }
