@@ -408,7 +408,7 @@ function TdeeSheet({ close }) {
   const FIELDS = [
     ['bmr', t('BMR'), t('What the body spends doing nothing at all.')],
     ['neat', t('NEAT'), t('Walking, standing, fidgeting — everything that is not a session.')
-      + ' ' + t('A day whose import carried its own figure is held to that one instead.')],
+      + ' ' + t('Charged flat, every day: a rest day costs this whether or not the import knew that day’s steps.')],
     ['other', t('Other'), t('Digestion, the cold, anything else you count separately.')],
     ['sport', t('Sport already included'), t('Training the total above already contains — so a day you do not train is charged this much less. Leave it at 0 if your figure is what you burn on any day, training or not.')]
   ]

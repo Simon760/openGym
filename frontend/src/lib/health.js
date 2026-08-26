@@ -508,10 +508,11 @@ column gets it taken back off. Put a session figure under Sport kcal; only use A
 for a whole-day reading off a watch.
 
 NEAT is the third figure, and the one nobody has to fill in: what the day cost outside
-training — the walking, the standing, the stairs. Where a day names its own, that day's
-maintenance uses it in place of the NEAT you entered once, and a day-total burn has that
-figure taken off instead of the usual one. Where the cell is empty your usual figure stands:
-an empty NEAT cell is never read as a day spent motionless.
+training — the walking, the standing, the stairs. It is only ever used to take the walking
+back off an Active energy reading, so it changes nothing on a day whose only burn is a Sport
+kcal figure. It never moves your maintenance: a day is always charged the total you entered.
+Where the cell is empty your usual figure stands — an empty NEAT cell is never read as a day
+spent motionless.
 
 Paste it however it came out. A fenced code block, a Markdown table of pipes, a sentence above
 it, semicolons instead of commas — all four read the same. The one thing that breaks is a

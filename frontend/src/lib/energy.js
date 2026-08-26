@@ -138,7 +138,12 @@ export function observedNEAT(S, days = NEAT_WINDOW, now = Date.now()) {
 }
 
 /**
- * The everyday movement to charge a given day with, and where that figure came from.
+ * The everyday movement to take off a whole-day burn, and where that figure came from.
+ *
+ * This has exactly one job: a watch's active energy is training plus all the walking, and
+ * the walking has to come out before what is left can be called training. It never touches
+ * the maintenance figure — that number is entered once and is charged flat, so a rest day
+ * costs the same whatever the import happened to know about that day's steps.
  *
  * Three sources, most specific first, and the order is the whole point:
  *
@@ -261,20 +266,20 @@ export function dayBalance(S, iso, tdee = S.tdee, trim, now = Date.now()) {
   const intake = num(e && e.kcal)
   const sp = sportKcal(S, iso, trim != null ? trim : trimOf(S), tdee, now)
   const delta = sp.kcal - p.sport
-  // A day that knows its own everyday movement uses it, in place of the NEAT the maintenance
-  // figure assumes for every day alike. That figure is one number typed once; it cannot know
-  // which day was eleven kilometres of walking and which was a desk. Where the day says
-  // nothing, neatFor hands back that same declared figure and the shift is zero — which is
-  // what makes an empty cell cost nothing rather than costing a day's NEAT.
-  const n = neatFor(S, iso, tdee, now)
-  const parts = n.from === 'day' ? { ...p, neat: n.kcal, total: p.total - p.neat + n.kcal } : p
-  const out = parts.total + delta
+  // The maintenance figure is the maintenance figure. A day's own NEAT reading is not
+  // allowed to move it — it exists to say how much of a whole-day burn was not training,
+  // and nothing else. A rest day is charged the entered total, every time, whatever the
+  // import happened to know about that day's walking.
+  const out = p.total + delta
   return {
     d: iso,
-    tdee: parts.total,
-    parts,
-    neat: parts.neat,
-    neatFrom: n.from,
+    tdee: p.total,
+    parts: p,
+    // The everyday movement actually taken off this day's burn, and where that figure came
+    // from — 'day' only when the import carried one for this date. Null on a day with
+    // nothing to take it off, which is most days.
+    neat: sp.neat,
+    neatFrom: sp.neatFrom ? sp.neatFrom.kind : null,
     planned: p.sport,
     sport: sp.kcal,
     sportRaw: sp.raw,
@@ -317,9 +322,9 @@ export function deficitTotals(S, tdee = S.tdee, days = 0, now = Date.now(), thro
   let nutrition = 0, sportDelta = 0, sportLogged = 0, unmeasured = 0, untracked = 0, plannedDays = 0, neatDays = 0
   list.forEach(e => {
     const b = dayBalance(S, e.d, tdee)
-    // The day's own maintenance, not the flat one: a day carrying its own NEAT figure is
-    // held to that day's total, or the column would be read and then quietly ignored.
     nutrition += b.tdee - b.intake
+    // Days where the import's own movement figure is what came off a whole-day burn. Not
+    // every day carrying a NEAT figure — only the ones where it changed an answer.
     if (b.neatFrom === 'day') neatDays++
     sportLogged += b.sport
     // A day that says nothing about training contributes nothing to the training total. It
@@ -344,9 +349,9 @@ export function deficitTotals(S, tdee = S.tdee, days = 0, now = Date.now(), thro
     sportPlanned: Math.round(p.sport * plannedDays),
     plannedDays,
     untracked,
-    // How many of those days were held to a movement figure of their own rather than to the
-    // one the maintenance total assumes for every day alike. Reported because a total quietly
-    // computed against a different maintenance on some of its days is a total nobody can check.
+    // How many days had their own movement figure taken off a whole-day burn, rather than
+    // the usual baseline. Reported because a training figure derived from a different
+    // subtraction on some of its days is a figure nobody can check.
     neatDays,
     total: Math.round(total),
     perDay: Math.round(total / list.length),

@@ -137,24 +137,43 @@ describe('a NEAT column, day by day', () => {
     expect(sportKcal(seen, D(15), 0.28, seen.tdee, NOW).kcal).toBe(Math.round(1000 * 0.72) - Math.round(400 * 0.72))
   })
 
-  it('holds the day to its own maintenance, NEAT included', () => {
-    const S = { ...base(), nutrition: [{ d: D(15), kcal: 2000 }], health: [{ d: D(15), neat: 700 }] }
-    const b = dayBalance(S, D(15), S.tdee, 0, NOW)
-    expect(b.parts.neat).toBe(700)
-    expect(b.tdee).toBe(1700 + 700 + 350)      // 450 declared replaced by the day's 700
-    expect(b.neatFrom).toBe('day')
+  it('never moves the day’s maintenance — that figure is charged flat', () => {
+    // The one thing a NEAT column must not do. A rest day costs the entered total, whatever
+    // the import knew about that day's walking; the column only says how much of a whole-day
+    // burn was not training.
+    for (const neat of [700, 300, null]) {
+      const S = { ...base(), nutrition: [{ d: D(15), kcal: 2000 }],
+        health: neat == null ? [] : [{ d: D(15), neat }] }
+      const b = dayBalance(S, D(15), S.tdee, 0, NOW)
+      expect(b.tdee, String(neat)).toBe(2500)
+      expect(b.parts.neat, String(neat)).toBe(450)
+      expect(b.deficit, String(neat)).toBe(2500 - 350 - 2000)   // no sport, so the planned 350 comes off
+    }
   })
 
-  it('counts the day’s own NEAT in the deficit, rather than reading the column and ignoring it', () => {
-    const day = neat => ({
+  it('changes the deficit only where there is a day total to take it off', () => {
+    const day = (neat, kcal) => ({
       ...base(),
-      workouts: [{ d: D(15), id: 'w', watch: { kcal: 350 } }],
+      workouts: [{ d: D(15), id: 'w' }],
       nutrition: [{ d: D(15), kcal: 2000 }],
-      health: neat == null ? [] : [{ d: D(15), neat }]
+      health: [{ d: D(15), ...(kcal == null ? {} : { kcal }), ...(neat == null ? {} : { neat }) }]
     })
-    // 1700 + neat + 350 maintenance, 350 trained against 350 planned, 2000 eaten
-    expect(deficitTotals(day(700), base().tdee, 0, NOW).total).toBe(2750 - 2000)
-    expect(deficitTotals(day(null), base().tdee, 0, NOW).total).toBe(2500 - 2000)
+    // A whole-day burn of 1000: the column decides what comes off it, so it moves the total.
+    expect(deficitTotals(day(700, 1000), base().tdee, 0, NOW).total).toBe(2500 + (300 - 350) - 2000)
+    expect(deficitTotals(day(250, 1000), base().tdee, 0, NOW).total).toBe(2500 + (750 - 350) - 2000)
+    // No day total, only a NEAT figure: nothing to subtract from, so nothing changes.
+    expect(deficitTotals(day(700, null), base().tdee, 0, NOW).total).toBe(2500 - 350 - 2000)
+  })
+
+  it('reports only the days where the column actually decided something', () => {
+    const S = {
+      ...base(),
+      workouts: [{ d: D(14), id: 'a' }, { d: D(15), id: 'b' }],
+      nutrition: [{ d: D(14), kcal: 2000 }, { d: D(15), kcal: 2000 }],
+      health: [{ d: D(14), neat: 700 }, { d: D(15), kcal: 1000, neat: 700 }]
+    }
+    // Both days carry a NEAT figure; only the one with a day total had it taken off anything.
+    expect(deficitTotals(S, S.tdee, 0, NOW).neatDays).toBe(1)
   })
 })
 
@@ -179,6 +198,7 @@ describe('a NEAT cell nobody filled in', () => {
     const b = dayBalance(S(), D(15), S().tdee, 0, NOW)
     expect(b.tdee).toBe(2500)
     expect(b.neatFrom).toBe('declared')
+    expect(b.neat).toBe(450)
   })
 
   it('never writes a zero into the day from an empty cell', () => {
