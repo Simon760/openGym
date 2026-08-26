@@ -239,6 +239,11 @@ export function neatBonus(S, iso, tdee = S && S.tdee) {
    on once there are enough weigh-ins to say which way the model actually errs. */
 export const restStrictOf = S => !!(S && S.restStrict)
 
+/* Above this much real effort in one day, the figure is worth a second look before it moves
+   a month of totals. It changes no arithmetic — one formula runs on every day, exceptional
+   or not — it only says out loud that this one was exceptional. */
+export const BIG_EFFORT = 1500
+
 /**
  * What training actually cost on a given day, and where the figure came from — the source
  * travels with the number because they are not equally trustworthy, and `raw` travels with
@@ -259,12 +264,20 @@ export const restStrictOf = S => !!(S && S.restStrict)
  *
  * A day with a logged session but no energy figure anywhere reports 'missing' rather than
  * quietly passing 0 — that day's balance is understated and the totals say so.
+ *
+ * Effort logged by hand rides on top of all of that, untrimmed. Five hundred stairs, a
+ * two-hour walk round a town, a hike nobody started a workout for — real work that no watch
+ * recorded as a session, and a figure a person estimated is already a real amount: the
+ * discount exists for a wrist sensor's optimism and there is no sensor here to be optimistic.
+ * It is added after the cut, never inside it.
  */
 export function sportKcal(S, iso, trim = WATCH_TRIM, tdee = S && S.tdee, now = Date.now()) {
   const t = validTrim(trim)
+  // Hand-logged effort, in real kcal. Read once here so every branch below can add it.
+  const free = Math.round(num0((healthFor(S, iso) || {}).free))
   const cut = (raw, source, neat = 0, neatFrom = null) => ({
-    kcal: Math.max(0, Math.round(raw * (1 - t)) - Math.round(neat)),
-    raw: Math.round(raw), trim: t, source, neat: Math.round(neat), neatFrom
+    kcal: Math.max(0, Math.round(raw * (1 - t)) - Math.round(neat)) + free,
+    raw: Math.round(raw), trim: t, source, neat: Math.round(neat), neatFrom, free
   })
 
   // The session's figure is already only the session: nothing is budgeted twice inside it.
@@ -297,10 +310,14 @@ export function sportKcal(S, iso, trim = WATCH_TRIM, tdee = S && S.tdee, now = D
   // was, a day with no session on it really is a rest day. Where it was not — an imported
   // history, a month before the app existed — the absence of a workout is the absence of a
   // record, and the day says nothing about training either way.
+  //
+  // Hand-logged effort alone is still evidence, and a day carrying it is not a rest day. It
+  // reports its own source so the day reads as measured — by a person rather than a watch.
+  if (free > 0) return { kcal: free, raw: 0, trim: t, source: 'free', neat: 0, neatFrom: null, free }
   if ((S.workouts || []).some(x => x.d === iso)) {
-    return { kcal: 0, raw: 0, trim: t, source: 'missing', neat: 0, neatFrom: null }
+    return { kcal: 0, raw: 0, trim: t, source: 'missing', neat: 0, neatFrom: null, free: 0 }
   }
-  return { kcal: 0, raw: 0, trim: t, source: trackedAround(S, iso) ? 'rest' : 'unknown', neat: 0, neatFrom: null }
+  return { kcal: 0, raw: 0, trim: t, source: trackedAround(S, iso) ? 'rest' : 'unknown', neat: 0, neatFrom: null, free: 0 }
 }
 
 /* How far either side of a day to look for evidence that training was being recorded at all.
@@ -338,7 +355,7 @@ export function dayBalance(S, iso, tdee = S.tdee, trim, now = Date.now()) {
   // is evidence about what training cost, and charging them the budget back would be a guess
   // dressed as arithmetic. Strict mode makes a rest day give the budget back, for a profile
   // whose maintenance figure genuinely describes a training day.
-  const measured = sp.source === 'session' || sp.source === 'watch'
+  const measured = sp.source === 'session' || sp.source === 'watch' || sp.source === 'free'
   const delta = measured ? sp.kcal - p.sport
     : (sp.source === 'rest' && restStrictOf(S) ? -p.sport : 0)
   const bonus = neatBonus(S, iso, tdee)
@@ -364,6 +381,10 @@ export function dayBalance(S, iso, tdee = S.tdee, trim, now = Date.now()) {
     sportSource: sp.source,
     delta,
     measured,
+    // Effort logged by hand, and whether the day's total effort is large enough to be worth
+    // checking before it is trusted. The arithmetic is the same either way.
+    free: sp.free || 0,
+    big: sp.kcal >= BIG_EFFORT,
     out,
     intake: intake == null ? null : Math.round(intake),
     deficit: intake == null ? null : Math.round(out - intake)
@@ -519,6 +540,73 @@ export function cutRate(S, tdee = S && S.tdee, days = 0, now = Date.now()) {
     bodyKg: num(bw), ceilingKg,
     ceilingPerDay: ceilingKg == null ? null : Math.round(ceilingKg * KCAL_PER_KG_FAT / 7),
     overCeiling: ceilingKg != null && kgPerWeek > ceilingKg
+  }
+}
+
+/**
+ * Record what the model predicted, at the moment the scale contradicts it.
+ *
+ * The watch discount is the least certain constant in the whole model — individual
+ * overcounts run from fifteen to forty percent — and the only thing that can settle it is a
+ * run of weigh-ins against a run of predictions. That comparison is impossible after the
+ * fact: once a weigh-in lands it becomes the new anchor, and the projection it disagreed with
+ * is gone. So the pair is written down here, on the way in, while both halves still exist.
+ *
+ * `sportPerDay` rides along because it is what decides which constant is wrong. An error
+ * that grows with training volume is the watch discount; an error that sits flat whatever
+ * the volume is the smoothed sport figure.
+ *
+ * Called inside store.update, before the weigh-in is inserted. A no-op when there is nothing
+ * to compare — the first weigh-in of all, or a run with no intake logged in it.
+ */
+export function recordCalibration(S, iso, kg, now = Date.now()) {
+  const p = projectedWeight(S, S && S.tdee, now)
+  if (!p || !p.days || p.from >= iso) return null
+  const days = (S.nutrition || []).filter(e => num(e.kcal) != null && e.d > p.from && e.d <= p.to)
+  const sport = days.reduce((a, e) => a + sportKcal(S, e.d, trimOf(S), S.tdee, now).kcal, 0)
+  const pair = {
+    d: iso,
+    from: p.from,
+    days: p.days,
+    gaps: p.gaps,
+    predicted: p.kg,
+    actual: Math.round(kg * 100) / 100,
+    // Positive means the scale is behind the prediction: less was lost than the model said.
+    error: Math.round((kg - p.kg) * 100) / 100,
+    sportPerDay: Math.round(sport / p.days),
+    trim: trimOf(S),
+    planned: (tdeeParts(S && S.tdee) || {}).sport || 0
+  }
+  S.calib = [...(S.calib || []).filter(c => c.d !== iso), pair].sort((a, b) => (a.d < b.d ? -1 : 1)).slice(-40)
+  return pair
+}
+
+/**
+ * What the recorded pairs say about which constant to move.
+ *
+ * Split at the median training volume rather than fitted: with five or six pairs a regression
+ * line is mostly noise wearing a coefficient. Two groups and the difference between their
+ * mean errors answers the only question being asked — does the error track training, or not.
+ */
+export const CALIB_MIN_PAIRS = 4
+export function calibration(S) {
+  const pairs = (S && S.calib) || []
+  if (pairs.length < CALIB_MIN_PAIRS) return { pairs, why: 'few', need: CALIB_MIN_PAIRS - pairs.length }
+  const mean = xs => xs.reduce((a, x) => a + x, 0) / xs.length
+  const vols = [...pairs].map(c => c.sportPerDay).sort((a, b) => a - b)
+  const mid = vols[vols.length >> 1]
+  const hi = pairs.filter(c => c.sportPerDay >= mid)
+  const lo = pairs.filter(c => c.sportPerDay < mid)
+  const bias = Math.round(mean(pairs.map(c => c.error)) * 100) / 100
+  if (!hi.length || !lo.length) return { pairs, bias, why: 'flat' }
+  const spread = Math.round((mean(hi.map(c => c.error)) - mean(lo.map(c => c.error))) * 100) / 100
+  return {
+    pairs, bias, spread,
+    // An error that grows with volume is the watch's optimism; one that does not is the
+    // smoothed sport figure, or the maintenance total itself.
+    blame: Math.abs(spread) >= Math.abs(bias) / 2 && Math.abs(spread) >= 0.15 ? 'trim' : 'sport',
+    hiVol: Math.round(mean(hi.map(c => c.sportPerDay))),
+    loVol: Math.round(mean(lo.map(c => c.sportPerDay)))
   }
 }
 

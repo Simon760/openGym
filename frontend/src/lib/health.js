@@ -67,6 +67,9 @@ export function parseHealth(raw) {
   // training. Absent means unknown, never zero — see neatFor.
   const neat = num(pick(data, 'neat_kcal', 'neatKcal', 'neat'))
   if (neat) out.neat = Math.round(neat)
+  // Real kcal, estimated by a person. Never discounted — see sportKcal.
+  const free = num(pick(data, 'free_kcal', 'freeKcal', 'free_activity', 'free'))
+  if (free) out.free = Math.round(free)
   const rhr = num(pick(data, 'resting_hr', 'restingHR', 'resting_heart_rate', 'rhr'))
   if (rhr) out.rhr = Math.round(rhr)
   const exercise = num(pick(data, 'exercise_minutes', 'exerciseMinutes', 'move_minutes'))
@@ -115,7 +118,7 @@ export function parseHealth(raw) {
 
   // A payload carrying only a date says nothing; letting it through would report a
   // successful import that wrote nothing.
-  const wrote = ['steps', 'kcal', 'sport', 'neat', 'rhr', 'exerciseMin', 'sleepHours', 'bed', 'weight', 'bodyFat',
+  const wrote = ['steps', 'kcal', 'sport', 'neat', 'free', 'rhr', 'exerciseMin', 'sleepHours', 'bed', 'weight', 'bodyFat',
     'intake', 'protein', 'carbs', 'fat', 'workout']
   if (!wrote.some(k => out[k] != null)) throw new Error(t('that payload has no health data in it'))
   return out
@@ -125,7 +128,8 @@ export function parseHealth(raw) {
 export function putHealth(list, entry) {
   const rest = (list || []).filter(e => e.d !== entry.d)
   const kept = { d: entry.d, t: entry.t || Date.now() }
-  for (const k of ['steps', 'kcal', 'rhr', 'exerciseMin', 'sport', 'sportMin', 'neat']) if (entry[k] != null) kept[k] = entry[k]
+  for (const k of ['steps', 'kcal', 'rhr', 'exerciseMin', 'sport', 'sportMin', 'neat', 'free']) if (entry[k] != null) kept[k] = entry[k]
+  if (entry.freeNote) kept.freeNote = String(entry.freeNote).slice(0, 80)
   if (Object.keys(kept).length <= 2) return rest.sort(byDate)
   return [...rest, kept].sort(byDate)
 }
@@ -155,11 +159,12 @@ export function applyHealth(S, p) {
     report.wrote.push(t('{0} kcal of training', p.sport))
   }
 
-  if (p.steps != null || p.kcal != null || p.rhr != null || p.exerciseMin != null || p.neat != null) {
+  if (p.steps != null || p.kcal != null || p.rhr != null || p.exerciseMin != null || p.neat != null || p.free != null) {
     S.health = putHealth(S.health, { ...(healthFor(S, p.d) || {}), ...p, d: p.d })
     if (p.steps != null) report.wrote.push(t('{0} steps', p.steps))
     if (p.kcal != null) report.wrote.push(t('{0} kcal burned', p.kcal))
     if (p.neat != null) report.wrote.push(t('{0} kcal of everyday movement', p.neat))
+    if (p.free != null) report.wrote.push(t('{0} kcal of effort you logged yourself', p.free))
     if (p.rhr != null) report.wrote.push(t('resting heart rate {0}', p.rhr))
   }
 
@@ -287,6 +292,12 @@ export const CSV_COLUMNS = [
   // before either burn column does, because "Dépense NEAT" starts with "dépense" and the
   // day-total list would otherwise swallow it whole. A blank cell is not a day spent lying
   // down: it falls back to the usual figure, in neatFor.
+  // Effort logged by hand, in real kcal — stairs, a hike, a long walk no watch called a
+  // session. Its own column because it is the one figure here the watch discount must not
+  // touch: a person's estimate has no wrist sensor's optimism in it to take off.
+  ['free', ['free activity', 'free activity kcal', 'other activity', 'unlogged activity',
+    'manual kcal', 'activite libre', 'kcal activite libre', 'effort libre', 'hors seance',
+    'activite hors seance']],
   ['neat', ['neat kcal', 'kcal neat', 'neat quotidien', 'depense neat', 'non exercise activity',
     'non exercise energy', 'activite hors sport', 'depense hors sport', 'neat']],
   ['sport', ['sport kcal', 'training kcal', 'workout calories', 'workout kcal',
@@ -431,6 +442,7 @@ export function parseHealthCSV(text) {
     const kcal = numCell(row, map.kcal); if (kcal) p.kcal = Math.round(kcal)
     const sport = numCell(row, map.sport); if (sport) p.sport = Math.round(sport)
     const neat = numCell(row, map.neat); if (neat) p.neat = Math.round(neat)
+    const free = numCell(row, map.free); if (free) p.free = Math.round(free)
     const rhr = numCell(row, map.rhr); if (rhr) p.rhr = Math.round(rhr)
     const kg = numCell(row, map.weight); if (kg) p.weight = Math.round(kg * 10) / 10
     const bf = validBodyFat(numCell(row, map.bodyFat)); if (bf != null) p.bodyFat = bf
@@ -483,13 +495,15 @@ Ask for exactly this:
   Write my whole history as CSV, one row per day, oldest first.
   First line exactly:
 
-  Date,Intake kcal,Protein,Carbs,Fat,Sport kcal,Steps,Weight,Body fat,Bedtime,Wake time
+  Date,Intake kcal,Protein,Carbs,Fat,Sport kcal,Free activity,Steps,Weight,Body fat,Bedtime,Wake time
 
   Rules:
   · Date as YYYY-MM-DD (2025-03-12)
   · Leave a cell EMPTY when the figure was never recorded that day — never write 0.
     A day with calories but no macros leaves Protein, Carbs and Fat empty. A day with no
     training leaves Sport kcal empty. Both are ordinary and both import fine.
+  · Free activity: effort no watch recorded as a session — stairs, a hike, a long walk. In
+    real kcal, your own estimate. Empty on an ordinary day.
   · Steps as a plain count — 9420, not "9.4k". An empty cell means an ordinary day.
   · Intake and Sport in kcal, macros in grams, weight in kg (78.4), body fat in %
   · Bedtime and Wake time as HH:MM
@@ -513,6 +527,12 @@ say once how many steps that is. A day that beat it really did cost more, so the
 added to that day. A day that fell short is charged exactly the same as always, never less:
 the entered figure is a floor, not a guess to be second-guessed by a pedometer that spent the
 afternoon in a coat pocket. An empty cell therefore costs nothing at all.
+
+Free activity is the third burn, and the only one that arrives already correct. Sport kcal
+comes off a watch and is discounted before it counts; a figure you estimated yourself has no
+wrist sensor's optimism in it, so it is taken exactly as written. Put the stairs, the hike,
+the two hours round a town there — it counts as training, on top of any session that day, and
+a day carrying only that is not a rest day.
 
 (A NEAT kcal column is read too, if your export happens to have one, and it wins over the
 step count for that day. Nobody needs to produce one.)

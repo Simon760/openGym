@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   validTDEE, tdeeParts, sportKcal, dayBalance, deficitTotals, impliedTDEE, predictedVsActual,
-  deficitSeries, trimOf, KCAL_PER_KG_FAT, TDEE_MIN, TDEE_MAX, WATCH_TRIM, projectedWeight } from './energy.js'
+  deficitSeries, trimOf, KCAL_PER_KG_FAT, TDEE_MIN, TDEE_MAX, WATCH_TRIM, projectedWeight, recordCalibration, calibration, CALIB_MIN_PAIRS } from './energy.js'
 import { isoOf } from './format.js'
 
 const S = (over = {}) => ({ nutrition: [], health: [], workouts: [], bodyweight: [], watchTrim: 0, ...over })
@@ -422,5 +422,133 @@ describe('projectedWeight', () => {
   it('names the days that logged nothing, since they drag it high', () => {
     const holey = S({ ...st, nutrition: st.nutrition.filter((_, i) => i % 3) })
     expect(projectedWeight(holey, st.tdee, NOW).gaps).toBeGreaterThan(0)
+  })
+})
+
+describe('effort logged by hand', () => {
+  // 492 stairs, 17 minutes up and 12 down: real work no watch called a session. The figure
+  // is a person's estimate, already in real kcal, so the watch discount must not touch it.
+  const P = { bmr: 1723, neat: 270, other: 80, sport: 230, stepBase: 9000 }
+  const st = over => S({ tdee: P, watchTrim: 0.28, nutrition: [{ d: day(0), kcal: 1900 }], ...over })
+  const NOW = Date.UTC(2026, 0, 2)
+
+  it('is added whole, with none of the discount taken off it', () => {
+    const b = dayBalance(st({ health: [{ d: day(0), free: 265 }] }), day(0), P, 0.28, NOW)
+    expect(b.free).toBe(265)
+    expect(b.sport).toBe(265)                 // not 265 x 0.72
+    expect(b.delta).toBe(35)                  // against the 230 the figure already contains
+    expect(b.out).toBe(2303 + 35)
+  })
+
+  it('makes a rest day a measured day', () => {
+    // Without it the day says nothing about training and is charged the figure exactly.
+    const bare = dayBalance(st({ workouts: [{ d: day(-2), id: 'a' }] }), day(0), P, 0.28, NOW)
+    expect(bare).toMatchObject({ measured: false, sportSource: 'rest', delta: 0 })
+    const withFree = dayBalance(st({ workouts: [{ d: day(-2), id: 'a' }], health: [{ d: day(0), free: 265 }] }), day(0), P, 0.28, NOW)
+    expect(withFree).toMatchObject({ measured: true, sportSource: 'free', delta: 35 })
+  })
+
+  it('stacks on a session rather than replacing it', () => {
+    const b = dayBalance(st({
+      workouts: [{ d: day(0), id: 'w', watch: { kcal: 580 } }],
+      health: [{ d: day(0), free: 265 }]
+    }), day(0), P, 0.28, NOW)
+    expect(b.sport).toBe(Math.round(580 * 0.72) + 265)   // 418 + 265
+    expect(b.delta).toBe(683 - 230)
+  })
+
+  it('flags an unusual day without treating it differently', () => {
+    // One formula runs on every day, exceptional or not. The flag says look, not recompute.
+    const big = dayBalance(st({ workouts: [{ d: day(0), id: 'w', watch: { kcal: 2270 } }] }), day(0), P, 0.28, NOW)
+    expect(big.sport).toBe(1634)
+    expect(big.delta).toBe(1404)
+    expect(big.out).toBe(2303 + 1404)          // the standard formula, not a special case
+    expect(big.big).toBe(true)
+    const ordinary = dayBalance(st({ workouts: [{ d: day(0), id: 'w', watch: { kcal: 420 } }] }), day(0), P, 0.28, NOW)
+    expect(ordinary.big).toBe(false)
+  })
+})
+
+describe('the projection is anchored, never chained', () => {
+  const P = { bmr: 1723, neat: 270, other: 80, sport: 230, stepBase: 9000 }
+  const NOW = Date.UTC(2026, 0, 2, 18)
+  const base = extra => S({
+    tdee: P,
+    nutrition: Array.from({ length: 30 }, (_, i) => ({ d: day(1 - i), kcal: 1900 })),
+    bodyweight: [{ d: day(-25), w: 82 }, { d: day(-10), w: 79.5 }, ...(extra || [])]
+  })
+
+  it('ignores everything before the last weigh-in entirely', () => {
+    // A different history before the anchor must not move the answer by a gram: that is what
+    // re-anchoring means, and chaining is precisely the failure it prevents.
+    const a = projectedWeight(base(), P, NOW)
+    const b = projectedWeight(S({ ...base(), bodyweight: [{ d: day(-27), w: 95 }, { d: day(-10), w: 79.5 }] }), P, NOW)
+    expect(b.kg).toBe(a.kg)
+    expect(b.from).toBe(day(-10))
+  })
+
+  it('re-anchors the moment a newer weigh-in exists', () => {
+    const later = projectedWeight(base([{ d: day(-3), w: 78.9 }]), P, NOW)
+    expect(later.from).toBe(day(-3))
+    expect(later.fromKg).toBe(78.9)
+    expect(later.days).toBe(3)                 // day(-2), day(-1), day(0) — today left out
+  })
+
+  it('rounds once, at the end, not once a day', () => {
+    // Chaining a rounded loss per day drifts. 400 kcal is 0.051948 kg; rounded to 0.05 daily
+    // it loses 0.03 kg over fifteen days, which is most of an argument about a projection.
+    const p = projectedWeight(base(), P, NOW)
+    const exact = p.fromKg - p.deficit / KCAL_PER_KG_FAT
+    expect(p.kg).toBe(Math.round(exact * 100) / 100)
+    expect(Math.abs(p.kg - exact)).toBeLessThan(0.005)
+  })
+})
+
+describe('recordCalibration', () => {
+  const P = { bmr: 1723, neat: 270, other: 80, sport: 230, stepBase: 9000 }
+  const NOW = Date.UTC(2026, 0, 2, 18)
+  const st = () => S({
+    tdee: P, watchTrim: 0.28,
+    nutrition: Array.from({ length: 20 }, (_, i) => ({ d: day(1 - i), kcal: 1900 })),
+    bodyweight: [{ d: day(-12), w: 79.5 }],
+    workouts: [{ d: day(-3), id: 'w', watch: { kcal: 500 } }]
+  })
+
+  it('writes the pair down before the weigh-in destroys the thing it compares', () => {
+    const s = st()
+    const before = projectedWeight(s, P, NOW)
+    const pair = recordCalibration(s, day(0), 78.9, NOW)
+    expect(pair.predicted).toBe(before.kg)
+    expect(pair.actual).toBe(78.9)
+    expect(pair.error).toBe(Math.round((78.9 - before.kg) * 100) / 100)
+    expect(pair.days).toBe(before.days)
+    expect(pair.sportPerDay).toBeGreaterThan(0)
+    expect(s.calib).toHaveLength(1)
+  })
+
+  it('says nothing when there is no earlier weigh-in to project from', () => {
+    expect(recordCalibration(S({ tdee: P, nutrition: [], bodyweight: [] }), day(0), 79, NOW)).toBe(null)
+  })
+
+  it('holds its tongue until there are enough pairs to blame a constant', () => {
+    const s = st()
+    expect(calibration(s).why).toBe('few')
+    expect(calibration(s).need).toBe(CALIB_MIN_PAIRS)
+  })
+
+  it('blames the watch when the error tracks training volume', () => {
+    const s = S({ tdee: P, calib: [
+      { d: day(-9), error: 0.1, sportPerDay: 90 }, { d: day(-7), error: 0.15, sportPerDay: 110 },
+      { d: day(-5), error: 0.7, sportPerDay: 430 }, { d: day(-3), error: 0.8, sportPerDay: 470 }
+    ] })
+    expect(calibration(s).blame).toBe('trim')
+  })
+
+  it('blames the figure when the error sits flat', () => {
+    const s = S({ tdee: P, calib: [
+      { d: day(-9), error: 0.5, sportPerDay: 90 }, { d: day(-7), error: 0.52, sportPerDay: 110 },
+      { d: day(-5), error: 0.48, sportPerDay: 430 }, { d: day(-3), error: 0.51, sportPerDay: 470 }
+    ] })
+    expect(calibration(s).blame).toBe('sport')
   })
 })

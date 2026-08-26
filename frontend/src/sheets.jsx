@@ -26,7 +26,7 @@ import { MOBILE, shareExport, shareText, canShareText } from './lib/mobile.js'
 import { entryFor, hasMacros, kcalFromMacros, derivedMismatch, remainingOf, putEntry, MACROS, MACRO_NAME } from './lib/nutrition.js'
 import { validBodyFat, composition, sleepFor, putSleep, validSleep, sleepHours, hoursBetween, validTime, BF_MIN, BF_MAX, SLEEP_MIN, SLEEP_MAX } from './lib/body.js'
 import { parseHealth, applyHealth, parseHealthCSV, applyHealthDays, shortcutRecipe, shortcutLink, historySpec } from './lib/health.js'
-import { impliedTDEE, tdeeParts, trimOf, stepBaseOf, restStrictOf, projectedWeight, dayBalance, KCAL_PER_KG_FAT, TDEE_PARTS, TDEE_MIN, TDEE_MAX, TRIM_MAX, IMPLIED_MIN_SPAN, IMPLIED_MIN_DAYS, IMPLIED_MIN_WEIGHINS } from './lib/energy.js'
+import { impliedTDEE, tdeeParts, trimOf, stepBaseOf, restStrictOf, projectedWeight, recordCalibration, calibration, dayBalance, KCAL_PER_KG_FAT, BIG_EFFORT, TDEE_PARTS, TDEE_MIN, TDEE_MAX, TRIM_MAX, IMPLIED_MIN_SPAN, IMPLIED_MIN_DAYS, IMPLIED_MIN_WEIGHINS } from './lib/energy.js'
 import { APP_NAME, FILE_PREFIX } from './lib/brand.js'
 
 const S = () => useStore.getState().S
@@ -113,6 +113,10 @@ function BwSheet({ onDone, close, iso = todayISO() }) {
     if (!n || n <= 0) { toast(t('Enter a valid weight')); return }
     const pct = validBodyFat(bf)
     update(s => {
+      // Written before the weigh-in lands, because inserting it destroys the thing being
+      // compared: this reading becomes the new anchor and the projection it disagreed with
+      // stops existing. The pair is what any future recalibration has to work from.
+      recordCalibration(s, iso, n)
       const ex = s.bodyweight.find(b => b.d === iso)
       const target = ex || { d: iso }
       target.w = n
@@ -494,6 +498,32 @@ function TdeeSheet({ close }) {
       {t('Wrist devices are good at heart rate and poor at energy — they read it 20 to 40 % high, almost always high. Applied to every training figure, including the ones you type in and import, because those are read off a watch too. Zero trusts it as it comes.')}
     </div>
 
+    {(() => {
+      const cal = calibration(st)
+      if (!cal.pairs.length) return null
+      return <>
+        <h4 className="sec">{t('Predicted against measured')}</h4>
+        <div className="small" style={{ fontVariantNumeric: 'tabular-nums' }}>
+          {cal.pairs.slice(-6).map(c => <div key={c.d} className="row between" style={{ padding: '4px 2px', borderBottom: '1px solid var(--sep-op)' }}>
+            <span className="dim">{fmtDate(c.d, true)}</span>
+            <span className="row" style={{ gap: 10 }}>
+              <span className="dim">{fmtNum(c.predicted)} → {fmtNum(c.actual)}</span>
+              <b style={{ color: Math.abs(c.error) < 0.4 ? 'var(--acc)' : 'var(--orange)', minWidth: 46, textAlign: 'right' }}>
+                {(c.error > 0 ? '+' : '−') + fmtNum(Math.abs(c.error))} kg
+              </b>
+            </span>
+          </div>)}
+        </div>
+        <div className="dim small" style={{ margin: '8px 2px 0', lineHeight: 1.45 }}>
+          {cal.why === 'few'
+            ? t('{0} more weigh-ins and this can say which constant to move. A positive error means the scale is behind the prediction — less came off than the model said.', cal.need)
+            : cal.blame === 'trim'
+              ? t('The error grows with training volume ({0} kcal a day against {1}), which points at the watch discount rather than the figure itself. Raise the {2} % below.', fmtNum(cal.hiVol), fmtNum(cal.loVol), Math.round(trimOf(st) * 100))
+              : t('The error sits at {0} kg whatever the training volume, which points at the maintenance total rather than the watch. Adjust the parts above, not the discount below.', fmtNum(cal.bias))}
+        </div>
+      </>
+    })()}
+
     <h4 className="sec">{t('What a projected weight is not')}</h4>
     <div className="dim small" style={{ lineHeight: 1.5 }}>
       {t('A projection is a tendency, not a measurement. The scale answers to glycogen water (a kilo or two, with the carbs), to salt (a gram of it holds about 100 ml), to whatever is still in transit, and to the swelling after a hard session — all of which move it further in a day than a week of deficit does. Only a weigh-in in constant conditions settles anything: on waking, before eating, after the bathroom, same scale.')}
@@ -570,7 +600,8 @@ function ProjectionSheet({ close }) {
     .filter(b => b && b.deficit != null)
   let run = 0
 
-  const SRC = { session: t('measured'), watch: t('day total'), missing: t('no figure'), rest: t('rest'), unknown: t('no record') }
+  const SRC = { session: t('measured'), watch: t('day total'), free: t('by hand'),
+    missing: t('no figure'), rest: t('rest'), unknown: t('no record') }
 
   return <>
     <h3>{t('Projected weight')}</h3>
@@ -596,13 +627,18 @@ function ProjectionSheet({ close }) {
               <td style={cell}>{fmtNum(b.tdee)}</td>
               <td style={{ ...cell, color: b.delta ? (b.delta > 0 ? 'var(--acc)' : 'var(--orange)') : 'var(--label-2)' }}>
                 {b.delta ? (b.delta > 0 ? '+' : '−') + fmtNum(Math.abs(b.delta)) : '·'}
-                <span className="dim" style={{ fontSize: '.8em' }}> {SRC[b.sportSource] || ''}</span>
+                <span className="dim" style={{ fontSize: '.8em' }}> {SRC[b.sportSource] || ''}
+                  {b.free > 0 ? ' +' + fmtNum(b.free) + ' ' + t('by hand') : ''}</span>
               </td>
               <td style={{ ...cell, color: b.bonus ? (b.bonus > 0 ? 'var(--acc)' : 'var(--orange)') : 'var(--label-2)' }}>
                 {b.bonus ? (b.bonus > 0 ? '+' : '−') + fmtNum(Math.abs(b.bonus)) : '·'}
                 {b.steps != null && <span className="dim" style={{ fontSize: '.8em' }}> {fmtNum(b.steps)}</span>}
               </td>
-              <td style={cell}><b>{fmtNum(b.out)}</b></td>
+              <td style={cell}>
+                <b>{fmtNum(b.out)}</b>
+                {b.big && <span title={t('Unusually large — the arithmetic is the same, but it is worth checking')}
+                  style={{ color: 'var(--yellow)', marginLeft: 4 }}>!</span>}
+              </td>
               <td style={cell}>{fmtNum(b.intake)}</td>
               <td style={{ ...cell, color: b.deficit >= 0 ? 'var(--acc)' : 'var(--orange)' }}>{(b.deficit > 0 ? '+' : '') + fmtNum(b.deficit)}</td>
               <td style={{ ...cell, color: 'var(--label-2)' }}>{fmtNum(run)}</td>
@@ -620,6 +656,9 @@ function ProjectionSheet({ close }) {
         <span className="dim">{fmtNum(proj.fromKg)} − {t('that')}</span><b style={{ color: 'var(--acc)' }}>{fmtNum(proj.kg)} {st.unit}</b>
       </div>
     </div>
+    {rows.some(b => b.big) && <div className="small" style={{ color: 'var(--yellow)', marginTop: 10, lineHeight: 1.45 }}>
+      {t('The days marked ! spent over {0} kcal on effort. The same formula runs on them as on every other day — the mark is there so an unusual figure gets a second look before it moves a month of totals.', fmtNum(BIG_EFFORT))}
+    </div>}
     {proj.gaps > 0 && <div className="small" style={{ color: 'var(--yellow)', marginTop: 10, lineHeight: 1.45 }}>
       {t('{0} days in that stretch logged no food at all. They count for nothing, so this figure is higher than the truth.', proj.gaps)}
     </div>}
@@ -1143,7 +1182,7 @@ function PlanImport({ bundle, report, onApplied, close }) {
 const healthFieldLabel = () => ({
   bed: t('Bedtime'), wake: t('Wake time'), awakeMin: t('Awake during the night'),
   sleepDur: t('Sleep duration'), steps: t('Steps'), kcal: t('Active energy (whole day)'),
-  sport: t('Training energy'), neat: t('Everyday movement'),
+  sport: t('Training energy'), neat: t('Everyday movement'), free: t('Effort you logged yourself'),
   rhr: t('Resting heart rate'), weight: t('Weight'), bodyFat: t('Body fat'),
   intake: t('Calories eaten'), protein: t('Protein'), carbs: t('Carbs'), fat: t('Fat')
 })
@@ -1158,7 +1197,10 @@ const healthFieldLabel = () => ({
 const WATCH_FIELDS = [
   { k: 'sport', label: 'Session energy', unit: 'kcal' },
   { k: 'min', label: 'Session length', unit: 'min' },
-  { k: 'steps', label: 'Steps', unit: '' }
+  { k: 'steps', label: 'Steps', unit: '' },
+  // Effort no watch called a session, estimated by you. The one field here that is not a
+  // reading, so the one field the watch discount must never touch.
+  { k: 'free', label: 'Effort you logged yourself', unit: 'kcal' }
 ]
 
 function NumRow({ label, unit, value, onChange, decimal = false }) {
@@ -1187,6 +1229,7 @@ function NumRow({ label, unit, value, onChange, decimal = false }) {
  */
 function ManualEntry({ onDone, close, iso = todayISO() }) {
   const [v, setV] = useState({})
+  const [note, setNote] = useState('')
   const set = (k, n) => setV(x => ({ ...x, [k]: n }))
   const any = WATCH_FIELDS.some(f => v[f.k] > 0)
 
@@ -1200,6 +1243,7 @@ function ManualEntry({ onDone, close, iso = todayISO() }) {
     // Absent, never zero. A field left empty is a figure nobody measured, and a zero here
     // would be read as a day of no movement — which is what the NEAT baseline is built from.
     if (v.steps > 0) p.steps = Math.round(v.steps)
+    if (v.free > 0) { p.free = Math.round(v.free); if (note.trim()) p.freeNote = note.trim() }
     let report
     update(s => { report = applyHealth(s, p) })
     onDone(report)
@@ -1211,8 +1255,18 @@ function ManualEntry({ onDone, close, iso = todayISO() }) {
     <div className="dim small" style={{ margin: '0 2px 6px', lineHeight: 1.45 }}>
       {t('Read them off your watch and type them in. Leave a field empty when you have nothing for it.')}
     </div>
-    {WATCH_FIELDS.map(f => <NumRow key={f.k} label={t(f.label)} unit={f.unit} decimal={f.decimal}
-      value={v[f.k] ?? null} onChange={n => set(f.k, n)} />)}
+    {WATCH_FIELDS.map(f => <div key={f.k}>
+      <NumRow label={t(f.label)} unit={f.unit} decimal={f.decimal}
+        value={v[f.k] ?? null} onChange={n => set(f.k, n)} />
+      {f.k === 'free' && <>
+        <div className="dim small" style={{ margin: '6px 2px 0', lineHeight: 1.45 }}>
+          {t('Stairs, a hike, a long walk — real work your watch never called a session. Put what you think it actually cost: this figure is taken as it is, with none of the watch discount applied to it.')}
+        </div>
+        {v.free > 0 && <input className="numf" style={{ width: '100%', marginTop: 8, textAlign: 'left', padding: '9px 11px' }}
+          value={note} maxLength={80} placeholder={t('what it was — 492 stairs, 2 h walking…')}
+          onChange={e => setNote(e.target.value)} />}
+      </>}
+    </div>)}
     <div style={{ height: 12 }} />
     <Button variant="primary" icon="check" disabled={!any} onClick={save}>
       {iso === todayISO() ? t('Save for today') : t('Save for {0}', fmtDate(iso, true))}
@@ -1348,6 +1402,7 @@ function HealthImport({ close, arrived }) {
       pending.kcal != null && [label.kcal, pending.kcal + ' kcal'],
       pending.exerciseMin != null && [t('Exercise minutes'), pending.exerciseMin + ' min'],
       pending.neat != null && [label.neat, pending.neat + ' kcal'],
+      pending.free != null && [label.free, pending.free + ' kcal'],
       pending.rhr != null && [label.rhr, pending.rhr],
       pending.bed && pending.wake && [t('Sleep'), pending.bed + ' → ' + pending.wake],
       pending.sleepHours != null && [t('Sleep'), fmtNum(pending.sleepHours) + ' h'],

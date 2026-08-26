@@ -417,3 +417,30 @@ describe('a NEAT column', () => {
     expect(parseHealth('{"date":"2026-03-12","neat_kcal":700}')).toMatchObject({ neat: 700 })
   })
 })
+
+describe('effort logged by hand, through the importer', () => {
+  it('reads a free-activity column under its own name', () => {
+    for (const head of ['Free activity', 'Activité libre', 'Hors séance', 'Manual kcal']) {
+      const { payloads, matched } = parseHealthCSV(`Date,${head}\n2026-03-12,265\n`)
+      expect(payloads[0], head).toMatchObject({ d: '2026-03-12', free: 265 })
+      expect(matched.find(m => m.field === 'free').column).toBe(head)
+    }
+  })
+
+  it('keeps it apart from the session and from the day total', () => {
+    const { payloads } = parseHealthCSV('Date,Sport kcal,Activité libre,Énergie active\n2026-03-12,580,265,1900\n')
+    expect(payloads[0]).toMatchObject({ sport: 580, free: 265, kcal: 1900 })
+  })
+
+  it('writes it onto the day beside everything else already there', () => {
+    const S = { health: [{ d: D, steps: 9420 }], workouts: [], nutrition: [], bodyweight: [] }
+    applyHealth(S, { d: D, free: 265, freeNote: '492 marches' })
+    expect(healthFor(S, D)).toMatchObject({ steps: 9420, free: 265, freeNote: '492 marches' })
+  })
+
+  it('leaves an empty cell absent rather than writing a zero', () => {
+    const { payloads } = parseHealthCSV('Date,Apports kcal,Activité libre\n2026-03-12,2100,\n2026-03-13,2100,265\n')
+    expect(payloads[0].free).toBeUndefined()
+    expect(payloads[1].free).toBe(265)
+  })
+})
