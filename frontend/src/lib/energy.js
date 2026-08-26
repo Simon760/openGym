@@ -187,8 +187,31 @@ export function sportKcal(S, iso, trim = WATCH_TRIM, tdee = S && S.tdee, now = D
       : cut(day, 'watch', (tdeeParts(tdee) || {}).neat || 0, { kind: 'declared' })
   }
 
-  const trained = (S.workouts || []).some(x => x.d === iso)
-  return { kcal: 0, raw: 0, trim: t, source: trained ? 'missing' : 'rest', neat: 0, neatFrom: null }
+  // Nothing measured the training that day. Whether that means "rested" or "nobody recorded
+  // it" is the difference between a rest day and a hole, and the arithmetic must not guess:
+  // a rest day legitimately costs a day's training budget less, and subtracting that from a
+  // hole is how a year of imported intake turns into a deficit nobody earned.
+  //
+  // The evidence is whether this app was being used to log training around then. Where it
+  // was, a day with no session on it really is a rest day. Where it was not — an imported
+  // history, a month before the app existed — the absence of a workout is the absence of a
+  // record, and the day says nothing about training either way.
+  if ((S.workouts || []).some(x => x.d === iso)) {
+    return { kcal: 0, raw: 0, trim: t, source: 'missing', neat: 0, neatFrom: null }
+  }
+  return { kcal: 0, raw: 0, trim: t, source: trackedAround(S, iso) ? 'rest' : 'unknown', neat: 0, neatFrom: null }
+}
+
+/* How far either side of a day to look for evidence that training was being recorded at all.
+   Wide enough to carry a deload week, narrow enough that a gap of a month reads as one. */
+export const TRACKED_WINDOW = 10
+
+/** Was training being recorded anywhere near this day? */
+function trackedAround(S, iso) {
+  const d = dayNum(iso)
+  const near = x => Math.abs(dayNum(x) - d) <= TRACKED_WINDOW
+  if ((S.workouts || []).some(w => near(w.d))) return true
+  return (S.health || []).some(h => near(h.d) && (num(h.sport) != null || num(h.kcal) != null))
 }
 
 /**
@@ -254,12 +277,16 @@ export function deficitTotals(S, tdee = S.tdee, days = 0, now = Date.now(), thro
   const list = (S.nutrition || []).filter(e => num(e.kcal) != null && e.d <= end && inWindow(e.d, days, now))
   if (!list.length) return null
 
-  let nutrition = 0, sportDelta = 0, sportLogged = 0, unmeasured = 0
+  let nutrition = 0, sportDelta = 0, sportLogged = 0, unmeasured = 0, untracked = 0, plannedDays = 0
   list.forEach(e => {
     const b = dayBalance(S, e.d, tdee)
     nutrition += p.total - b.intake
-    sportDelta += b.delta
     sportLogged += b.sport
+    // A day that says nothing about training contributes nothing to the training total. It
+    // is not a day of no training, and treating it as one would charge it a whole budget.
+    if (b.sportSource === 'unknown') { untracked++; return }
+    sportDelta += b.delta
+    plannedDays++
     if (b.sportSource === 'missing') unmeasured++
   })
   const total = nutrition + sportDelta
@@ -271,7 +298,12 @@ export function deficitTotals(S, tdee = S.tdee, days = 0, now = Date.now(), thro
     nutrition: Math.round(nutrition),
     sportDelta: Math.round(sportDelta),
     sportLogged: Math.round(sportLogged),
-    sportPlanned: Math.round(p.sport * list.length),
+    // Against the days the budget could actually be held to, not every day in the window:
+    // "5 352 measured against 30 590 assumed" is only a fair comparison when the 30 590 was
+    // assumed over days that had something to say.
+    sportPlanned: Math.round(p.sport * plannedDays),
+    plannedDays,
+    untracked,
     total: Math.round(total),
     perDay: Math.round(total / list.length),
     kg: Math.round((total / KCAL_PER_KG_FAT) * 100) / 100,

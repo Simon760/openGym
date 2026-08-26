@@ -248,7 +248,14 @@ function EnergyCard({ S }) {
               because that is what budgeting for it means. Spelled out, or the sport row
               reads as "training did nothing" on a cut built entirely on training. */}
           {tot.sportPlanned > 0 && <div className="dim small" style={{ lineHeight: 1.45 }}>
-            {t('{0} kcal of training measured, against {1} your maintenance already counts.', fmtNum(tot.sportLogged), fmtNum(tot.sportPlanned))}
+            {t('{0} kcal of training measured across {1} days, against {2} your maintenance counts for them.',
+              fmtNum(tot.sportLogged), tot.plannedDays, fmtNum(tot.sportPlanned))}
+          </div>}
+          {/* Days that say nothing about training are left out of the training figure rather
+              than counted as rest. Said out loud, because a total that quietly ignores half
+              its window is worse than one that explains why. */}
+          {tot.untracked > 0 && <div className="dim small" style={{ lineHeight: 1.45 }}>
+            {t('{0} days recorded no training either way — neither a session nor a rest day — so they count for eating only.', tot.untracked)}
           </div>}
           {tot.nutrition < 0 && <div className="small" style={{ color: 'var(--orange)', lineHeight: 1.45 }}>
             {t('Eating sat above maintenance across this period — every gram lost came from training.')}

@@ -82,11 +82,25 @@ describe('sportKcal', () => {
     expect(sportKcal(st, day(0), 0)).toMatchObject({ kcal: 430, source: 'session' })
   })
 
-  it('separates a rest day from a session nobody measured', () => {
-    // both come to zero, and only one of them is true
-    expect(sportKcal(S(), day(0), 0)).toMatchObject({ kcal: 0, source: 'rest' })
+  it('tells a rest day, an unmeasured session and a hole apart', () => {
+    // All three come to zero and only one of them means "no training happened". The budget
+    // is charged against a rest day and never against a hole: subtracting a day's training
+    // budget from a day nobody recorded is how an imported history becomes a deficit nobody
+    // earned. Evidence of a rest day is the app being used to log training around then.
+    const tracked = { workouts: [{ d: day(3), id: 'a' }, { d: day(6), id: 'b' }] }
+
+    expect(sportKcal(S(tracked), day(4), 0)).toMatchObject({ kcal: 0, source: 'rest' })
     expect(sportKcal(S({ workouts: [{ d: day(0), id: 'w' }] }), day(0), 0))
       .toMatchObject({ kcal: 0, source: 'missing' })
+    expect(sportKcal(S(), day(0), 0)).toMatchObject({ kcal: 0, source: 'unknown' })
+    // far enough from anything recorded that the silence says nothing
+    expect(sportKcal(S(tracked), day(60), 0)).toMatchObject({ source: 'unknown' })
+  })
+
+  it('reads a day the watch spoke for as tracked, with no workout logged', () => {
+    // an imported history that carries training energy is evidence just as a logged session is
+    const st = S({ health: [{ d: day(3), sport: 400 }] })
+    expect(sportKcal(st, day(4), 0)).toMatchObject({ source: 'rest' })
   })
 
   it('throws away the share of a watch reading nobody should trust', () => {
@@ -306,5 +320,36 @@ describe('deficitSeries', () => {
     const st = S({ nutrition: [{ d: day(0), kcal: 1500 }, { d: day(2), kcal: 1700 }] })
     expect(deficitSeries(st, 2000).map(p => p.y)).toEqual([500, 300])
     expect(deficitSeries(st, null)).toEqual([])
+  })
+})
+
+describe('deficitTotals — days that say nothing about training', () => {
+  // Four months of imported intake with almost no training data, against a maintenance
+  // figure that budgets 230 kcal a day of it. This is the shape that produced a headline
+  // deficit of 2 671 kcal beside a scale that had moved 6.7 kg.
+  const days120 = Array.from({ length: 120 }, (_, i) => day(-i))
+  const st = S({
+    tdee: { bmr: 1620, neat: 453, other: 0, sport: 230 },
+    nutrition: days120.map(d => ({ d, kcal: 1900 })),
+    health: []
+  })
+
+  it('does not charge a training budget to a day nobody recorded', () => {
+    const t = deficitTotals(st, st.tdee, 0, Date.UTC(2026, 5, 1))
+    expect(t.untracked).toBe(t.days)          // nothing was tracked at all
+    expect(t.sportDelta).toBe(0)              // so training contributes nothing either way
+    expect(t.sportPlanned).toBe(0)            // and nothing was assumed of those days
+    expect(t.total).toBe(t.nutrition)
+  })
+
+  it('still charges it to a day that really was a rest day', () => {
+    const trained = S({
+      ...st,
+      workouts: days120.filter((_, i) => i % 3 === 0).map((d, i) => ({ d, id: 'w' + i }))
+    })
+    const t = deficitTotals(trained, st.tdee, 0, Date.UTC(2026, 5, 1))
+    expect(t.untracked).toBe(0)               // the app was in use throughout
+    expect(t.sportDelta).toBeLessThan(0)      // and the budget went unspent
+    expect(t.sportPlanned).toBe(230 * t.plannedDays)
   })
 })

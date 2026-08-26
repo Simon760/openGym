@@ -900,4 +900,6 @@ export default {
   '{0} kcal of training': '{0} kcal d’entraînement',
   'Active energy (whole day)': 'Énergie active (journée)',
   'Training energy': 'Énergie d’entraînement',
+  '{0} kcal of training measured across {1} days, against {2} your maintenance counts for them.': '{0} kcal d’entraînement mesurés sur {1} jours, contre {2} que ta dépense compte pour eux.',
+  '{0} days recorded no training either way — neither a session nor a rest day — so they count for eating only.': '{0} jours ne disent rien de l’entraînement — ni séance, ni jour de repos — ils ne comptent que pour l’alimentation.',
 }
