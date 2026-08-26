@@ -227,7 +227,7 @@ function EnergyCard({ S }) {
       </div>
       : <>
         <Segmented className="seg-range" value={win} onChange={setWin}
-          options={[{ value: 30, label: '30d' }, { value: 90, label: '90d' }, { value: 365, label: '1y' }, { value: 0, label: t('All') }]} />
+          options={[{ value: 7, label: '7d' }, { value: 30, label: '30d' }, { value: 90, label: '90d' }, { value: 365, label: '1y' }, { value: 0, label: t('All') }]} />
         {!tot ? <div className="muted small">{t('Nothing logged in this period.')}</div> : <>
           <div className="row between" style={{ alignItems: 'flex-end', gap: 12 }}>
             <div style={{ minWidth: 0 }}>

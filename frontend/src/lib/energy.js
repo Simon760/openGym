@@ -29,8 +29,13 @@ import { isoOf, todayISO } from './format.js'
 
 const num = v => (Number.isFinite(+v) && +v > 0 ? +v : null)
 const num0 = v => (Number.isFinite(+v) && +v > 0 ? +v : 0)
+// Counted in whole days back from the last finished one, not in milliseconds back from the
+// clock. Measured against `now`, a window opened at three in the afternoon excludes the day
+// exactly N days ago — its noon stamp falls three hours short — so "7d" showed six days and
+// "30d" twenty-nine. Nobody would have called that a bug; they would have quietly stopped
+// trusting the card.
 const inWindow = (iso, days, now) =>
-  !days || new Date(iso + 'T12:00:00').getTime() > now - days * 86400000
+  !days || dayNum(iso) > dayNum(lastFinished(now)) - days
 const dayNum = iso => new Date(iso + 'T12:00:00').getTime() / 86400000
 
 /**

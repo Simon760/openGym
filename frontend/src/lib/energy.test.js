@@ -552,3 +552,36 @@ describe('recordCalibration', () => {
     expect(calibration(s).blame).toBe('sport')
   })
 })
+
+describe('a window of N days holds N days', () => {
+  // Measured in milliseconds back from the clock, a window opened in the afternoon dropped
+  // the day exactly N days ago — its noon stamp fell hours short of the cutoff. "7d" showed
+  // six days. Nobody would have filed that as a bug; they would have stopped trusting the card.
+  const st = S({
+    tdee: 2300,
+    nutrition: Array.from({ length: 40 }, (_, i) => ({ d: day(-i), kcal: 1900 }))
+  })
+
+  it('counts whole finished days, whatever time of day it is asked', () => {
+    for (const hour of [0, 9, 15, 23]) {
+      const now = Date.UTC(2026, 0, 2, hour)      // "today" is day(1); yesterday is day(0)
+      for (const days of [7, 30]) {
+        const t = deficitTotals(st, 2300, days, now)
+        expect(t.days, `${days}d at ${hour}h`).toBe(days)
+        expect(t.to, `${days}d at ${hour}h`).toBe(day(0))
+        expect(t.from, `${days}d at ${hour}h`).toBe(day(1 - days))
+      }
+    }
+  })
+
+  it('still leaves today out of it', () => {
+    const t = deficitTotals(st, 2300, 7, Date.UTC(2026, 0, 2, 15))
+    expect(t.to).toBe(day(0))
+    expect(t.to < isoOf(new Date(Date.UTC(2026, 0, 2, 15)))).toBe(true)
+  })
+
+  it('takes everything when no window is asked for', () => {
+    // day(0) back to day(-39): forty entries, every one of them already finished
+    expect(deficitTotals(st, 2300, 0, Date.UTC(2026, 0, 2, 15)).days).toBe(40)
+  })
+})
