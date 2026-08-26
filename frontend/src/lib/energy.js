@@ -175,7 +175,7 @@ export function neatFor(S, iso, tdee = S && S.tdee, now = Date.now()) {
    count is a broken sensor rather than a long walk. Fifty thousand steps is about forty
    kilometres; a figure above it has never been walked, it has been miscounted, and charging
    it would wreck a month of totals in one row. */
-export const STEP_BASE = 8500
+export const STEP_BASE = 9000
 export const STEP_MAX = 50000
 export const stepBaseOf = S => {
   const n = num(S && S.tdee && S.tdee.stepBase)
@@ -206,14 +206,17 @@ export function dayNEAT(S, iso, tdee = S && S.tdee) {
 }
 
 /**
- * What a day of unusual movement adds to its own expenditure — and it only ever adds.
+ * What a day's own movement adds to, or takes off, its own expenditure.
  *
- * The entered NEAT is a floor, not an estimate to be second-guessed. A day spent at a desk
- * still costs the figure that was entered: a maintenance that drops because the pedometer
- * was in the other trousers is a maintenance nobody can plan against. But a day that walked
- * eleven kilometres really did cost more, and there is no reason to pretend otherwise.
+ * The maintenance figure is a weekly average, not a daily fact: it assumes a certain number
+ * of steps a day. A day that beat that assumption really did cost more; a day that fell
+ * short really did cost less. Both directions, because the arithmetic is the same arithmetic
+ * and only counting the flattering half would bias every total upward.
  *
- * So: the surplus over the entered NEAT, and nothing when there is no surplus.
+ * The one thing that is never guessed is a day nobody measured. No step count and no NEAT
+ * figure means no adjustment at all: not a penalty, not a credit — the day is charged the
+ * entered total. An absent pedometer is not a sedentary day, and a maintenance that sags
+ * whenever the phone stayed on the desk is a maintenance nobody can plan against.
  *
  * This composes exactly with the subtraction sportKcal makes from a whole-day watch reading,
  * which is worth spelling out because it looks like double counting and is not. Where a day
@@ -225,8 +228,16 @@ export function neatBonus(S, iso, tdee = S && S.tdee) {
   const p = tdeeParts(tdee)
   const d = p && dayNEAT(S, iso, tdee)
   if (!d) return { kcal: 0, from: null, dayKcal: null }
-  return { kcal: Math.max(0, d.kcal - p.neat), from: d.from, dayKcal: d.kcal, steps: d.steps, base: d.base }
+  return { kcal: d.kcal - p.neat, from: d.from, dayKcal: d.kcal, steps: d.steps, base: d.base }
 }
+
+/* Whether a day with no session on it gives back the training the maintenance figure budgets
+   for. Strictly it should: a figure that contains 230 kcal of smoothed training describes a
+   day that trained. In practice that correction and the watch discount are two errors of
+   opposite sign, and cancelling them against each other has held closer to the scale than
+   applying either alone — so the honest default is off, and this switch is here to be turned
+   on once there are enough weigh-ins to say which way the model actually errs. */
+export const restStrictOf = S => !!(S && S.restStrict)
 
 /**
  * What training actually cost on a given day, and where the figure came from — the source
@@ -322,10 +333,14 @@ export function dayBalance(S, iso, tdee = S.tdee, trim, now = Date.now()) {
   const e = entryFor(S, iso)
   const intake = num(e && e.kcal)
   const sp = sportKcal(S, iso, trim != null ? trim : trimOf(S), tdee, now)
-  const delta = sp.kcal - p.sport
-  // The entered maintenance is a floor and is charged whole, every day. What a day of
-  // unusual movement adds sits on top of it and never digs into it: 8 500 steps is what the
-  // figure already pays for, 12 000 costs more, 3 000 costs the same.
+  // Only a session somebody actually measured moves the training term. A rest day, a session
+  // logged with no figure on it, a day from before any of this was recorded — none of those
+  // is evidence about what training cost, and charging them the budget back would be a guess
+  // dressed as arithmetic. Strict mode makes a rest day give the budget back, for a profile
+  // whose maintenance figure genuinely describes a training day.
+  const measured = sp.source === 'session' || sp.source === 'watch'
+  const delta = measured ? sp.kcal - p.sport
+    : (sp.source === 'rest' && restStrictOf(S) ? -p.sport : 0)
   const bonus = neatBonus(S, iso, tdee)
   const out = p.total + delta + bonus.kcal
   return {
@@ -348,6 +363,7 @@ export function dayBalance(S, iso, tdee = S.tdee, trim, now = Date.now()) {
     trim: sp.trim,
     sportSource: sp.source,
     delta,
+    measured,
     out,
     intake: intake == null ? null : Math.round(intake),
     deficit: intake == null ? null : Math.round(out - intake)
@@ -378,7 +394,11 @@ export function deficitTotals(S, tdee = S.tdee, days = 0, now = Date.now(), thro
   const p = tdeeParts(tdee)
   if (!p) return null
   const end = through || lastFinished(now)
+  // Sorted here rather than trusted: `from`, `to` and `span` are read off the ends of this
+  // list, and a state that arrived newest-first — an import, a database round trip — would
+  // otherwise report a negative span and a reversed date range with no other symptom.
   const list = (S.nutrition || []).filter(e => num(e.kcal) != null && e.d <= end && inWindow(e.d, days, now))
+    .sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : 0))
   if (!list.length) return null
 
   let nutrition = 0, sportDelta = 0, sportLogged = 0, unmeasured = 0, untracked = 0, plannedDays = 0, neatDays = 0
@@ -386,20 +406,20 @@ export function deficitTotals(S, tdee = S.tdee, days = 0, now = Date.now(), thro
   list.forEach(e => {
     const b = dayBalance(S, e.d, tdee)
     nutrition += b.tdee - b.intake
-    // Movement above what the maintenance figure already pays for. Its own term, because it
-    // belongs to neither of the other two: it is not eating, and it is not training.
+    // Movement measured against what the maintenance figure already assumes. Its own term,
+    // because it belongs to neither of the other two: it is not eating, and it is not
+    // training. It runs in both directions, so it is summed and not counted.
     bonus += b.bonus
-    if (b.bonus > 0) bonusDays++
+    if (b.bonus !== 0) bonusDays++
     // Days where the import's own movement figure is what came off a whole-day burn. Not
     // every day carrying a NEAT figure — only the ones where it changed an answer.
     if (b.neatFrom === 'day' || b.neatFrom === 'steps') neatDays++
     sportLogged += b.sport
-    // A day that says nothing about training contributes nothing to the training total. It
-    // is not a day of no training, and treating it as one would charge it a whole budget.
-    if (b.sportSource === 'unknown') { untracked++; return }
+    // Whatever the day's own arithmetic charged, so the total and the chart cannot disagree.
     sportDelta += b.delta
-    plannedDays++
-    if (b.sportSource === 'missing') unmeasured++
+    if (b.measured) plannedDays++
+    else if (b.sportSource === 'missing') unmeasured++
+    else if (b.sportSource === 'unknown') untracked++
   })
   const total = nutrition + sportDelta + bonus
   const from = list[0].d, to = list[list.length - 1].d
@@ -412,9 +432,9 @@ export function deficitTotals(S, tdee = S.tdee, days = 0, now = Date.now(), thro
     bonus: Math.round(bonus),
     bonusDays,
     sportLogged: Math.round(sportLogged),
-    // Against the days the budget could actually be held to, not every day in the window:
-    // "5 352 measured against 30 590 assumed" is only a fair comparison when the 30 590 was
-    // assumed over days that had something to say.
+    // Against the days a session was actually measured, not every day in the window: "5 352
+    // measured against 30 590 assumed" is only a fair comparison when the 30 590 was assumed
+    // over days that had something to say.
     sportPlanned: Math.round(p.sport * plannedDays),
     plannedDays,
     untracked,
@@ -426,6 +446,77 @@ export function deficitTotals(S, tdee = S.tdee, days = 0, now = Date.now(), thro
     perDay: Math.round(total / list.length),
     kg: Math.round((total / KCAL_PER_KG_FAT) * 100) / 100,
     unmeasured
+  }
+}
+
+/* ------------------------------------------------------- what the scale should say -- */
+
+/**
+ * The weight the deficit says you are at now, counted forward from the last time you actually
+ * stood on the scale.
+ *
+ * Forward from the *last* weigh-in, and never chained across several: 7 700 kcal per kilo is
+ * an approximation that errs one way, so every day it runs adds a little more error in the
+ * same direction. Anchored to a fresh measurement it is a useful week-long tendency; run for
+ * three months off one old reading it is fiction with a decimal point.
+ *
+ * `gaps` is how many days in that stretch logged no intake. Those days contribute nothing,
+ * so a projection with gaps in it understates the deficit and reads high — which is worth
+ * knowing before trusting the figure to a hundred grams.
+ */
+export function projectedWeight(S, tdee = S && S.tdee, now = Date.now()) {
+  const weighIns = (S.bodyweight || []).filter(b => num(b.w) != null).sort((a, b) => (a.d < b.d ? -1 : 1))
+  const last = weighIns[weighIns.length - 1]
+  if (!last || !tdeeParts(tdee)) return null
+  const end = lastFinished(now)
+  if (last.d >= end) return { from: last.d, fromKg: num(last.w), kg: num(last.w), days: 0, span: 0, deficit: 0, gaps: 0 }
+  const days = (S.nutrition || []).filter(e => num(e.kcal) != null && e.d > last.d && e.d <= end)
+  let deficit = 0
+  days.forEach(e => { const b = dayBalance(S, e.d, tdee, undefined, now); if (b && b.deficit != null) deficit += b.deficit })
+  const span = Math.round(dayNum(end) - dayNum(last.d))
+  const kg = num(last.w) - deficit / KCAL_PER_KG_FAT
+  return {
+    from: last.d, fromKg: num(last.w),
+    days: days.length, span, gaps: Math.max(0, span - days.length),
+    deficit: Math.round(deficit),
+    kg: Math.round(kg * 100) / 100,
+    change: Math.round((kg - num(last.w)) * 100) / 100
+  }
+}
+
+/* How fast a cut is actually running, in the bands that decide whether it is working.
+   Contiguous by construction: a rate falls in exactly one of them. */
+export const CUT_BANDS = [
+  { max: 300, key: 'slow' },
+  { max: 400, key: 'gentle' },
+  { max: 500, key: 'optimal' },
+  { max: 600, key: 'high' },
+  { max: 700, key: 'steep' },
+  { max: Infinity, key: 'excessive' }
+]
+
+/* Garthe 2011: above about 0.7 % of bodyweight a week, the lean mass a lifter gains is
+   cancelled out. A share and not a number, because 0.55 kg a week is a different proposition
+   at 60 kg than at 95. */
+export const LOSS_CEILING_PCT = 0.007
+
+/**
+ * The rate this cut is running at, against the rate this body can afford. Null until there is
+ * both a deficit to read and a weight to scale the ceiling to — a ceiling in kilograms that
+ * does not know whose kilograms is worse than no ceiling.
+ */
+export function cutRate(S, tdee = S && S.tdee, days = 0, now = Date.now()) {
+  const tot = deficitTotals(S, tdee, days, now)
+  if (!tot) return null
+  const bw = ((S.bodyweight || []).filter(b => num(b.w) != null).sort((a, b) => (a.d < b.d ? -1 : 1)).pop() || {}).w
+  const kgPerWeek = Math.round((tot.perDay * 7 / KCAL_PER_KG_FAT) * 100) / 100
+  const band = CUT_BANDS.find(b => tot.perDay < b.max) || CUT_BANDS[CUT_BANDS.length - 1]
+  const ceilingKg = num(bw) == null ? null : Math.round(num(bw) * LOSS_CEILING_PCT * 100) / 100
+  return {
+    perDay: tot.perDay, kgPerWeek, band: band.key,
+    bodyKg: num(bw), ceilingKg,
+    ceilingPerDay: ceilingKg == null ? null : Math.round(ceilingKg * KCAL_PER_KG_FAT / 7),
+    overCeiling: ceilingKg != null && kgPerWeek > ceilingKg
   }
 }
 

@@ -137,29 +137,35 @@ describe('a NEAT column, day by day', () => {
     expect(sportKcal(seen, D(15), 0.28, seen.tdee, NOW).kcal).toBe(Math.round(1000 * 0.72) - Math.round(400 * 0.72))
   })
 
-  it('never moves the day’s maintenance — that figure is charged flat', () => {
-    // The entered total is a floor. A day that barely moved still costs it; a NEAT column
-    // reading below it takes nothing away.
-    for (const neat of [300, 100, null]) {
+  it('never moves the entered maintenance figure itself', () => {
+    // Whatever a day did, the figure in the settings stays the figure in the settings. What
+    // the day did shows up beside it as its own term, where it can be read and checked.
+    for (const neat of [700, 300, null]) {
       const S = { ...base(), nutrition: [{ d: D(15), kcal: 2000 }],
         health: neat == null ? [] : [{ d: D(15), neat }] }
       const b = dayBalance(S, D(15), S.tdee, 0, NOW)
       expect(b.tdee, String(neat)).toBe(2500)
       expect(b.parts.neat, String(neat)).toBe(450)
-      expect(b.bonus, String(neat)).toBe(0)
-      expect(b.deficit, String(neat)).toBe(2500 - 350 - 2000)   // no sport: the planned 350 comes off
     }
   })
 
-  it('adds the surplus over the entered figure, and only the surplus', () => {
+  it('runs in both directions once a day says what it did', () => {
     const day = neat => dayBalance(
       { ...base(), nutrition: [{ d: D(15), kcal: 2000 }], health: [{ d: D(15), neat }] },
       D(15), base().tdee, 0, NOW)
     expect(day(700).bonus).toBe(250)          // 700 − 450
-    expect(day(700).tdee).toBe(2500)          // the maintenance itself has not moved
-    expect(day(700).out).toBe(2500 - 350 + 250)
+    expect(day(700).out).toBe(2500 + 250)     // nothing measured the training, so no delta
     expect(day(450).bonus).toBe(0)
-    expect(day(200).bonus).toBe(0)            // never negative
+    expect(day(200).bonus).toBe(-250)         // a quieter day really did cost less
+    expect(day(200).out).toBe(2500 - 250)
+  })
+
+  it('says nothing at all about a day nobody measured', () => {
+    // The one asymmetry, and the important one: an absent pedometer is not a sedentary day.
+    const S = { ...base(), nutrition: [{ d: D(15), kcal: 2000 }], health: [] }
+    const b = dayBalance(S, D(15), S.tdee, 0, NOW)
+    expect(b.bonus).toBe(0)
+    expect(b.out).toBe(2500)
   })
 
   it('reports only the days where the column actually decided something', () => {
@@ -232,13 +238,31 @@ describe('walking above what the figure already pays for', () => {
     expect(dayNEAT(S(17000), D(15), S().tdee).kcal).toBe(900)
   })
 
-  it('adds the surplus, and nothing at 8 500 or below', () => {
-    expect(bal(12000).bonus).toBe(Math.round((12000 - 8500) / 8500 * 450))   // 185
+  it('adds above the baseline, subtracts below it, and says nothing without a count', () => {
+    expect(bal(12000).bonus).toBe(Math.round((12000 - 8500) / 8500 * 450))   // +185
     expect(bal(12000).tdee).toBe(2500)                                       // untouched
-    expect(bal(12000).out).toBe(2500 - 350 + 185)
+    expect(bal(12000).out).toBe(2500 + 185)   // nothing measured the training, so no delta
     expect(bal(8500).bonus).toBe(0)
-    expect(bal(3000).bonus).toBe(0)
-    expect(bal(null).bonus).toBe(0)
+    expect(bal(3000).bonus).toBe(Math.round((3000 - 8500) / 8500 * 450))     // −291
+    expect(bal(null).bonus).toBe(0)                                          // not measured
+  })
+
+  it('matches the reference table for this profile', () => {
+    // 1723 BMR + 270 NEAT + 80 TEF + 230 smoothed sport = 2 303, and 270 kcal buys 9 000
+    // steps — which is 0.03 kcal a step, the net figure rather than the gross one.
+    const P = { bmr: 1723, neat: 270, other: 80, sport: 230, stepBase: 9000 }
+    const at = steps => dayBalance(
+      { watchTrim: 0, tdee: P, workouts: [], bodyweight: [], nutrition: [{ d: D(15), kcal: 2000 }],
+        health: steps == null ? [] : [{ d: D(15), steps }] }, D(15), P, 0, NOW)
+    expect(at(null).bonus).toBe(0)
+    expect(at(3000).bonus).toBe(-180)
+    expect(at(6000).bonus).toBe(-90)
+    expect(at(9000).bonus).toBe(0)
+    expect(at(10000).bonus).toBe(30)
+    expect(at(12000).bonus).toBe(90)
+    expect(at(15000).bonus).toBe(180)
+    expect(at(20000).bonus).toBe(330)
+    expect(at(30000).bonus).toBe(630)
   })
 
   it('honours a step baseline of your own', () => {
@@ -275,5 +299,49 @@ describe('walking above what the figure already pays for', () => {
     const tot = deficitTotals(S(12000), S().tdee, 0, NOW)
     expect(tot.nutrition + tot.sportDelta + tot.bonus).toBe(tot.total)
     expect(tot.bonusDays).toBe(1)
+  })
+})
+
+describe('the whole model, on the profile it was specified for', () => {
+  // 1723 BMR + 270 NEAT + 80 TEF + 230 smoothed sport = 2 303, 9 000 steps, watch at 0.72.
+  const P = { bmr: 1723, neat: 270, other: 80, sport: 230, stepBase: 9000 }
+  const S = over => ({ watchTrim: 0.28, tdee: P, workouts: [], bodyweight: [], health: [],
+    nutrition: [{ d: D(15), kcal: 1851 }], ...over })
+
+  it('works the reference day through end to end', () => {
+    // 24/08: 1 851 eaten, steps not logged, a push session the watch read at 420.
+    const st = S({ workouts: [{ d: D(15), id: 'w', name: 'Push', watch: { kcal: 420 } }] })
+    const b = dayBalance(st, D(15), P, 0.28, NOW)
+    expect(b.bonus).toBe(0)               // steps not logged: nothing assumed either way
+    expect(b.sport).toBe(302)             // 420 x 0.72
+    expect(b.delta).toBe(72)              // against the 230 the figure already contains
+    expect(b.out).toBe(2375)              // the spec says 2 372, off by the 2 303/2 300 rounding
+    expect(b.deficit).toBe(2375 - 1851)
+  })
+
+  it('charges a rest day the entered figure, and a strict profile the figure less its sport', () => {
+    const rest = S({ workouts: [{ d: D(11), id: 'a' }, { d: D(13), id: 'b' }] })
+    expect(dayBalance(rest, D(15), P, 0.28, NOW)).toMatchObject({ sportSource: 'rest', delta: 0, out: 2303 })
+    expect(dayBalance({ ...rest, restStrict: true }, D(15), P, 0.28, NOW))
+      .toMatchObject({ delta: -230, out: 2073 })
+  })
+
+  it('reads a small session as the loss it is', () => {
+    // 250 on the watch is 180 real, against 230 already budgeted: the day cost 50 less.
+    const st = S({ workouts: [{ d: D(15), id: 'w', watch: { kcal: 250 } }] })
+    expect(dayBalance(st, D(15), P, 0.28, NOW)).toMatchObject({ sport: 180, delta: -50, out: 2253 })
+  })
+
+  it('stacks the two terms on a long day with a long session', () => {
+    // The Agung hike: 2 270 on the watch, 15 000 steps.
+    const st = S({
+      workouts: [{ d: D(15), id: 'w', watch: { kcal: 2270 } }],
+      health: [{ d: D(15), steps: 15000 }]
+    })
+    const b = dayBalance(st, D(15), P, 0.28, NOW)
+    expect(b.sport).toBe(1634)            // 2 270 x 0.72
+    expect(b.delta).toBe(1404)
+    expect(b.bonus).toBe(180)             // 6 000 steps over the 9 000 assumed
+    expect(b.out).toBe(2303 + 1404 + 180)
   })
 })

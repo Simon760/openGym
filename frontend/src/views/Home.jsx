@@ -7,7 +7,7 @@ import { t, dateLocale } from '../lib/i18n.js'
 import { bwSheet, goalSheet, dayOverrideSheet, workoutDetailSheet, calendarSheet, startFlow, loadStarterPlan, bwDeltaColor, nutriSheet, nutriGoalSheet, digestSheet, openPendingProgram, discardPendingProgram, sleepSheet, tdeeSheet, watchSheet } from '../sheets.jsx'
 import { entryFor, kcalFromMacros, macroSplit, remainingOf, MACROS, MACRO_NAME, MACRO_COLOR } from '../lib/nutrition.js'
 import { composition, sleepFor, lastSleep, sleepHours, whenOf, sinceStart, bwAsOf } from '../lib/body.js'
-import { dayBalance } from '../lib/energy.js'
+import { dayBalance, projectedWeight } from '../lib/energy.js'
 import LineChart from '../components/LineChart.jsx'
 import Icon from '../components/Icon.jsx'
 import { Button } from '../components/ui.jsx'
@@ -58,6 +58,7 @@ export default function Home() {
 
   const comp = composition(bw)
   const journey = sinceStart(S)
+  const proj = projectedWeight(S)
   const daySleep = sleepFor(S, iso)
   const lastNight = daySleep || (isToday ? lastSleep(S) : null)
   const todayNutri = entryFor(S, iso)
@@ -211,6 +212,20 @@ export default function Home() {
             <span>{t('{0} since {1}', (journey.kg > 0 ? '+' : '−') + fmtNum(Math.abs(journey.kg)) + ' ' + S.unit, fmtDate(journey.from.d, true))}</span>
           </div>
         )}
+        {/* Where the deficit says you are now, counted forward from the last real weigh-in
+            and never from an older one — 7 700 kcal a kilo errs one way, so every day it runs
+            unanchored adds error in the same direction. Shown only once it has days to speak
+            from, and captioned as a tendency, because the scale answers to glycogen water and
+            salt long before it answers to fat. */}
+        {proj && proj.days >= 2 && Math.abs(proj.change) >= 0.05 && (
+          <div className="small row" style={{ color: 'var(--label-2)', marginTop: 4, gap: 5 }}>
+            <Icon name="bolt" style={{ fontSize: 13 }} />
+            <span>
+              {t('≈ {0} today, on the {1} days logged since', fmtNum(proj.kg) + ' ' + S.unit, proj.days)}
+              {proj.gaps > 0 && ' · ' + t('{0} days unlogged, so it reads high', proj.gaps)}
+            </span>
+          </div>
+        )}
         {S.targetW && (
           <div className="small row" style={{ color: 'var(--yellow)', marginTop: 4, gap: 5 }}>
             <Icon name="target" style={{ fontSize: 13 }} />
@@ -284,9 +299,9 @@ export default function Home() {
             {/* Spelled out rather than folded into the maintenance figure: a day charged more
                 than the number in the settings has to say why, or the arithmetic stops
                 adding up on screen. */}
-            {balance.bonus > 0 && ' · ' + (balance.bonusFrom === 'steps'
-              ? t('+{0} for {1} steps', fmtNum(balance.bonus), fmtNum(balance.steps))
-              : t('+{0} of extra everyday movement', fmtNum(balance.bonus)))}
+            {balance.bonus !== 0 && ' · ' + (balance.bonusFrom === 'steps'
+              ? t('{0} for {1} steps', (balance.bonus > 0 ? '+' : '−') + fmtNum(Math.abs(balance.bonus)), fmtNum(balance.steps))
+              : t('{0} of everyday movement vs the usual', (balance.bonus > 0 ? '+' : '−') + fmtNum(Math.abs(balance.bonus))))}
           </div>
         </div>
         <div className="stat-v" style={{ color: balance.deficit >= 0 ? 'var(--acc)' : 'var(--orange)', flexShrink: 0 }}>

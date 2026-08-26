@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { EXIDX, exName } from '../lib/exercises.js'
 import { lastBW, streakWeeks, setLabel, modeOf, effortOf } from '../lib/history.js'
-import { fmtNum, fmtDate, fmtVol, todayISO, weekKey } from '../lib/format.js'
+import { fmtNum, fmtDate, fmtVol, todayISO, weekKey, fmtNum2 } from '../lib/format.js'
 import { t } from '../lib/i18n.js'
 import { bwSheet, goalSheet, calendarSheet, workoutDetailSheet, WorkoutRow, bwDeltaColor, nutriSheet, nutriGoalSheet, sleepSheet, tdeeSheet } from '../sheets.jsx'
 import LineChart from '../components/LineChart.jsx'
@@ -19,7 +19,7 @@ import {
 } from '../lib/effort.js'
 import { avgOver, seriesOf, MACROS, MACRO_NAME, MACRO_COLOR } from '../lib/nutrition.js'
 import { bodyFatSeries, compositionTrend, sleepSeries, sleepAverage, sleepDebt, lastComposition, whenOf } from '../lib/body.js'
-import { deficitTotals, deficitSeries, impliedTDEE, predictedVsActual, tdeeParts, KCAL_PER_KG_FAT } from '../lib/energy.js'
+import { deficitTotals, deficitSeries, impliedTDEE, predictedVsActual, projectedWeight, cutRate, tdeeParts, KCAL_PER_KG_FAT, LOSS_CEILING_PCT } from '../lib/energy.js'
 import { Button, Segmented, SelectRow } from '../components/ui.jsx'
 
 // Which muscles the training in a window actually hit — and, the point of the card,
@@ -188,6 +188,21 @@ function NutritionCard({ S }) {
 // eating created, the deficit training created, and the two together — all over the same set
 // of days, because a combined figure drawn from a wider day set than its parts is not a sum
 // of anything. See lib/energy.js for the model and for why the day set is the logged one.
+/* The bands a cut runs in, and the colour each one deserves. Green is not "good", it is
+   "this is the rate that keeps the muscle" — which is why both ends of the scale are warm. */
+const BAND_LABEL = {
+  slow: 'Slower than a cut needs to be',
+  gentle: 'Gentle — it will work, it will take a while',
+  optimal: 'The rate that keeps the most muscle',
+  high: 'Fast, and still defensible',
+  steep: 'Steeper than the evidence supports',
+  excessive: 'Too fast — this is muscle as well as fat'
+}
+const BAND_COLOR = {
+  slow: 'var(--yellow)', gentle: 'var(--teal)', optimal: 'var(--acc)',
+  high: 'var(--acc)', steep: 'var(--orange)', excessive: 'var(--red)'
+}
+
 function EnergyCard({ S }) {
   const [win, setWin] = useState(0)
   const tot = deficitTotals(S, S.tdee, win)
@@ -195,6 +210,8 @@ function EnergyCard({ S }) {
   const cmp = predictedVsActual(S, S.tdee, win)
   const implied = impliedTDEE(S, win)
   const tdee = tdeeParts(S.tdee)
+  const rate = cutRate(S, S.tdee, win)
+  const proj = projectedWeight(S, S.tdee)
 
   return <div className="card">
     <div className="row between" style={{ marginBottom: 8 }}>
@@ -231,9 +248,9 @@ function EnergyCard({ S }) {
               the deficit still has a bar and still reads as a size. */}
           <div style={{ marginTop: 12 }}>
             {[['nutrition', t('Eating'), 'var(--orange)'], ['sportDelta', t('Sport vs plan'), 'var(--blue)'],
-              ...(tot.bonus > 0 ? [['bonus', t('Walking above the usual'), 'var(--teal)']] : [])].map(([k, label, col]) => {
+              ...(tot.bonus !== 0 ? [['bonus', t('Walking vs the usual'), 'var(--teal)']] : [])].map(([k, label, col]) => {
               const v = tot[k]
-              const peak = Math.max(Math.abs(tot.nutrition), Math.abs(tot.sportDelta), tot.bonus) || 1
+              const peak = Math.max(Math.abs(tot.nutrition), Math.abs(tot.sportDelta), Math.abs(tot.bonus)) || 1
               return <div key={k} style={{ marginBottom: 8 }}>
                 <div className="row between small" style={{ marginBottom: 4 }}>
                   <span className="muted">{label}</span>
@@ -260,8 +277,8 @@ function EnergyCard({ S }) {
           </div>}
           {/* The third bar earns a sentence: it is the one term people do not expect, and a
               figure charged above the entered maintenance has to say where it came from. */}
-          {tot.bonus > 0 && <div className="dim small" style={{ lineHeight: 1.45 }}>
-            {t('{0} days moved more than your figure already pays for. Only the surplus counts — a quieter day is never charged less.', tot.bonusDays)}
+          {tot.bonus !== 0 && <div className="dim small" style={{ lineHeight: 1.45 }}>
+            {t('{0} days had a step count, and are charged what that count really cost — more on a long day, less on a quiet one. A day with no count is charged your figure exactly.', tot.bonusDays)}
           </div>}
           {/* Days where the import's own movement figure, not the usual baseline, is what came
               off a whole-day burn. Named, because a training figure derived from a different
@@ -280,6 +297,29 @@ function EnergyCard({ S }) {
 
           {pts.length > 1 && <div className="chart" style={{ marginTop: 10 }}>
             <LineChart points={pts} h={150} unit="kcal" color="var(--acc)" goal={0} />
+          </div>}
+
+          {/* How fast this is actually running. A deficit total says how much; only a rate
+              against a body says whether that much is the right much. */}
+          {rate && <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--sep)' }}>
+            <div className="row between" style={{ alignItems: 'flex-end', gap: 12 }}>
+              <div>
+                <div className="stat-v" style={{ color: BAND_COLOR[rate.band] }}>
+                  {fmtNum(Math.abs(rate.kgPerWeek))} <span className="muted" style={{ fontSize: '1rem' }}>kg / {t('week')}</span>
+                </div>
+                <div className="small dim" style={{ marginTop: 2 }}>{t(BAND_LABEL[rate.band])}</div>
+              </div>
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <div className="stat-v" style={{ fontSize: '1.15rem' }}>{fmtNum(rate.perDay)}</div>
+                <div className="small dim">{t('kcal a day')}</div>
+              </div>
+            </div>
+            {rate.ceilingKg != null && <div className={'small' + (rate.overCeiling ? '' : ' dim')}
+              style={{ marginTop: 6, lineHeight: 1.45, color: rate.overCeiling ? 'var(--orange)' : undefined }}>
+              {rate.overCeiling
+                ? t('Above {0} kg a week at {1} kg — past that the muscle a cut costs stops being paid back by the fat it takes off.', fmtNum2(rate.ceilingKg), fmtNum(rate.bodyKg))
+                : t('Under the {0} kg a week that {1} kg can afford.', fmtNum2(rate.ceilingKg), fmtNum(rate.bodyKg))}
+            </div>}
           </div>}
 
           {/* The one reading here that can tell you the maintenance figure is wrong. */}

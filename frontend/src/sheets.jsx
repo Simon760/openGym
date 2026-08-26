@@ -26,7 +26,7 @@ import { MOBILE, shareExport, shareText, canShareText } from './lib/mobile.js'
 import { entryFor, hasMacros, kcalFromMacros, derivedMismatch, remainingOf, putEntry, MACROS, MACRO_NAME } from './lib/nutrition.js'
 import { validBodyFat, composition, sleepFor, putSleep, validSleep, sleepHours, hoursBetween, validTime, BF_MIN, BF_MAX, SLEEP_MIN, SLEEP_MAX } from './lib/body.js'
 import { parseHealth, applyHealth, parseHealthCSV, applyHealthDays, shortcutRecipe, shortcutLink, historySpec } from './lib/health.js'
-import { impliedTDEE, tdeeParts, trimOf, stepBaseOf, TDEE_PARTS, TDEE_MIN, TDEE_MAX, TRIM_MAX, IMPLIED_MIN_SPAN, IMPLIED_MIN_DAYS, IMPLIED_MIN_WEIGHINS } from './lib/energy.js'
+import { impliedTDEE, tdeeParts, trimOf, stepBaseOf, restStrictOf, TDEE_PARTS, TDEE_MIN, TDEE_MAX, TRIM_MAX, IMPLIED_MIN_SPAN, IMPLIED_MIN_DAYS, IMPLIED_MIN_WEIGHINS } from './lib/energy.js'
 import { APP_NAME, FILE_PREFIX } from './lib/brand.js'
 
 const S = () => useStore.getState().S
@@ -393,6 +393,7 @@ function TdeeSheet({ close }) {
       : { bmr: 0, neat: 0, other: 0, sport: 0, stepBase: base }
   })
   const [trim, setTrim] = useState(() => Math.round(trimOf(st) * 100))
+  const [strict, setStrict] = useState(() => restStrictOf(st))
   const set = (k, n) => setV(o => ({ ...o, [k]: Math.round(n || 0) }))
   const total = TDEE_PARTS.reduce((a, k) => a + (v[k] || 0), 0)
   const parts = tdeeParts(v)
@@ -410,9 +411,9 @@ function TdeeSheet({ close }) {
   const FIELDS = [
     ['bmr', t('BMR'), t('What the body spends doing nothing at all.')],
     ['neat', t('NEAT'), t('Walking, standing, fidgeting — everything that is not a session.')
-      + ' ' + t('Charged in full every day and never less — a quiet day still costs this much.')],
+      + ' ' + t('What an ordinary day costs. A day whose steps you never logged is charged exactly this.')],
     ['other', t('Other'), t('Digestion, the cold, anything else you count separately.')],
-    ['sport', t('Sport already included'), t('Training the total above already contains — so a day you do not train is charged this much less. Leave it at 0 if your figure is what you burn on any day, training or not.')]
+    ['sport', t('Sport already included'), t('Training the total above already contains, smoothed over the week. A session you measured is counted against it: more than this adds to the day, less takes off. Leave it at 0 if your figure is what you burn on a day you do not train.')]
   ]
 
   return <>
@@ -431,9 +432,17 @@ function TdeeSheet({ close }) {
         <Stepper label={t('which is about')} unit={t('steps')} value={v.stepBase} step={500} decimal={false}
           onChange={n => setV(o => ({ ...o, stepBase: Math.max(1000, Math.min(40000, Math.round(n || 0))) }))} />
         <div className="dim small" style={{ margin: '2px 2px 0', lineHeight: 1.4 }}>
-          {t('Above this, the extra steps are added to that day’s expenditure — about {0} kcal per 1 000 steps. Below it nothing is taken away: a quiet day still costs the figure above.',
+          {t('About {0} kcal per 1 000 steps. A day above this line costs more, a day below it costs less — and a day whose steps you never logged costs exactly the figure above.',
             Math.round((v.neat / Math.max(1000, v.stepBase)) * 1000))}
         </div>
+        {/* 0.03 kcal a step is the net cost — what walking adds over lying still. The gross
+            figures published for step counters run 0.04 to 0.05 and already contain the
+            resting metabolism this profile counts separately as BMR. Entering one of those
+            here counts an hour of doing nothing twice. */}
+        {v.neat / Math.max(1000, v.stepBase) > 0.04 && <div className="small" style={{ margin: '6px 2px 0', lineHeight: 1.4, color: 'var(--yellow)' }}>
+          {t('That works out at {0} kcal a step. Net of resting metabolism a step costs nearer 0.03 — the higher figures printed on step counters already contain the BMR you counted above.',
+            (v.neat / Math.max(1000, v.stepBase)).toFixed(3))}
+        </div>}
       </div>}
     </div>)}
 
@@ -447,19 +456,34 @@ function TdeeSheet({ close }) {
         invisible until months of totals come out wrong. */}
     {v.sport > 0 && <>
       <div className="row between small" style={{ padding: '6px 2px 0' }}>
-        <span className="dim">{t('A day you do not train')}</span>
-        <b style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtNum(total - v.sport)} kcal</b>
+        <span className="dim">{t('A rest day')}</span>
+        <b style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtNum(strict ? total - v.sport : total)} kcal</b>
       </div>
       <div className="row between small" style={{ padding: '3px 2px 0' }}>
         <span className="dim">{t('A day trained as planned')}</span>
         <b style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtNum(total)} kcal</b>
       </div>
+      <div className="row between small" style={{ padding: '3px 2px 0' }}>
+        <span className="dim">{t('A day nothing measured')}</span>
+        <b style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtNum(total)} kcal</b>
+      </div>
       <div style={{ height: 10 }} />
       <Button icon="reset" onClick={() => setV(o => ({ ...o, other: (o.other || 0) + o.sport, sport: 0 }))}>
-        {t('My figure holds on rest days too')}
+        {t('My figure contains no training at all')}
       </Button>
       <div className="dim small" style={{ margin: '6px 2px 0', lineHeight: 1.45 }}>
-        {t('Moves the {0} kcal into Other. The total does not change, but a day without training stops costing less — and every training kcal you record is added on top of it instead.', fmtNum(v.sport))}
+        {t('Moves the {0} kcal into Other. The total does not change, but every training kcal you record is then added whole, instead of being counted against the {0} the figure assumed.', fmtNum(v.sport))}
+      </div>
+      {/* The same question the other way round, for a profile that wants to keep the smoothed
+          sport in the figure. Off by default: it and the watch discount are two corrections of
+          opposite sign, and turning on only one of them is how a model drifts. */}
+      <div style={{ height: 12 }} />
+      <div className="row between" style={{ gap: 12, padding: '2px 2px' }}>
+        <span style={{ minWidth: 0 }}>{t('Charge a rest day the {0} kcal less', fmtNum(v.sport))}</span>
+        <Switch checked={strict} onChange={setStrict} />
+      </div>
+      <div className="dim small" style={{ margin: '6px 2px 0', lineHeight: 1.45 }}>
+        {t('Strictly correct, and off by default. It and the watch discount below are two errors of opposite sign; turn this on once your weigh-ins say the predictions run heavy, not before.')}
       </div>
     </>}
 
@@ -468,6 +492,11 @@ function TdeeSheet({ close }) {
       onChange={n => setTrim(Math.max(0, Math.min(Math.round(TRIM_MAX * 100), Math.round(n || 0))))} />
     <div className="dim small" style={{ margin: '6px 2px 0', lineHeight: 1.45 }}>
       {t('Wrist devices are good at heart rate and poor at energy — they read it 20 to 40 % high, almost always high. Applied to every training figure, including the ones you type in and import, because those are read off a watch too. Zero trusts it as it comes.')}
+    </div>
+
+    <h4 className="sec">{t('What a projected weight is not')}</h4>
+    <div className="dim small" style={{ lineHeight: 1.5 }}>
+      {t('A projection is a tendency, not a measurement. The scale answers to glycogen water (a kilo or two, with the carbs), to salt (a gram of it holds about 100 ml), to whatever is still in transit, and to the swelling after a hard session — all of which move it further in a day than a week of deficit does. Only a weigh-in in constant conditions settles anything: on waking, before eating, after the bathroom, same scale.')}
     </div>
 
     {implied.tdee ? <>
@@ -503,6 +532,7 @@ function TdeeSheet({ close }) {
       update(s => {
         s.tdee = { bmr: parts.bmr, neat: parts.neat, other: parts.other, sport: parts.sport, stepBase: v.stepBase }
         s.watchTrim = Math.round(trim) / 100
+        s.restStrict = strict
       })
       close(); toast(t('Maintenance set'))
     }}>{t('Save')}</Button>

@@ -27,6 +27,10 @@ export const durPart = ms => (ms >= 60000 ? [fmtDur(ms)] : [])
 // The `|| 0` is not redundant: a rounded value can land on negative zero, and a chart axis
 // that prints "-0" next to "500" reads as a bug in the data rather than in the label.
 export const fmtNum = n => ((Math.round(n * 10) / 10) || 0).toLocaleString(dateLocale())
+// Two decimals, for a figure where rounding to one would move a limit in the wrong
+// direction: a 0.554 kg ceiling shown as "0.6" invites the reader over it.
+export const fmtNum2 = n => ((Math.round(n * 100) / 100) || 0)
+  .toLocaleString(dateLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 // Volume stays in the profile's unit throughout: the old shorthand turned anything over
 // 10 000 into "t", which is wrong for a pound profile and made one list mix "18.8t" with
 // "7'535 kg" — two numbers you can't compare at a glance.

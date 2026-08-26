@@ -128,12 +128,25 @@ describe('dayBalance', () => {
     })
   })
 
-  it('takes the day off the balance when the session was skipped', () => {
-    // the budget assumed 400 kcal of training that did not happen — the day cost that much
-    // less, and a deficit that ignored it would be 400 kcal of fiction
+  it('leaves a day nobody measured on its entered figure', () => {
+    // Strictly the budget assumed 400 kcal of training that did not happen. But nothing here
+    // measured that day either way, and charging the budget back is a guess dressed as
+    // arithmetic — so by default the day is charged what was entered, no more, no less.
     const st = S({ nutrition: [{ d: day(0), kcal: 1900 }] })
     expect(dayBalance(st, day(0), { bmr: 1700, neat: 400, sport: 400 }))
-      .toMatchObject({ delta: -400, out: 2100, deficit: 200 })
+      .toMatchObject({ delta: 0, measured: false, out: 2500, deficit: 600 })
+  })
+
+  it('gives the training budget back on a rest day when told to be strict about it', () => {
+    // For a profile whose maintenance figure genuinely describes a day that trained. Off by
+    // default because it and the watch discount are two errors of opposite sign.
+    const st = S({
+      restStrict: true,
+      nutrition: [{ d: day(0), kcal: 1900 }],
+      workouts: [{ d: day(-2), id: 'a' }, { d: day(-4), id: 'b' }]   // the app was in use
+    })
+    expect(dayBalance(st, day(0), { bmr: 1700, neat: 400, sport: 400 }))
+      .toMatchObject({ delta: -400, sportSource: 'rest', out: 2100, deficit: 200 })
   })
 
   it('is a plain food-against-maintenance day when training went to plan', () => {
@@ -191,13 +204,14 @@ describe('deficitTotals', () => {
   it('carries the training that happened beside the training the figure assumed', () => {
     // with sport budgeted in, the deficit it creates lives inside `nutrition` — a card that
     // only had `sportDelta` would report zero training on a cut built entirely on training
-    // 600 active on day(1), 200 of it the NEAT the figure already budgets → 400 trained,
-    // against 200 budgeted on each of the three logged days.
+    // 600 active on day(1), 200 of it the NEAT the figure already budgets → 400 trained.
+    // Only that day was measured, so only that day is held to the 200 the figure assumes.
     const t = deficitTotals(st, { bmr: 1600, neat: 200, sport: 200 })
     expect(t.sportLogged).toBe(400)
-    expect(t.sportPlanned).toBe(600)       // 200 a day across the three logged days
-    expect(t.sportDelta).toBe(-200)
-    expect(t.nutrition + t.sportDelta).toBe(t.total)
+    expect(t.plannedDays).toBe(1)
+    expect(t.sportPlanned).toBe(200)
+    expect(t.sportDelta).toBe(200)         // 400 done against the 200 assumed of that day
+    expect(t.nutrition + t.sportDelta + t.bonus).toBe(t.total)
   })
 
   it('carries the days it speaks for, and the days it had to skip', () => {
@@ -342,14 +356,34 @@ describe('deficitTotals — days that say nothing about training', () => {
     expect(t.total).toBe(t.nutrition)
   })
 
-  it('still charges it to a day that really was a rest day', () => {
-    const trained = S({
-      ...st,
+  it('leaves a real rest day alone too, unless the profile asks for strictness', () => {
+    const withWorkouts = extra => S({
+      ...st, ...extra,
       workouts: days120.filter((_, i) => i % 3 === 0).map((d, i) => ({ d, id: 'w' + i }))
     })
-    const t = deficitTotals(trained, st.tdee, 0, Date.UTC(2026, 5, 1))
-    expect(t.untracked).toBe(0)               // the app was in use throughout
-    expect(t.sportDelta).toBeLessThan(0)      // and the budget went unspent
-    expect(t.sportPlanned).toBe(230 * t.plannedDays)
+    const loose = deficitTotals(withWorkouts({}), st.tdee, 0, Date.UTC(2026, 5, 1))
+    expect(loose.untracked).toBe(0)           // the app was in use throughout
+    expect(loose.sportDelta).toBe(0)          // but nothing measured a single session
+    expect(loose.sportPlanned).toBe(0)        // so nothing was held to the budget
+
+    const strict = deficitTotals(withWorkouts({ restStrict: true }), st.tdee, 0, Date.UTC(2026, 5, 1))
+    expect(strict.sportDelta).toBeLessThan(0)
+    expect(strict.total).toBeLessThan(loose.total)
+  })
+})
+
+describe('the totals do not trust the order they were handed', () => {
+  // An import, or a database round trip, can hand back a nutrition list newest-first. The
+  // period was read straight off the ends of it, so a reversed list reported a negative span
+  // and a date range running backwards — with nothing else wrong to give it away.
+  it('reads the same period whichever way round the log arrives', () => {
+    const nights = Array.from({ length: 10 }, (_, i) => ({ d: day(-i), kcal: 1900 }))
+    const asc = S({ nutrition: [...nights].reverse() })
+    const desc = S({ nutrition: nights })
+    const a = deficitTotals(asc, 2300, 0, Date.UTC(2026, 5, 1))
+    const b = deficitTotals(desc, 2300, 0, Date.UTC(2026, 5, 1))
+    expect(b.span).toBeGreaterThan(0)
+    expect(b.from < b.to).toBe(true)
+    expect(b).toEqual(a)
   })
 })
