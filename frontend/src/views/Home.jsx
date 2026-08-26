@@ -4,7 +4,7 @@ import { useStore } from '../store/useStore.js'
 import { effectiveRoutine, effectiveRoutineId, streakWeeks, lastBW, setsDoneActive } from '../lib/history.js'
 import { fmtNum, fmtDate, todayISO, isoOf, weekKey, DAYS } from '../lib/format.js'
 import { t, dateLocale } from '../lib/i18n.js'
-import { bwSheet, goalSheet, dayOverrideSheet, workoutDetailSheet, calendarSheet, startFlow, loadStarterPlan, bwDeltaColor, nutriSheet, nutriGoalSheet, digestSheet, openPendingProgram, discardPendingProgram, sleepSheet, tdeeSheet, watchSheet } from '../sheets.jsx'
+import { bwSheet, goalSheet, dayOverrideSheet, workoutDetailSheet, calendarSheet, startFlow, loadStarterPlan, bwDeltaColor, nutriSheet, nutriGoalSheet, digestSheet, openPendingProgram, discardPendingProgram, sleepSheet, tdeeSheet, watchSheet, projectionSheet } from '../sheets.jsx'
 import { entryFor, kcalFromMacros, macroSplit, remainingOf, MACROS, MACRO_NAME, MACRO_COLOR } from '../lib/nutrition.js'
 import { composition, sleepFor, lastSleep, sleepHours, whenOf, sinceStart, bwAsOf } from '../lib/body.js'
 import { dayBalance, projectedWeight } from '../lib/energy.js'
@@ -218,12 +218,14 @@ export default function Home() {
             from, and captioned as a tendency, because the scale answers to glycogen water and
             salt long before it answers to fat. */}
         {proj && proj.days >= 2 && Math.abs(proj.change) >= 0.05 && (
-          <div className="small row" style={{ color: 'var(--label-2)', marginTop: 4, gap: 5 }}>
+          <div className="small row" style={{ color: 'var(--label-2)', marginTop: 4, gap: 5, cursor: 'pointer' }}
+            onClick={e => { e.stopPropagation(); projectionSheet() }}>
             <Icon name="bolt" style={{ fontSize: 13 }} />
             <span>
               {t('≈ {0} today, on the {1} days logged since', fmtNum(proj.kg) + ' ' + S.unit, proj.days)}
               {proj.gaps > 0 && ' · ' + t('{0} days unlogged, so it reads high', proj.gaps)}
             </span>
+            <Icon name="chevronRight" style={{ fontSize: 11, opacity: .5 }} />
           </div>
         )}
         {S.targetW && (

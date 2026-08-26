@@ -469,14 +469,16 @@ export function projectedWeight(S, tdee = S && S.tdee, now = Date.now()) {
   const last = weighIns[weighIns.length - 1]
   if (!last || !tdeeParts(tdee)) return null
   const end = lastFinished(now)
-  if (last.d >= end) return { from: last.d, fromKg: num(last.w), kg: num(last.w), days: 0, span: 0, deficit: 0, gaps: 0 }
+  if (last.d >= end) return { from: last.d, to: last.d, fromKg: num(last.w), kg: num(last.w), days: 0, span: 0, deficit: 0, gaps: 0 }
   const days = (S.nutrition || []).filter(e => num(e.kcal) != null && e.d > last.d && e.d <= end)
   let deficit = 0
   days.forEach(e => { const b = dayBalance(S, e.d, tdee, undefined, now); if (b && b.deficit != null) deficit += b.deficit })
   const span = Math.round(dayNum(end) - dayNum(last.d))
   const kg = num(last.w) - deficit / KCAL_PER_KG_FAT
   return {
-    from: last.d, fromKg: num(last.w),
+    // `to` travels with it so a caller listing the days can stop where this stopped. A list
+    // that runs one day further than the figure it explains is a list that contradicts it.
+    from: last.d, to: end, fromKg: num(last.w),
     days: days.length, span, gaps: Math.max(0, span - days.length),
     deficit: Math.round(deficit),
     kg: Math.round(kg * 100) / 100,

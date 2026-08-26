@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import {
   validTDEE, tdeeParts, sportKcal, dayBalance, deficitTotals, impliedTDEE, predictedVsActual,
-  deficitSeries, trimOf, KCAL_PER_KG_FAT, TDEE_MIN, TDEE_MAX, WATCH_TRIM
-} from './energy.js'
+  deficitSeries, trimOf, KCAL_PER_KG_FAT, TDEE_MIN, TDEE_MAX, WATCH_TRIM, projectedWeight } from './energy.js'
+import { isoOf } from './format.js'
 
 const S = (over = {}) => ({ nutrition: [], health: [], workouts: [], bodyweight: [], watchTrim: 0, ...over })
 
@@ -385,5 +385,42 @@ describe('the totals do not trust the order they were handed', () => {
     expect(b.span).toBeGreaterThan(0)
     expect(b.from < b.to).toBe(true)
     expect(b).toEqual(a)
+  })
+})
+
+describe('projectedWeight', () => {
+  const DAYS = 12
+  const st = S({
+    tdee: { bmr: 1723, neat: 270, other: 80, sport: 230, stepBase: 9000 },
+    bodyweight: [{ d: day(-20), w: 80.4 }, { d: day(-DAYS), w: 79.5 }],
+    // day(1) is today under the NOW below, and is logged — so the cutoff has something to cut.
+    nutrition: Array.from({ length: DAYS + 2 }, (_, i) => ({ d: day(1 - i), kcal: 1900 })),
+    health: []
+  })
+  const NOW = Date.UTC(2026, 0, 2, 18)      // day(1), mid-afternoon
+
+  it('counts forward from the last weigh-in and stops at yesterday', () => {
+    const p = projectedWeight(st, st.tdee, NOW)
+    expect(p.from).toBe(day(-DAYS))
+    expect(p.fromKg).toBe(79.5)
+    expect(isoOf(new Date(NOW))).toBe(day(1))        // today is logged...
+    expect(p.to).toBe(day(0))                        // ...and is still left out
+    expect(p.days).toBe(DAYS)                        // day(-11) through day(0)
+  })
+
+  it('explains itself with exactly the days it counted', () => {
+    // The sheet lists every day in (from, to] — a list that ran one day further than the
+    // figure it explains would show a running total ending somewhere else.
+    const p = projectedWeight(st, st.tdee, NOW)
+    const listed = (st.nutrition || []).filter(e => e.d > p.from && e.d <= p.to)
+    expect(listed.length).toBe(p.days)
+    const sum = listed.reduce((a, e) => a + dayBalance(st, e.d, st.tdee, undefined, NOW).deficit, 0)
+    expect(Math.round(sum)).toBe(p.deficit)
+    expect(p.kg).toBe(Math.round((79.5 - p.deficit / KCAL_PER_KG_FAT) * 100) / 100)
+  })
+
+  it('names the days that logged nothing, since they drag it high', () => {
+    const holey = S({ ...st, nutrition: st.nutrition.filter((_, i) => i % 3) })
+    expect(projectedWeight(holey, st.tdee, NOW).gaps).toBeGreaterThan(0)
   })
 })

@@ -26,7 +26,7 @@ import { MOBILE, shareExport, shareText, canShareText } from './lib/mobile.js'
 import { entryFor, hasMacros, kcalFromMacros, derivedMismatch, remainingOf, putEntry, MACROS, MACRO_NAME } from './lib/nutrition.js'
 import { validBodyFat, composition, sleepFor, putSleep, validSleep, sleepHours, hoursBetween, validTime, BF_MIN, BF_MAX, SLEEP_MIN, SLEEP_MAX } from './lib/body.js'
 import { parseHealth, applyHealth, parseHealthCSV, applyHealthDays, shortcutRecipe, shortcutLink, historySpec } from './lib/health.js'
-import { impliedTDEE, tdeeParts, trimOf, stepBaseOf, restStrictOf, TDEE_PARTS, TDEE_MIN, TDEE_MAX, TRIM_MAX, IMPLIED_MIN_SPAN, IMPLIED_MIN_DAYS, IMPLIED_MIN_WEIGHINS } from './lib/energy.js'
+import { impliedTDEE, tdeeParts, trimOf, stepBaseOf, restStrictOf, projectedWeight, dayBalance, KCAL_PER_KG_FAT, TDEE_PARTS, TDEE_MIN, TDEE_MAX, TRIM_MAX, IMPLIED_MIN_SPAN, IMPLIED_MIN_DAYS, IMPLIED_MIN_WEIGHINS } from './lib/energy.js'
 import { APP_NAME, FILE_PREFIX } from './lib/brand.js'
 
 const S = () => useStore.getState().S
@@ -541,6 +541,100 @@ function TdeeSheet({ close }) {
   </>
 }
 export const tdeeSheet = () => ui().openSheet(close => <TdeeSheet close={close} />)
+
+/* ============================ the projection, day by day ============================ */
+/**
+ * Every day the projected weight is built from, with the arithmetic that produced it.
+ *
+ * A projection that disagrees with another calculation is worthless until you can see which
+ * day the two disagree on. Four terms decide each day and any one of them can be applied
+ * differently — the watch discount, the training a maintenance figure already contains, the
+ * step baseline, whether an unmeasured day is charged anything at all — so all four are
+ * printed, per day, with the running total beside them.
+ */
+function ProjectionSheet({ close }) {
+  const st = S()
+  const p = tdeeParts(st.tdee)
+  const proj = projectedWeight(st)
+  if (!proj || !p) return <>
+    <h3>{t('Projected weight')}</h3>
+    <div className="muted small">{t('It needs a weigh-in, and days logged after it.')}</div>
+  </>
+
+  const rows = (st.nutrition || [])
+    // Bounded at both ends by the projection's own range: today is still being lived and is
+    // not in the figure, so it must not be in the list that explains the figure either.
+    .filter(e => e.kcal != null && e.d > proj.from && e.d <= proj.to)
+    .sort((a, b) => (a.d < b.d ? -1 : 1))
+    .map(e => dayBalance(st, e.d, st.tdee))
+    .filter(b => b && b.deficit != null)
+  let run = 0
+
+  const SRC = { session: t('measured'), watch: t('day total'), missing: t('no figure'), rest: t('rest'), unknown: t('no record') }
+
+  return <>
+    <h3>{t('Projected weight')}</h3>
+    <div className="muted small" style={{ marginBottom: 12, lineHeight: 1.45 }}>
+      {t('{0} on {1}, then every day logged since. Each line is the day’s own arithmetic — no day is carried over into the next.',
+        fmtNum(proj.fromKg) + ' ' + st.unit, fmtDate(proj.from, true))}
+    </div>
+
+    <div style={{ overflowX: 'auto', margin: '0 -2px' }}>
+      <table className="small" style={{ width: '100%', borderCollapse: 'collapse', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+        <thead>
+          <tr style={{ color: 'var(--label-2)' }}>
+            {[t('Day'), t('Base'), t('Sport'), t('Steps'), t('Spent'), t('Eaten'), t('Deficit'), t('Total')].map((h, i) =>
+              <th key={i} style={{ textAlign: i ? 'right' : 'left', padding: '0 7px 6px 0', fontWeight: 600 }}>{h}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(b => {
+            run += b.deficit
+            const cell = { textAlign: 'right', padding: '5px 7px 5px 0', borderTop: '1px solid var(--sep-op)' }
+            return <tr key={b.d}>
+              <td style={{ ...cell, textAlign: 'left' }}>{fmtDate(b.d, true)}</td>
+              <td style={cell}>{fmtNum(b.tdee)}</td>
+              <td style={{ ...cell, color: b.delta ? (b.delta > 0 ? 'var(--acc)' : 'var(--orange)') : 'var(--label-2)' }}>
+                {b.delta ? (b.delta > 0 ? '+' : '−') + fmtNum(Math.abs(b.delta)) : '·'}
+                <span className="dim" style={{ fontSize: '.8em' }}> {SRC[b.sportSource] || ''}</span>
+              </td>
+              <td style={{ ...cell, color: b.bonus ? (b.bonus > 0 ? 'var(--acc)' : 'var(--orange)') : 'var(--label-2)' }}>
+                {b.bonus ? (b.bonus > 0 ? '+' : '−') + fmtNum(Math.abs(b.bonus)) : '·'}
+                {b.steps != null && <span className="dim" style={{ fontSize: '.8em' }}> {fmtNum(b.steps)}</span>}
+              </td>
+              <td style={cell}><b>{fmtNum(b.out)}</b></td>
+              <td style={cell}>{fmtNum(b.intake)}</td>
+              <td style={{ ...cell, color: b.deficit >= 0 ? 'var(--acc)' : 'var(--orange)' }}>{(b.deficit > 0 ? '+' : '') + fmtNum(b.deficit)}</td>
+              <td style={{ ...cell, color: 'var(--label-2)' }}>{fmtNum(run)}</td>
+            </tr>
+          })}
+        </tbody>
+      </table>
+    </div>
+
+    <h4 className="sec">{t('Which gives')}</h4>
+    <div className="small" style={{ fontVariantNumeric: 'tabular-nums', lineHeight: 1.9 }}>
+      <div className="row between"><span className="dim">{t('Deficit over {0} days', proj.days)}</span><b>{fmtNum(proj.deficit)} kcal</b></div>
+      <div className="row between"><span className="dim">{t('÷ {0} kcal a kilo', fmtNum(KCAL_PER_KG_FAT))}</span><b>{fmtNum(Math.round((proj.deficit / KCAL_PER_KG_FAT) * 100) / 100)} {st.unit}</b></div>
+      <div className="row between" style={{ borderTop: '1px solid var(--sep)', paddingTop: 4, marginTop: 4 }}>
+        <span className="dim">{fmtNum(proj.fromKg)} − {t('that')}</span><b style={{ color: 'var(--acc)' }}>{fmtNum(proj.kg)} {st.unit}</b>
+      </div>
+    </div>
+    {proj.gaps > 0 && <div className="small" style={{ color: 'var(--yellow)', marginTop: 10, lineHeight: 1.45 }}>
+      {t('{0} days in that stretch logged no food at all. They count for nothing, so this figure is higher than the truth.', proj.gaps)}
+    </div>}
+
+    <h4 className="sec">{t('If another calculation disagrees')}</h4>
+    <div className="dim small" style={{ lineHeight: 1.5 }}>
+      {t('Four rules decide each day, and a different answer means one of them was applied differently. Sport is counted against the {0} kcal your figure already contains, not added whole. A watch reading is discounted {1} % first. Steps move the day both ways from your {2}-step line. And a day nothing measured is charged your figure exactly — never less.',
+        fmtNum(p.sport), Math.round(trimOf(st) * 100), fmtNum(stepBaseOf(st)))}
+    </div>
+    <div style={{ height: 14 }} />
+    <Button variant="ghost" className="dim" onClick={close}>{t('Close')}</Button>
+  </>
+}
+
+export const projectionSheet = () => ui().openSheet(close => <ProjectionSheet close={close} />)
 
 /* ============================ exercise detail ============================ */
 // Estimated 1RM for one exercise (issue #18): what the log already implies, plus a calculator
