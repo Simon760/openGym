@@ -483,15 +483,15 @@ Ask for exactly this:
   Write my whole history as CSV, one row per day, oldest first.
   First line exactly:
 
-  Date,Intake kcal,Protein,Carbs,Fat,Sport kcal,NEAT kcal,Weight,Body fat,Steps,Bedtime,Wake time
+  Date,Intake kcal,Protein,Carbs,Fat,Sport kcal,Steps,Weight,Body fat,Bedtime,Wake time
 
   Rules:
   · Date as YYYY-MM-DD (2025-03-12)
   · Leave a cell EMPTY when the figure was never recorded that day — never write 0.
     A day with calories but no macros leaves Protein, Carbs and Fat empty. A day with no
     training leaves Sport kcal empty. Both are ordinary and both import fine.
-  · NEAT kcal is optional, day by day. An empty cell means "as usual", not "did not move".
-  · Intake, Sport and NEAT in kcal, macros in grams, weight in kg (78.4), body fat in %
+  · Steps as a plain count — 9420, not "9.4k". An empty cell means an ordinary day.
+  · Intake and Sport in kcal, macros in grams, weight in kg (78.4), body fat in %
   · Bedtime and Wake time as HH:MM
   · Drop any column you have no data for at all
 
@@ -507,12 +507,15 @@ step walked — and the walking is already inside your maintenance figure as NEA
 column gets it taken back off. Put a session figure under Sport kcal; only use Active energy
 for a whole-day reading off a watch.
 
-NEAT is the third figure, and the one nobody has to fill in: what the day cost outside
-training — the walking, the standing, the stairs. It is only ever used to take the walking
-back off an Active energy reading, so it changes nothing on a day whose only burn is a Sport
-kcal figure. It never moves your maintenance: a day is always charged the total you entered.
-Where the cell is empty your usual figure stands — an empty NEAT cell is never read as a day
-spent motionless.
+Steps are the column worth adding after those two, and a plain count is all that is wanted —
+no calories to work out. Your maintenance already pays for an ordinary day's walking, and you
+say once how many steps that is. A day that beat it really did cost more, so the surplus is
+added to that day. A day that fell short is charged exactly the same as always, never less:
+the entered figure is a floor, not a guess to be second-guessed by a pedometer that spent the
+afternoon in a coat pocket. An empty cell therefore costs nothing at all.
+
+(A NEAT kcal column is read too, if your export happens to have one, and it wins over the
+step count for that day. Nobody needs to produce one.)
 
 Paste it however it came out. A fenced code block, a Markdown table of pipes, a sentence above
 it, semicolons instead of commas — all four read the same. The one thing that breaks is a
