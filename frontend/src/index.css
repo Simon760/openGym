@@ -975,3 +975,8 @@ h4.sec{
 .mshare-b>i{display:block;height:100%;border-radius:99px;background:var(--acc)}
 .mshare-v{text-align:right;color:var(--label-2);font-variant-numeric:tabular-nums}
 .mshare-r.dim .mshare-n,.mshare-r.dim .mshare-v{color:var(--label-3)}
+
+/* The day the home screen is pointed at. Distinct from .today, which marks the actual date:
+   both can be true, and when they are not, the ring is what says which one you are reading. */
+.wday.sel .num{box-shadow:inset 0 0 0 2px var(--acc)}
+.wday.sel.today .num{box-shadow:none}

@@ -903,4 +903,6 @@ export default {
   'HR {0} rest': 'HR {0} rest',
   '{0} kcal': '{0} kcal',
   'Change what’s planned': 'Change what’s planned',
+  '{0} week streak (one)': '{0} week streak',
+  'Save for {0}': 'Save for {0}',
 }

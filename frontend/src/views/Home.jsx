@@ -4,9 +4,9 @@ import { useStore } from '../store/useStore.js'
 import { effectiveRoutine, effectiveRoutineId, streakWeeks, lastBW, setsDoneActive } from '../lib/history.js'
 import { fmtNum, fmtDate, todayISO, isoOf, weekKey, DAYS } from '../lib/format.js'
 import { t, dateLocale } from '../lib/i18n.js'
-import { bwSheet, goalSheet, dayOverrideSheet, daySheet, calendarSheet, startFlow, loadStarterPlan, bwDeltaColor, nutriSheet, nutriGoalSheet, digestSheet, openPendingProgram, discardPendingProgram, sleepSheet, tdeeSheet, watchSheet } from '../sheets.jsx'
+import { bwSheet, goalSheet, dayOverrideSheet, workoutDetailSheet, calendarSheet, startFlow, loadStarterPlan, bwDeltaColor, nutriSheet, nutriGoalSheet, digestSheet, openPendingProgram, discardPendingProgram, sleepSheet, tdeeSheet, watchSheet } from '../sheets.jsx'
 import { entryFor, kcalFromMacros, macroSplit, remainingOf, MACROS, MACRO_NAME, MACRO_COLOR } from '../lib/nutrition.js'
-import { composition, todaySleep, lastSleep, sleepHours, whenOf, sinceStart } from '../lib/body.js'
+import { composition, sleepFor, lastSleep, sleepHours, whenOf, sinceStart, bwAsOf } from '../lib/body.js'
 import { dayBalance } from '../lib/energy.js'
 import LineChart from '../components/LineChart.jsx'
 import Icon from '../components/Icon.jsx'
@@ -20,12 +20,22 @@ export default function Home() {
   const S = useStore(s => s.S)
   const user = useStore(s => s.user)
   const [weekOffset, setWeekOffset] = useState(0)
+  // Which day the whole page is showing. The cards are the same cards — a day in the past is
+  // not a different screen, it is this screen with that day's figures in it, and the same
+  // buttons for filling in what is missing.
+  const [sel, setSel] = useState(todayISO())
+  const iso = sel
+  const isToday = sel === todayISO()
 
   const today = new Date()
-  const routine = effectiveRoutine(S, todayISO())
-  const todayOvr = S.dayPlan[todayISO()] !== undefined
-  const bw = lastBW(S)
-  const prevBW = S.bodyweight.length > 1 ? S.bodyweight[S.bodyweight.length - 2] : null
+  const selDate = new Date(sel + 'T12:00:00')
+  const routine = effectiveRoutine(S, iso)
+  const todayOvr = S.dayPlan[iso] !== undefined
+  const dayW = (S.workouts || []).find(x => x.d === iso)
+  // The weight as that day could have known it: its own reading, or the last one before it.
+  const bw = bwAsOf(S, iso)
+  const bwIdx = bw ? S.bodyweight.findIndex(b => b.d === bw.d) : -1
+  const prevBW = bwIdx > 0 ? S.bodyweight[bwIdx - 1] : null
   const delta = bw && prevBW ? bw.w - prevBW.w : null
 
   const monday = new Date(today); monday.setDate(today.getDate() - ((today.getDay() + 6) % 7) + weekOffset * 7)
@@ -36,7 +46,7 @@ export default function Home() {
     const iso = isoOf(d)
     const eff = effectiveRoutineId(S, iso), ovr = S.dayPlan[iso] !== undefined, done = doneDays.has(iso)
     const dot = done ? ' done' : ovr && eff ? ' ovr' : eff ? ' plan' : ''
-    strip.push(<div key={i} className={'wday' + (iso === todayISO() ? ' today' : '')} onClick={() => daySheet(iso)}>
+    strip.push(<div key={i} className={'wday' + (iso === todayISO() ? ' today' : '') + (iso === sel ? ' sel' : '')} onClick={() => setSel(iso)}>
       <div className="lbl">{t(DAYS[d.getDay()])}</div><div className="num">{d.getDate()}</div><div className={'dot' + dot} /></div>)
   }
   const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6)
@@ -48,19 +58,18 @@ export default function Home() {
 
   const comp = composition(bw)
   const journey = sinceStart(S)
-  const sleptToday = todaySleep(S)
-  const lastNight = sleptToday || lastSleep(S)
-  const todayNutri = entryFor(S, todayISO())
+  const daySleep = sleepFor(S, iso)
+  const lastNight = daySleep || (isToday ? lastSleep(S) : null)
+  const todayNutri = entryFor(S, iso)
   const nutriLeft = remainingOf(todayNutri, S.nutriGoal)
   // Null unless there is both a maintenance figure and calories logged today — a balance
   // is a subtraction, and half of one is not worth a line on the card.
-  const bal = todayNutri ? dayBalance(S, todayISO()) : null
+  const bal = todayNutri ? dayBalance(S, iso) : null
   const balance = bal && bal.deficit != null ? bal : null
   const macroSplitToday = macroSplit(todayNutri)
 
-  // What the watch already gave today, as one line. Absent figures stay absent rather than
+  // What the watch gave that day, as one line. Absent figures stay absent rather than
   // reading as zero — a day nobody measured is not a day of no movement.
-  const iso = todayISO()
   const watchLine = (() => {
     const w = (S.workouts || []).find(x => x.d === iso && x.watch)
     const h = (S.health || []).find(x => x.d === iso)
@@ -77,11 +86,20 @@ export default function Home() {
   })()
 
   // today's session shown right under the week strip
-  const onToday = () => { if (S.active) nav('/workout'); else if (routine) startFlow(routine.id); else dayOverrideSheet(todayISO()) }
+    // Today: start what is planned. Any other day: it is history, so the row leads to what was
+  // done, or to changing what was planned for a day still ahead.
+  const onToday = () => {
+    if (dayW) return workoutDetailSheet(dayW)
+    if (!isToday) return dayOverrideSheet(iso)
+    if (S.active) return nav('/workout')
+    if (routine) return startFlow(routine.id)
+    dayOverrideSheet(iso)
+  }
 
   return <div className="narrow">
     <div className="hdr">
-      <div><h1>{user ? t('Hi {0}', user.name) : APP_NAME}</h1><div className="sub">{today.toLocaleDateString(dateLocale(), { weekday: 'long', day: 'numeric', month: 'long' })}</div></div>
+      <div><h1>{user ? t('Hi {0}', user.name) : APP_NAME}</h1><div className="sub">{selDate.toLocaleDateString(dateLocale(), { weekday: 'long', day: 'numeric', month: 'long' })}
+        {!isToday && <button className="tag acc" style={{ marginLeft: 8, border: 0 }} onClick={() => setSel(todayISO())}>{t('Today')}</button>}</div></div>
       <div className="row" style={{ gap: 8 }}>
         <button className="iconbtn" onClick={digestSheet} aria-label={t('Send to your coach')}><Icon name="clipboard" /></button>
         <button className="iconbtn" onClick={() => nav('/settings')} aria-label={t('Settings')}><Icon name="gear" /></button>
@@ -97,23 +115,26 @@ export default function Home() {
       <div className="week">{strip}</div>
       <div className="today-row" onClick={onToday}>
         <div className="row" style={{ gap: 9, minWidth: 0 }}>
-          <span className="lrow-i" style={{ background: S.active ? 'var(--orange)' : routine ? 'var(--acc)' : 'var(--surface-3)' }}>
-            <Icon name={S.active ? 'timer' : routine ? glyphOf(routine.emoji) : 'moon'} />
+          <span className="lrow-i" style={{ background: dayW ? 'var(--acc)' : isToday && S.active ? 'var(--orange)' : routine ? 'var(--acc)' : 'var(--surface-3)' }}>
+            <Icon name={dayW ? 'checkCircle' : isToday && S.active ? 'timer' : routine ? glyphOf(routine.emoji) : 'moon'} />
           </span>
           <div style={{ minWidth: 0 }}>
-            <div className="lbl2">{t('Today')}</div>
-            <div className="ttl">{S.active ? t('{0} — in progress', S.active.name) : routine ? routine.name : t('Rest day')}{todayOvr && routine ? ' · ' + t('rescheduled') : ''}</div>
+            <div className="lbl2">{isToday ? t('Today') : fmtDate(iso, true)}</div>
+            <div className="ttl">{dayW ? dayW.name
+              : isToday && S.active ? t('{0} — in progress', S.active.name)
+              : routine ? routine.name : t('Rest day')}{todayOvr && routine ? ' · ' + t('rescheduled') : ''}</div>
           </div>
         </div>
-        {S.active ? <span className="tag" style={{ color: 'var(--orange)', background: 'color-mix(in srgb,var(--orange) 16%,transparent)' }}>{t('Resume')}</span>
-          : routine ? <span className="tag acc">{t('Start')}</span>
+        {dayW ? <Icon name="chevronRight" className="chev" />
+          : isToday && S.active ? <span className="tag" style={{ color: 'var(--orange)', background: 'color-mix(in srgb,var(--orange) 16%,transparent)' }}>{t('Resume')}</span>
+          : isToday && routine ? <span className="tag acc">{t('Start')}</span>
           : <Icon name="plus" className="chev" />}
       </div>
 
       {/* What the watch measured today. It sits here, under the day it belongs to, because
           it is a daily gesture — buried at the bottom of an import screen in Settings it was
           a feature nobody would reach twice. */}
-      <div className="today-row" onClick={watchSheet}>
+      <div className="today-row wrap" onClick={() => watchSheet(iso)}>
         <div className="row" style={{ gap: 9, minWidth: 0 }}>
           <span className="lrow-i" style={{ background: watchLine ? 'var(--red)' : 'var(--surface-3)' }}><Icon name="flame" /></span>
           <div style={{ minWidth: 0 }}>
@@ -159,7 +180,7 @@ export default function Home() {
         <h2 style={{ margin: 0 }}>{t('Body weight')}</h2>
         <div className="row" style={{ gap: 8 }}>
           <Button size="sm" icon="target" style={S.targetW ? { color: 'var(--yellow)' } : undefined} onClick={goalSheet}>{S.targetW ? fmtNum(S.targetW) : t('Goal')}</Button>
-          <Button size="sm" icon="plus" onClick={() => bwSheet()}>{t('Log')}</Button>
+          <Button size="sm" icon="plus" onClick={() => bwSheet({ iso })}>{t('Log')}</Button>
         </div>
       </div>
       {bw ? <>
@@ -201,17 +222,17 @@ export default function Home() {
 
       {/* Sleep lives on this card rather than its own: it is the other thing your body did
           overnight, and a card holding a single number would push everything else down. */}
-      <div className="today-row" style={{ marginTop: 12 }} onClick={sleepSheet}>
+      <div className="today-row" style={{ marginTop: 12 }} onClick={() => sleepSheet(iso)}>
         <div className="row" style={{ gap: 9, minWidth: 0 }}>
-          <span className="lrow-i" style={{ background: sleptToday ? 'var(--indigo)' : 'var(--surface-3)' }}><Icon name="moon" /></span>
+          <span className="lrow-i" style={{ background: daySleep ? 'var(--indigo)' : 'var(--surface-3)' }}><Icon name="moon" /></span>
           <div style={{ minWidth: 0 }}>
             <div className="lbl2">{t('Last night')}</div>
             <div className="ttl">{lastNight
-              ? fmtNum(sleepHours(lastNight)) + ' h' + (lastNight.q ? ' · ' + lastNight.q + '/5' : '') + (sleptToday ? '' : ' · ' + fmtDate(lastNight.d, true))
+              ? fmtNum(sleepHours(lastNight)) + ' h' + (lastNight.q ? ' · ' + lastNight.q + '/5' : '') + (daySleep ? '' : ' · ' + fmtDate(lastNight.d, true))
               : t('Not logged')}</div>
           </div>
         </div>
-        {sleptToday ? <Icon name="chevronRight" className="chev" /> : <span className="tag acc">{t('Log')}</span>}
+        {daySleep ? <Icon name="chevronRight" className="chev" /> : <span className="tag acc">{t('Log')}</span>}
       </div>
     </div>
 
@@ -222,7 +243,7 @@ export default function Home() {
           <Button size="sm" icon="target" style={S.nutriGoal ? { color: 'var(--yellow)' } : undefined} onClick={nutriGoalSheet}>
             {S.nutriGoal?.kcal ? fmtNum(S.nutriGoal.kcal) : t('Goal')}
           </Button>
-          <Button size="sm" icon="plus" onClick={nutriSheet}>{t('Log')}</Button>
+          <Button size="sm" icon="plus" onClick={() => nutriSheet(iso)}>{t('Log')}</Button>
         </div>
       </div>
       {todayNutri ? <>
@@ -275,7 +296,7 @@ export default function Home() {
         <div>
           <div className="row" style={{ gap: 7, fontSize: 22, fontWeight: 600, letterSpacing: '-.021em' }}>
             <Icon name="flame" style={{ color: 'var(--orange)' }} />
-            {t('{0} week streak', streakWeeks(S))}
+            {streakWeeks(S) === 1 ? t('{0} week streak (one)', 1) : t('{0} week streak', streakWeeks(S))}
           </div>
           <div className="muted small" style={{ marginTop: 2 }}>{wThisWeek}{plannedPerWeek ? ' / ' + plannedPerWeek : ''} {t('this week')} · {t(S.workouts.length === 1 ? '{0} workout total' : '{0} workouts total', S.workouts.length)}</div>
         </div>

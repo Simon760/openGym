@@ -895,4 +895,6 @@ export default {
   'HR {0} rest': 'FC repos {0}',
   '{0} kcal': '{0} kcal',
   'Change what’s planned': 'Changer ce qui est prévu',
+  '{0} week streak (one)': 'série de {0} semaine',
+  'Save for {0}': 'Enregistrer pour le {0}',
 }

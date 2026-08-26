@@ -25,8 +25,8 @@ import { nextPrescription, applyPrescription, policyFor, defaultIncrement, POLIC
 import { MOBILE, shareExport, shareText, canShareText } from './lib/mobile.js'
 import { entryFor, hasMacros, kcalFromMacros, derivedMismatch, remainingOf, putEntry, MACROS, MACRO_NAME } from './lib/nutrition.js'
 import { validBodyFat, composition, sleepFor, putSleep, validSleep, sleepHours, hoursBetween, validTime, BF_MIN, BF_MAX, SLEEP_MIN, SLEEP_MAX } from './lib/body.js'
-import { parseHealth, applyHealth, healthFor, parseHealthCSV, applyHealthDays, shortcutRecipe, shortcutLink, historySpec } from './lib/health.js'
-import { impliedTDEE, tdeeParts, trimOf, dayBalance, TDEE_PARTS, TDEE_MIN, TDEE_MAX, TRIM_MAX, IMPLIED_MIN_SPAN, IMPLIED_MIN_DAYS, IMPLIED_MIN_WEIGHINS } from './lib/energy.js'
+import { parseHealth, applyHealth, parseHealthCSV, applyHealthDays, shortcutRecipe, shortcutLink, historySpec } from './lib/health.js'
+import { impliedTDEE, tdeeParts, trimOf, TDEE_PARTS, TDEE_MIN, TDEE_MAX, TRIM_MAX, IMPLIED_MIN_SPAN, IMPLIED_MIN_DAYS, IMPLIED_MIN_WEIGHINS } from './lib/energy.js'
 import { APP_NAME, FILE_PREFIX } from './lib/brand.js'
 
 const S = () => useStore.getState().S
@@ -92,7 +92,11 @@ function WeightInput({ value, setValue, unit }) {
 }
 
 /* ============================ body weight ============================ */
-function BwSheet({ onDone, close }) {
+/* Every one of these writes a day, and the day used to be today by convention rather than by
+ * decision — the home screen only ever showed today, so nothing else could ask. Now that it
+ * can be pointed at any day, the day is a parameter with today as its default: a missed
+ * Tuesday is filled in from the same sheet, in the same place, rather than not at all. */
+function BwSheet({ onDone, close, iso = todayISO() }) {
   const st = useStore(s => s.S)
   const unit = st.unit
   const bw = lastBW(st)
@@ -100,7 +104,7 @@ function BwSheet({ onDone, close }) {
   // Body fat rides on the weigh-in because that is how a scale reports it — one reading,
   // one entry. Optional: leaving it at zero writes a weigh-in exactly as before.
   const [bf, setBf] = useState(() => {
-    const todays = st.bodyweight.find(b => b.d === todayISO())
+    const todays = st.bodyweight.find(b => b.d === iso)
     return validBodyFat(todays && todays.bf) ?? validBodyFat(bw && bw.bf) ?? 0
   })
   const comp = composition({ w: v, bf })
@@ -109,7 +113,6 @@ function BwSheet({ onDone, close }) {
     if (!n || n <= 0) { toast(t('Enter a valid weight')); return }
     const pct = validBodyFat(bf)
     update(s => {
-      const iso = todayISO()
       const ex = s.bodyweight.find(b => b.d === iso)
       const target = ex || { d: iso }
       target.w = n
@@ -127,7 +130,7 @@ function BwSheet({ onDone, close }) {
   const delEntry = d => update(s => { s.bodyweight = s.bodyweight.filter(b => b.d !== d) })
   return <>
     <h3>{t('Log body weight')}</h3>
-    <div className="muted small">{t('Today') + ', ' + fmtDate(todayISO(), true)}</div>
+    <div className="muted small">{fmtDate(iso, true)}</div>
     <WeightInput value={v} setValue={setV} unit={unit} />
     <div style={{ height: 10 }} />
     <Stepper label={t('Body fat (%)')} unit="%" value={bf} step={0.1} onChange={setBf} />
@@ -282,9 +285,8 @@ export const goalSheet = () => ui().openSheet(close => <GoalSheet close={close} 
 /* ============================ daily intake ============================ */
 // Calories and macros for one day. Four numbers, one screen, no meal breakdown — see
 // lib/nutrition.js for why the day is the unit.
-function NutriSheet({ close }) {
+function NutriSheet({ close, iso = todayISO() }) {
   const st = S()
-  const iso = todayISO()
   const [v, setV] = useState(() => {
     const e = entryFor(st, iso)
     return { kcal: e?.kcal || 0, p: e?.p || 0, c: e?.c || 0, f: e?.f || 0 }
@@ -344,7 +346,7 @@ function NutriSheet({ close }) {
     </>}
   </>
 }
-export const nutriSheet = () => ui().openSheet(close => <NutriSheet close={close} />)
+export const nutriSheet = iso => ui().openSheet(close => <NutriSheet close={close} {...(iso ? { iso } : {})} />)
 
 function NutriGoalSheet({ close }) {
   const st = S()
@@ -1026,13 +1028,13 @@ function NumRow({ label, unit, value, onChange, decimal = false }) {
  * Blank means absent, not zero: a day with no steps entered is a day nobody counted, and a
  * zero would drag every average that reads it.
  */
-function ManualEntry({ onDone, close }) {
+function ManualEntry({ onDone, close, iso = todayISO() }) {
   const [v, setV] = useState({})
   const set = (k, n) => setV(x => ({ ...x, [k]: n }))
   const any = WATCH_FIELDS.some(f => v[f.k] > 0)
 
   const save = () => {
-    const p = { d: todayISO() }
+    const p = { d: iso }
     if (v.sport > 0 || v.min > 0) {
       p.workout = {}
       if (v.sport > 0) p.workout.kcal = Math.round(v.sport)
@@ -1048,13 +1050,16 @@ function ManualEntry({ onDone, close }) {
 
   return <>
     {close && <h3>{t('My watch')}</h3>}
+    {iso !== todayISO() && <div className="muted small" style={{ margin: '0 2px 6px' }}>{fmtDate(iso, true)}</div>}
     <div className="dim small" style={{ margin: '0 2px 6px', lineHeight: 1.45 }}>
       {t('Read them off your watch and type them in. Leave a field empty when you have nothing for it.')}
     </div>
     {WATCH_FIELDS.map(f => <NumRow key={f.k} label={t(f.label)} unit={f.unit} decimal={f.decimal}
       value={v[f.k] ?? null} onChange={n => set(f.k, n)} />)}
     <div style={{ height: 12 }} />
-    <Button variant="primary" icon="check" disabled={!any} onClick={save}>{t('Save for today')}</Button>
+    <Button variant="primary" icon="check" disabled={!any} onClick={save}>
+      {iso === todayISO() ? t('Save for today') : t('Save for {0}', fmtDate(iso, true))}
+    </Button>
     {close && <><div style={{ height: 8 }} />
       <Button variant="ghost" className="dim" onClick={close}>{t('Cancel')}</Button></>}
   </>
@@ -1064,11 +1069,11 @@ function ManualEntry({ onDone, close }) {
  * Typing the day's figures in is the daily gesture, so it opens from the home screen rather
  * than from the bottom of an import screen in Settings. Two taps and a number.
  */
-export const watchSheet = () => ui().openSheet(close => <WatchLog close={close} />)
+export const watchSheet = iso => ui().openSheet(close => <WatchLog close={close} {...(iso ? { iso } : {})} />)
 
-function WatchLog({ close }) {
+function WatchLog({ close, iso }) {
   const [done, setDone] = useState(null)
-  if (!done) return <ManualEntry close={close} onDone={setDone} />
+  if (!done) return <ManualEntry close={close} {...(iso ? { iso } : {})} onDone={setDone} />
   return <>
     <h3>{done.wrote.length ? t('Saved') : t('Nothing was saved')}</h3>
     <div className="muted small" style={{ marginBottom: 10 }}>{fmtDate(done.date, true)}</div>
@@ -1293,9 +1298,8 @@ export const healthImportSheet = arrived => ui().openSheet(close => <HealthImpor
 /* ============================ sleep ============================ */
 // Filed under the day you woke up, not the day you went to bed: that is the day it affects,
 // and the day the weigh-in and the intake are already filed under. See lib/body.js.
-function SleepSheet({ close }) {
+function SleepSheet({ close, iso = todayISO() }) {
   const st = S()
-  const iso = todayISO()
   const existing = sleepFor(st, iso)
   // The two times you actually know, not a duration you would have to compute. "Went to bed
   // at 23:30, got up at 07:00, was up twice" is what a person remembers; 7.25 hours is not.
@@ -1355,7 +1359,7 @@ function SleepSheet({ close }) {
       onChange={n => update(s => { s.sleepGoal = validSleep(n) })} />
   </>
 }
-export const sleepSheet = () => ui().openSheet(close => <SleepSheet close={close} />)
+export const sleepSheet = iso => ui().openSheet(close => <SleepSheet close={close} {...(iso ? { iso } : {})} />)
 
 /* ============================ digest ============================ */
 // Everything the log knows about a period, as text to hand to something that coaches you.
@@ -1482,91 +1486,6 @@ export const discardPendingProgram = () => confirmSheet({
   onConfirm: () => update(s => { delete s.pendingProgram })
 })
 
-
-/**
- * Everything a day holds, in one place.
- *
- * Tapping a day in the week strip used to open the routine picker and nothing else, which
- * answered "what am I training" and refused every other question — what did I eat, what did
- * the watch say, how did I sleep, what did the day cost. Those figures were all recorded and
- * none of them were readable anywhere except by scrolling three cards on the home screen,
- * and only for today.
- *
- * Sections with nothing in them are still listed, dimmed. A day with no intake logged is a
- * fact about the day, and hiding the row makes it look like a day that did not need one.
- */
-function DayRow({ icon, label, value, dim, onClick, tint }) {
-  return (
-    <div className={'today-row wrap' + (onClick ? '' : ' still')} style={{ marginTop: 8 }} onClick={onClick}>
-      <div className="row" style={{ gap: 9, minWidth: 0 }}>
-        <span className="lrow-i" style={{ background: dim ? 'var(--surface-3)' : (tint || 'var(--acc)') }}><Icon name={icon} /></span>
-        <div style={{ minWidth: 0 }}>
-          <div className="lbl2">{label}</div>
-          <div className="ttl" style={dim ? { color: 'var(--label-3)' } : undefined}>{value}</div>
-        </div>
-      </div>
-      {onClick && <Icon name="chevronRight" className="chev" />}
-    </div>
-  )
-}
-
-function DaySummary({ iso, close }) {
-  const st = useStore(s => s.S)
-  const none = t('Not logged')
-
-  const w = (st.workouts || []).find(x => x.d === iso)
-  const plannedId = effectiveRoutineId(st, iso)
-  const planned = st.routines.find(r => r.id === plannedId)
-  const training = w
-    ? [w.name, setsDone(w) + ' ' + t('sets'), fmtVol(workoutVolume(w), st.unit)].filter(Boolean).join(' · ')
-    : planned ? t('Planned: {0}', planned.name) : t('Rest day')
-
-  const h = healthFor(st, iso)
-  const sp = [
-    (w && w.watch && w.watch.kcal) || (h && h.sport),
-    (w && w.watch && w.watch.minutes) || (h && h.sportMin)
-  ]
-  const watch = [
-    sp[0] ? fmtNum(sp[0]) + ' kcal' : null,
-    sp[1] ? fmtNum(sp[1]) + ' min' : null,
-    h && h.kcal ? t('{0} kcal active', fmtNum(h.kcal)) : null,
-    h && h.steps ? fmtNum(h.steps) + ' ' + t('steps') : null,
-    h && h.rhr ? t('HR {0} rest', h.rhr) : null
-  ].filter(Boolean).join(' · ')
-
-  const n = entryFor(st, iso)
-  const food = n && (n.kcal || hasMacros(n))
-    ? [fmtNum(n.kcal || kcalFromMacros(n)) + ' kcal',
-      ...MACROS.filter(m => n[m]).map(m => t(MACRO_NAME[m]) + ' ' + fmtNum(n[m]) + ' g')].join(' · ')
-    : null
-
-  const sl = sleepFor(st, iso)
-  const sleep = sl ? fmtNum(sleepHours(sl)) + ' h' + (sl.bed && sl.wake ? ' · ' + sl.bed + ' → ' + sl.wake : '') : null
-
-  const b = (st.bodyweight || []).find(x => x.d === iso)
-  const weight = b ? fmtNum(b.w) + ' ' + st.unit + (b.bf ? ' · ' + fmtNum(b.bf) + ' %' : '') : null
-
-  const bal = dayBalance(st, iso)
-  const balance = bal && bal.deficit != null
-    ? t('{0} kcal', (bal.deficit > 0 ? '+' : '') + fmtNum(bal.deficit)) + ' · '
-      + (bal.deficit > 0 ? t('deficit') : t('surplus'))
-    : null
-
-  return <>
-    <h3>{fmtDate(iso, true)}</h3>
-    <DayRow icon={w ? 'checkCircle' : planned ? 'dumbbell' : 'moon'} label={t('Training')} value={training}
-      dim={!w && !planned} tint={w ? 'var(--acc)' : 'var(--surface-3)'}
-      onClick={w ? () => { close(); workoutDetailSheet(w) } : undefined} />
-    <DayRow icon="flame" label={t('My watch')} value={watch || none} dim={!watch} tint="var(--red)" />
-    <DayRow icon="plate" label={t('Nutrition')} value={food || none} dim={!food} tint="var(--orange)" />
-    <DayRow icon="moon" label={t('Sleep')} value={sleep || none} dim={!sleep} tint="var(--indigo)" />
-    <DayRow icon="scale" label={t('Body weight')} value={weight || none} dim={!weight} tint="var(--teal)" />
-    {balance && <DayRow icon="chartLine" label={t('Balance')} value={balance} tint="var(--yellow)" />}
-    <div style={{ height: 14 }} />
-    <Button icon="calendar" onClick={() => { close(); dayOverrideSheet(iso) }}>{t('Change what’s planned')}</Button>
-  </>
-}
-export const daySheet = iso => ui().openSheet(close => <DaySummary iso={iso} close={close} />)
 
 function DayOverride({ iso, close }) {
   const st = useStore(s => s.S)

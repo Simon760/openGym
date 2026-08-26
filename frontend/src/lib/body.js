@@ -52,6 +52,19 @@ export const dayTime = d => new Date(String(d) + 'T12:00:00').getTime()
 export const whenOf = e => (e && e.d ? dayTime(e.d) : (e && (e.t || e.start)) || 0)
 
 /**
+ * What the scale said on a given day, or the last thing it said before it.
+ *
+ * "As of" rather than "on": a weigh-in is not a daily obligation, and a Tuesday with no
+ * reading is not a Tuesday with no weight. Looking back at one, the honest answer is the
+ * most recent reading that day could have known about — never a later one, which would show
+ * a past day a weight it had not reached yet.
+ */
+export const bwAsOf = (S, iso) => {
+  const list = (S.bodyweight || []).filter(b => num(b.w) != null && b.d <= iso)
+  return list.length ? list[list.length - 1] : null
+}
+
+/**
  * The whole journey: the first weigh-in ever recorded against the latest.
  *
  * Different from the delta beside the number, which compares one weigh-in to the one before
