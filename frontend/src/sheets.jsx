@@ -453,7 +453,7 @@ function TdeeSheet({ close }) {
     <Stepper label={t('Discount its active energy by')} unit="%" value={trim} step={1} decimal={false}
       onChange={n => setTrim(Math.max(0, Math.min(Math.round(TRIM_MAX * 100), Math.round(n || 0))))} />
     <div className="dim small" style={{ margin: '6px 2px 0', lineHeight: 1.45 }}>
-      {t('Wrist devices are good at heart rate and poor at energy — they read it 20 to 40 % high, almost always high. Applied to what the watch reports, and to nothing you typed yourself. Zero trusts it as it comes.')}
+      {t('Wrist devices are good at heart rate and poor at energy — they read it 20 to 40 % high, almost always high. Applied to every training figure, including the ones you type in and import, because those are read off a watch too. Zero trusts it as it comes.')}
     </div>
 
     {implied.tdee ? <>
@@ -1106,6 +1106,7 @@ function WatchLog({ close, iso }) {
 }
 
 function HealthImport({ close, arrived }) {
+  const st = useStore(x => x.S)
   const [text, setText] = useState('')
   const [err, setErr] = useState(null)
   const [recipe, setRecipe] = useState(false)
@@ -1173,6 +1174,12 @@ function HealthImport({ close, arrived }) {
     try { await navigator.clipboard.writeText(url); toast(t('Link copied — paste it into Open URL')) }
     catch (e) { setLink(url) }
   }
+  const clearHealth = () => confirmSheet({
+    title: t('Clear the imported days?'),
+    message: t('Removes every day of steps, active energy, resting heart rate and imported training energy. Weigh-ins, intake, sleep and logged sessions stay. Import the file again afterwards.'),
+    confirmText: t('Clear'), danger: true,
+    onConfirm: () => { update(s => { s.health = [] }); toast(t('Imported days cleared')) }
+  })
   const copyRecipe = async () => {
     try { await navigator.clipboard.writeText(shortcutRecipe()); toast(t('Recipe copied')) }
     catch (e) { setRecipe(true) }
@@ -1286,6 +1293,19 @@ function HealthImport({ close, arrived }) {
     <div style={{ height: 8 }} />
     <Button variant="ghost" icon="folder" onClick={() => fileRef.current?.click()}>{t('Open a file')}</Button>
     <input ref={fileRef} type="file" accept=".csv,.json,.txt,text/csv,application/json,text/plain" onChange={pickFile} hidden />
+    {/* Re-importing merges, which is right when two sources each know part of a day and
+        wrong when the first pass filed a column under the wrong name: the bad values stay,
+        and a figure read as the day's active energy goes on feeding the NEAT baseline. So
+        there is a way to start the health data over without touching anything else. */}
+    {(st.health || []).length > 0 && <>
+      <div style={{ height: 8 }} />
+      <Button variant="ghost" className="dim" icon="trash" onClick={clearHealth}>
+        {t('Clear the {0} imported days', (st.health || []).length)}
+      </Button>
+      <div className="dim small" style={{ margin: '6px 2px 0', lineHeight: 1.45 }}>
+        {t('Steps, active energy, resting heart rate and any training energy filed against a day. Your weigh-ins, intake, sleep and logged sessions are untouched.')}
+      </div>
+    </>}
     <h4 className="sec">{t('Your history, from wherever it is written down')}</h4>
     <div className="dim small" style={{ marginBottom: 10, lineHeight: 1.45 }}>
       {t('Weigh-ins, intake, training energy — as far back as it goes, one row per day. Ask for it as CSV: an empty cell stays empty, which is the whole point, because a day nobody logged must not arrive as a zero.')}
