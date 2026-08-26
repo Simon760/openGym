@@ -68,7 +68,7 @@ describe('the totals hold together', () => {
     const sum = days.reduce((a, e) => a + dayBalance(S, e.d, TDEE, 0.28, NOW).deficit, 0)
     expect(tot.days).toBe(days.length)
     expect(Math.abs(sum - tot.total)).toBeLessThanOrEqual(days.length)   // rounding, one kcal a day at most
-    expect(tot.nutrition + tot.sportDelta).toBe(tot.total)
+    expect(tot.nutrition + tot.sportDelta + tot.bonus).toBe(tot.total)
     expect(tot.kg).toBeCloseTo(tot.total / KCAL_PER_KG_FAT, 2)
     expect(tot.perDay).toBe(Math.round(tot.total / tot.days))
   })
@@ -87,7 +87,7 @@ describe('the totals hold together', () => {
     S.nutrition.filter(e => e.kcal != null).forEach(e => {
       const b = dayBalance(S, e.d, TDEE, 0.28, NOW)
       const sp = sportKcal(S, e.d, 0.28, TDEE, NOW)
-      expect(b.deficit, e.d).toBe(Math.round(b.tdee + (sp.kcal - p.sport) - b.intake))
+      expect(b.deficit, e.d).toBe(Math.round(b.tdee + (sp.kcal - p.sport) + b.bonus - b.intake))
     })
   })
 

@@ -26,7 +26,7 @@ import { MOBILE, shareExport, shareText, canShareText } from './lib/mobile.js'
 import { entryFor, hasMacros, kcalFromMacros, derivedMismatch, remainingOf, putEntry, MACROS, MACRO_NAME } from './lib/nutrition.js'
 import { validBodyFat, composition, sleepFor, putSleep, validSleep, sleepHours, hoursBetween, validTime, BF_MIN, BF_MAX, SLEEP_MIN, SLEEP_MAX } from './lib/body.js'
 import { parseHealth, applyHealth, parseHealthCSV, applyHealthDays, shortcutRecipe, shortcutLink, historySpec } from './lib/health.js'
-import { impliedTDEE, tdeeParts, trimOf, TDEE_PARTS, TDEE_MIN, TDEE_MAX, TRIM_MAX, IMPLIED_MIN_SPAN, IMPLIED_MIN_DAYS, IMPLIED_MIN_WEIGHINS } from './lib/energy.js'
+import { impliedTDEE, tdeeParts, trimOf, stepBaseOf, TDEE_PARTS, TDEE_MIN, TDEE_MAX, TRIM_MAX, IMPLIED_MIN_SPAN, IMPLIED_MIN_DAYS, IMPLIED_MIN_WEIGHINS } from './lib/energy.js'
 import { APP_NAME, FILE_PREFIX } from './lib/brand.js'
 
 const S = () => useStore.getState().S
@@ -388,7 +388,9 @@ function TdeeSheet({ close }) {
   const st = S()
   const [v, setV] = useState(() => {
     const p = tdeeParts(st.tdee)
-    return p ? { bmr: p.bmr, neat: p.neat, other: p.other, sport: p.sport } : { bmr: 0, neat: 0, other: 0, sport: 0 }
+    const base = stepBaseOf(st)
+    return p ? { bmr: p.bmr, neat: p.neat, other: p.other, sport: p.sport, stepBase: base }
+      : { bmr: 0, neat: 0, other: 0, sport: 0, stepBase: base }
   })
   const [trim, setTrim] = useState(() => Math.round(trimOf(st) * 100))
   const set = (k, n) => setV(o => ({ ...o, [k]: Math.round(n || 0) }))
@@ -408,7 +410,7 @@ function TdeeSheet({ close }) {
   const FIELDS = [
     ['bmr', t('BMR'), t('What the body spends doing nothing at all.')],
     ['neat', t('NEAT'), t('Walking, standing, fidgeting — everything that is not a session.')
-      + ' ' + t('Charged flat, every day: a rest day costs this whether or not the import knew that day’s steps.')],
+      + ' ' + t('Charged in full every day and never less — a quiet day still costs this much.')],
     ['other', t('Other'), t('Digestion, the cold, anything else you count separately.')],
     ['sport', t('Sport already included'), t('Training the total above already contains — so a day you do not train is charged this much less. Leave it at 0 if your figure is what you burn on any day, training or not.')]
   ]
@@ -422,6 +424,17 @@ function TdeeSheet({ close }) {
     {FIELDS.map(([k, label, hint]) => <div key={k} style={{ marginBottom: 4 }}>
       <Stepper label={label} unit="kcal" value={v[k]} step={25} decimal={false} onChange={n => set(k, n)} />
       <div className="dim small" style={{ margin: '2px 2px 8px', lineHeight: 1.4 }}>{hint}</div>
+      {/* NEAT in the unit a phone actually measures it in. Walking above this line is the one
+          thing allowed to move a day off the entered figure, and it can only move it up:
+          a day that barely walked still costs the whole total. */}
+      {k === 'neat' && v.neat > 0 && <div style={{ marginBottom: 12 }}>
+        <Stepper label={t('which is about')} unit={t('steps')} value={v.stepBase} step={500} decimal={false}
+          onChange={n => setV(o => ({ ...o, stepBase: Math.max(1000, Math.min(40000, Math.round(n || 0))) }))} />
+        <div className="dim small" style={{ margin: '2px 2px 0', lineHeight: 1.4 }}>
+          {t('Above this, the extra steps are added to that day’s expenditure — about {0} kcal per 1 000 steps. Below it nothing is taken away: a quiet day still costs the figure above.',
+            Math.round((v.neat / Math.max(1000, v.stepBase)) * 1000))}
+        </div>
+      </div>}
     </div>)}
 
     <div className="row between" style={{ padding: '8px 2px 0', borderTop: '1px solid var(--sep)' }}>
@@ -488,7 +501,7 @@ function TdeeSheet({ close }) {
     <Button variant="primary" onClick={() => {
       if (!parts) { toast(t('A maintenance figure sits between {0} and {1} kcal.', TDEE_MIN, TDEE_MAX)); return }
       update(s => {
-        s.tdee = { bmr: parts.bmr, neat: parts.neat, other: parts.other, sport: parts.sport }
+        s.tdee = { bmr: parts.bmr, neat: parts.neat, other: parts.other, sport: parts.sport, stepBase: v.stepBase }
         s.watchTrim = Math.round(trim) / 100
       })
       close(); toast(t('Maintenance set'))

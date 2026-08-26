@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { observedNEAT, sportKcal, neatFor, dayBalance, deficitTotals, NEAT_MIN_DAYS } from './energy.js'
+import { observedNEAT, sportKcal, neatFor, dayNEAT, neatBonus, dayBalance, deficitTotals, NEAT_MIN_DAYS, STEP_MAX } from './energy.js'
 import { parseHealthCSV } from './health.js'
 
 const D = n => new Date(Date.UTC(2026, 0, 1 + n)).toISOString().slice(0, 10)
@@ -138,31 +138,28 @@ describe('a NEAT column, day by day', () => {
   })
 
   it('never moves the day’s maintenance — that figure is charged flat', () => {
-    // The one thing a NEAT column must not do. A rest day costs the entered total, whatever
-    // the import knew about that day's walking; the column only says how much of a whole-day
-    // burn was not training.
-    for (const neat of [700, 300, null]) {
+    // The entered total is a floor. A day that barely moved still costs it; a NEAT column
+    // reading below it takes nothing away.
+    for (const neat of [300, 100, null]) {
       const S = { ...base(), nutrition: [{ d: D(15), kcal: 2000 }],
         health: neat == null ? [] : [{ d: D(15), neat }] }
       const b = dayBalance(S, D(15), S.tdee, 0, NOW)
       expect(b.tdee, String(neat)).toBe(2500)
       expect(b.parts.neat, String(neat)).toBe(450)
-      expect(b.deficit, String(neat)).toBe(2500 - 350 - 2000)   // no sport, so the planned 350 comes off
+      expect(b.bonus, String(neat)).toBe(0)
+      expect(b.deficit, String(neat)).toBe(2500 - 350 - 2000)   // no sport: the planned 350 comes off
     }
   })
 
-  it('changes the deficit only where there is a day total to take it off', () => {
-    const day = (neat, kcal) => ({
-      ...base(),
-      workouts: [{ d: D(15), id: 'w' }],
-      nutrition: [{ d: D(15), kcal: 2000 }],
-      health: [{ d: D(15), ...(kcal == null ? {} : { kcal }), ...(neat == null ? {} : { neat }) }]
-    })
-    // A whole-day burn of 1000: the column decides what comes off it, so it moves the total.
-    expect(deficitTotals(day(700, 1000), base().tdee, 0, NOW).total).toBe(2500 + (300 - 350) - 2000)
-    expect(deficitTotals(day(250, 1000), base().tdee, 0, NOW).total).toBe(2500 + (750 - 350) - 2000)
-    // No day total, only a NEAT figure: nothing to subtract from, so nothing changes.
-    expect(deficitTotals(day(700, null), base().tdee, 0, NOW).total).toBe(2500 - 350 - 2000)
+  it('adds the surplus over the entered figure, and only the surplus', () => {
+    const day = neat => dayBalance(
+      { ...base(), nutrition: [{ d: D(15), kcal: 2000 }], health: [{ d: D(15), neat }] },
+      D(15), base().tdee, 0, NOW)
+    expect(day(700).bonus).toBe(250)          // 700 − 450
+    expect(day(700).tdee).toBe(2500)          // the maintenance itself has not moved
+    expect(day(700).out).toBe(2500 - 350 + 250)
+    expect(day(450).bonus).toBe(0)
+    expect(day(200).bonus).toBe(0)            // never negative
   })
 
   it('reports only the days where the column actually decided something', () => {
@@ -211,5 +208,72 @@ describe('a NEAT cell nobody filled in', () => {
     const rest = Array.from({ length: 6 }, (_, i) => ({ d: D(i * 2), kcal: 400 }))
     const s = S(); s.health = [...rest, { d: D(15), kcal: 1000 }]
     expect(sportKcal(s, D(15), 0, s.tdee, NOW).neatFrom).toEqual({ kind: 'rest', days: 6 })
+  })
+})
+
+/**
+ * Steps as the unit NEAT is actually measured in.
+ *
+ * The entered figure pays for a certain number of steps. Walk more and the day really did
+ * cost more; walk less and it did not cost less, because a maintenance that sags whenever
+ * the phone was in the other pocket is a maintenance nobody can plan against. So the term
+ * only ever adds.
+ */
+describe('walking above what the figure already pays for', () => {
+  const S = (steps, over = {}) => ({
+    watchTrim: 0, tdee: { bmr: 1700, neat: 450, other: 0, sport: 350, stepBase: 8500 },
+    workouts: [], nutrition: [{ d: D(15), kcal: 2000 }], bodyweight: [],
+    health: steps == null ? [] : [{ d: D(15), steps }], ...over
+  })
+  const bal = (steps, over) => dayBalance(S(steps, over), D(15), S(steps, over).tdee, 0, NOW)
+
+  it('reads the day’s NEAT off the step count, in proportion', () => {
+    expect(dayNEAT(S(8500), D(15), S().tdee)).toMatchObject({ kcal: 450, from: 'steps', steps: 8500, base: 8500 })
+    expect(dayNEAT(S(17000), D(15), S().tdee).kcal).toBe(900)
+  })
+
+  it('adds the surplus, and nothing at 8 500 or below', () => {
+    expect(bal(12000).bonus).toBe(Math.round((12000 - 8500) / 8500 * 450))   // 185
+    expect(bal(12000).tdee).toBe(2500)                                       // untouched
+    expect(bal(12000).out).toBe(2500 - 350 + 185)
+    expect(bal(8500).bonus).toBe(0)
+    expect(bal(3000).bonus).toBe(0)
+    expect(bal(null).bonus).toBe(0)
+  })
+
+  it('honours a step baseline of your own', () => {
+    const S2 = S(12000); S2.tdee = { ...S2.tdee, stepBase: 12000 }
+    expect(dayBalance(S2, D(15), S2.tdee, 0, NOW).bonus).toBe(0)
+    const S3 = S(12000); S3.tdee = { ...S3.tdee, stepBase: 6000 }
+    expect(dayBalance(S3, D(15), S3.tdee, 0, NOW).bonus).toBe(450)   // 6 000 extra = one whole NEAT
+  })
+
+  it('refuses a step count nobody walked', () => {
+    // A pedometer that reported 900 000 is broken, and charging it would wreck a month.
+    expect(bal(900000).bonus).toBe(bal(STEP_MAX).bonus)
+  })
+
+  it('a NEAT column in kcal outranks the step count', () => {
+    const S2 = S(20000); S2.health = [{ d: D(15), steps: 20000, neat: 600 }]
+    expect(dayNEAT(S2, D(15), S2.tdee)).toMatchObject({ kcal: 600, from: 'day' })
+    expect(dayBalance(S2, D(15), S2.tdee, 0, NOW).bonus).toBe(150)
+  })
+
+  it('does not double-count against a whole-day watch reading', () => {
+    // The watch's 1 400 already contains the walking. Training comes out as 1 400 − that
+    // day's NEAT; the bonus puts the surplus back. The two must cancel to BMR + other + 1 400.
+    const S2 = S(17000)
+    S2.workouts = [{ d: D(15), id: 'w' }]
+    S2.health = [{ d: D(15), steps: 17000, kcal: 1400 }]
+    const b = dayBalance(S2, D(15), S2.tdee, 0, NOW)
+    expect(b.sport).toBe(1400 - 900)          // day NEAT from 17 000 steps = 900
+    expect(b.bonus).toBe(900 - 450)
+    expect(b.out).toBe(1700 + 0 + 1400)       // BMR + other + what the watch read
+  })
+
+  it('keeps the totals adding up with a third term in them', () => {
+    const tot = deficitTotals(S(12000), S().tdee, 0, NOW)
+    expect(tot.nutrition + tot.sportDelta + tot.bonus).toBe(tot.total)
+    expect(tot.bonusDays).toBe(1)
   })
 })

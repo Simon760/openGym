@@ -281,6 +281,12 @@ export default function Home() {
               fmtNum(balance.tdee),
               (balance.delta > 0 ? '+' : '') + fmtNum(balance.delta),
               fmtNum(balance.intake))}
+            {/* Spelled out rather than folded into the maintenance figure: a day charged more
+                than the number in the settings has to say why, or the arithmetic stops
+                adding up on screen. */}
+            {balance.bonus > 0 && ' · ' + (balance.bonusFrom === 'steps'
+              ? t('+{0} for {1} steps', fmtNum(balance.bonus), fmtNum(balance.steps))
+              : t('+{0} of extra everyday movement', fmtNum(balance.bonus)))}
           </div>
         </div>
         <div className="stat-v" style={{ color: balance.deficit >= 0 ? 'var(--acc)' : 'var(--orange)', flexShrink: 0 }}>

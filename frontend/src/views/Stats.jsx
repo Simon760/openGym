@@ -230,9 +230,10 @@ function EnergyCard({ S }) {
               of the two rather than against the total, so a component that worked *against*
               the deficit still has a bar and still reads as a size. */}
           <div style={{ marginTop: 12 }}>
-            {[['nutrition', t('Eating'), 'var(--orange)'], ['sportDelta', t('Sport vs plan'), 'var(--blue)']].map(([k, label, col]) => {
+            {[['nutrition', t('Eating'), 'var(--orange)'], ['sportDelta', t('Sport vs plan'), 'var(--blue)'],
+              ...(tot.bonus > 0 ? [['bonus', t('Walking above the usual'), 'var(--teal)']] : [])].map(([k, label, col]) => {
               const v = tot[k]
-              const peak = Math.max(Math.abs(tot.nutrition), Math.abs(tot.sportDelta)) || 1
+              const peak = Math.max(Math.abs(tot.nutrition), Math.abs(tot.sportDelta), tot.bonus) || 1
               return <div key={k} style={{ marginBottom: 8 }}>
                 <div className="row between small" style={{ marginBottom: 4 }}>
                   <span className="muted">{label}</span>
@@ -256,6 +257,11 @@ function EnergyCard({ S }) {
               its window is worse than one that explains why. */}
           {tot.untracked > 0 && <div className="dim small" style={{ lineHeight: 1.45 }}>
             {t('{0} days recorded no training either way — neither a session nor a rest day — so they count for eating only.', tot.untracked)}
+          </div>}
+          {/* The third bar earns a sentence: it is the one term people do not expect, and a
+              figure charged above the entered maintenance has to say where it came from. */}
+          {tot.bonus > 0 && <div className="dim small" style={{ lineHeight: 1.45 }}>
+            {t('{0} days moved more than your figure already pays for. Only the surplus counts — a quieter day is never charged less.', tot.bonusDays)}
           </div>}
           {/* Days where the import's own movement figure, not the usual baseline, is what came
               off a whole-day burn. Named, because a training figure derived from a different

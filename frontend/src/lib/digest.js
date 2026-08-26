@@ -179,6 +179,7 @@ export function dailyDigest(S, iso = todayISO(), now = Date.now()) {
   if (bal && bal.deficit != null) {
     out.push(t('Balance') + ' ' + fmtNum(bal.tdee) + ' ' + t('maintenance')
       + ' ' + sign(bal.delta) + ' ' + t('sport vs plan')
+      + (bal.bonus > 0 ? ' ' + sign(bal.bonus) + ' ' + t('walked above the usual') : '')
       + ' − ' + fmtNum(bal.intake) + ' ' + t('eaten')
       + ' = ' + sign(bal.deficit) + ' kcal'
       + ' (' + (bal.deficit >= 0 ? t('deficit') : t('surplus')) + ')')

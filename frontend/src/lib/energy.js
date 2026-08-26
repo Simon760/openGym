@@ -164,11 +164,68 @@ export function observedNEAT(S, days = NEAT_WINDOW, now = Date.now()) {
  * is set against another watch reading.
  */
 export function neatFor(S, iso, tdee = S && S.tdee, now = Date.now()) {
-  const own = num((healthFor(S, iso) || {}).neat)
-  if (own != null) return { kcal: Math.round(own), from: 'day' }
+  const own = dayNEAT(S, iso, tdee)
+  if (own) return own
   const seen = observedNEAT(S, NEAT_WINDOW, now)
   if (seen) return { kcal: seen.kcal, from: 'rest', days: seen.days }
   return { kcal: Math.round((tdeeParts(tdee) || {}).neat || 0), from: 'declared' }
+}
+
+/* How many steps the entered NEAT already pays for, and the ceiling above which a step
+   count is a broken sensor rather than a long walk. Fifty thousand steps is about forty
+   kilometres; a figure above it has never been walked, it has been miscounted, and charging
+   it would wreck a month of totals in one row. */
+export const STEP_BASE = 8500
+export const STEP_MAX = 50000
+export const stepBaseOf = S => {
+  const n = num(S && S.tdee && S.tdee.stepBase)
+  return n != null && n >= 1000 && n <= 40000 ? Math.round(n) : STEP_BASE
+}
+
+/**
+ * What this particular day's everyday movement cost, when the day says so itself — in kcal,
+ * whatever unit it was recorded in.
+ *
+ * Two ways a day can say it. A NEAT column gives the kcal outright. A step count gives it by
+ * proportion: the entered NEAT pays for a certain number of steps, so twice those steps is
+ * twice that NEAT. Nothing here falls back to a baseline — this answers "what did *this* day
+ * do", and a day that says nothing gets null rather than an average.
+ */
+export function dayNEAT(S, iso, tdee = S && S.tdee) {
+  const h = healthFor(S, iso) || {}
+  const own = num(h.neat)
+  if (own != null) return { kcal: Math.round(own), from: 'day' }
+  const steps = num(h.steps)
+  const p = tdeeParts(tdee)
+  if (steps == null || !p || !p.neat) return null
+  const base = stepBaseOf(S)
+  return {
+    kcal: Math.round((Math.min(steps, STEP_MAX) / base) * p.neat),
+    from: 'steps', steps: Math.round(steps), base
+  }
+}
+
+/**
+ * What a day of unusual movement adds to its own expenditure — and it only ever adds.
+ *
+ * The entered NEAT is a floor, not an estimate to be second-guessed. A day spent at a desk
+ * still costs the figure that was entered: a maintenance that drops because the pedometer
+ * was in the other trousers is a maintenance nobody can plan against. But a day that walked
+ * eleven kilometres really did cost more, and there is no reason to pretend otherwise.
+ *
+ * So: the surplus over the entered NEAT, and nothing when there is no surplus.
+ *
+ * This composes exactly with the subtraction sportKcal makes from a whole-day watch reading,
+ * which is worth spelling out because it looks like double counting and is not. Where a day
+ * total A is read off a watch, training comes out as A − NEAT-of-that-day, and the day is
+ * charged (BMR + NEAT-entered + other) + training + (NEAT-of-that-day − NEAT-entered) — the
+ * two NEAT terms cancel and what is left is BMR + other + A. Exactly right, once.
+ */
+export function neatBonus(S, iso, tdee = S && S.tdee) {
+  const p = tdeeParts(tdee)
+  const d = p && dayNEAT(S, iso, tdee)
+  if (!d) return { kcal: 0, from: null, dayKcal: null }
+  return { kcal: Math.max(0, d.kcal - p.neat), from: d.from, dayKcal: d.kcal, steps: d.steps, base: d.base }
 }
 
 /**
@@ -266,15 +323,20 @@ export function dayBalance(S, iso, tdee = S.tdee, trim, now = Date.now()) {
   const intake = num(e && e.kcal)
   const sp = sportKcal(S, iso, trim != null ? trim : trimOf(S), tdee, now)
   const delta = sp.kcal - p.sport
-  // The maintenance figure is the maintenance figure. A day's own NEAT reading is not
-  // allowed to move it — it exists to say how much of a whole-day burn was not training,
-  // and nothing else. A rest day is charged the entered total, every time, whatever the
-  // import happened to know about that day's walking.
-  const out = p.total + delta
+  // The entered maintenance is a floor and is charged whole, every day. What a day of
+  // unusual movement adds sits on top of it and never digs into it: 8 500 steps is what the
+  // figure already pays for, 12 000 costs more, 3 000 costs the same.
+  const bonus = neatBonus(S, iso, tdee)
+  const out = p.total + delta + bonus.kcal
   return {
     d: iso,
     tdee: p.total,
     parts: p,
+    // What the day's own movement added on top, and what said so — a step count, a NEAT
+    // column, or nothing at all, which is most days.
+    bonus: bonus.kcal,
+    bonusFrom: bonus.from,
+    steps: bonus.steps == null ? null : bonus.steps,
     // The everyday movement actually taken off this day's burn, and where that figure came
     // from — 'day' only when the import carried one for this date. Null on a day with
     // nothing to take it off, which is most days.
@@ -320,12 +382,17 @@ export function deficitTotals(S, tdee = S.tdee, days = 0, now = Date.now(), thro
   if (!list.length) return null
 
   let nutrition = 0, sportDelta = 0, sportLogged = 0, unmeasured = 0, untracked = 0, plannedDays = 0, neatDays = 0
+  let bonus = 0, bonusDays = 0
   list.forEach(e => {
     const b = dayBalance(S, e.d, tdee)
     nutrition += b.tdee - b.intake
+    // Movement above what the maintenance figure already pays for. Its own term, because it
+    // belongs to neither of the other two: it is not eating, and it is not training.
+    bonus += b.bonus
+    if (b.bonus > 0) bonusDays++
     // Days where the import's own movement figure is what came off a whole-day burn. Not
     // every day carrying a NEAT figure — only the ones where it changed an answer.
-    if (b.neatFrom === 'day') neatDays++
+    if (b.neatFrom === 'day' || b.neatFrom === 'steps') neatDays++
     sportLogged += b.sport
     // A day that says nothing about training contributes nothing to the training total. It
     // is not a day of no training, and treating it as one would charge it a whole budget.
@@ -334,7 +401,7 @@ export function deficitTotals(S, tdee = S.tdee, days = 0, now = Date.now(), thro
     plannedDays++
     if (b.sportSource === 'missing') unmeasured++
   })
-  const total = nutrition + sportDelta
+  const total = nutrition + sportDelta + bonus
   const from = list[0].d, to = list[list.length - 1].d
   return {
     from, to,
@@ -342,6 +409,8 @@ export function deficitTotals(S, tdee = S.tdee, days = 0, now = Date.now(), thro
     span: Math.round(dayNum(to) - dayNum(from)) + 1,
     nutrition: Math.round(nutrition),
     sportDelta: Math.round(sportDelta),
+    bonus: Math.round(bonus),
+    bonusDays,
     sportLogged: Math.round(sportLogged),
     // Against the days the budget could actually be held to, not every day in the window:
     // "5 352 measured against 30 590 assumed" is only a fair comparison when the 30 590 was
