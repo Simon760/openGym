@@ -409,7 +409,7 @@ function TdeeSheet({ close }) {
     ['bmr', t('BMR'), t('What the body spends doing nothing at all.')],
     ['neat', t('NEAT'), t('Walking, standing, fidgeting — everything that is not a session.')],
     ['other', t('Other'), t('Digestion, the cold, anything else you count separately.')],
-    ['sport', t('Sport already included'), t('The training this figure already budgets for. Only the difference from what you actually log moves a day.')]
+    ['sport', t('Sport already included'), t('Training the total above already contains — so a day you do not train is charged this much less. Leave it at 0 if your figure is what you burn on any day, training or not.')]
   ]
 
   return <>
@@ -427,9 +427,27 @@ function TdeeSheet({ close }) {
       <span className="muted">{t('Total')}</span>
       <b className="stat-v" style={{ fontSize: 20, color: parts ? 'var(--acc)' : 'var(--orange)' }}>{fmtNum(total)} kcal</b>
     </div>
-    {v.sport > 0 && <div className="dim small" style={{ margin: '6px 2px 0', lineHeight: 1.45 }}>
-      {t('A day trained as planned sits at maintenance. A session skipped takes {0} kcal off the day, a longer one adds the difference.', fmtNum(v.sport))}
-    </div>}
+    {/* What the parts actually come to on the two kinds of day. Spelled out as figures and
+        not as a sentence, because "sport already included" reads to most people as "this is
+        what I burn when I train" — and the consequence, that a rest day is charged less, is
+        invisible until months of totals come out wrong. */}
+    {v.sport > 0 && <>
+      <div className="row between small" style={{ padding: '6px 2px 0' }}>
+        <span className="dim">{t('A day you do not train')}</span>
+        <b style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtNum(total - v.sport)} kcal</b>
+      </div>
+      <div className="row between small" style={{ padding: '3px 2px 0' }}>
+        <span className="dim">{t('A day trained as planned')}</span>
+        <b style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtNum(total)} kcal</b>
+      </div>
+      <div style={{ height: 10 }} />
+      <Button icon="reset" onClick={() => setV(o => ({ ...o, other: (o.other || 0) + o.sport, sport: 0 }))}>
+        {t('My figure holds on rest days too')}
+      </Button>
+      <div className="dim small" style={{ margin: '6px 2px 0', lineHeight: 1.45 }}>
+        {t('Moves the {0} kcal into Other. The total does not change, but a day without training stops costing less — and every training kcal you record is added on top of it instead.', fmtNum(v.sport))}
+      </div>
+    </>}
 
     <h4 className="sec">{t('Trust in the watch')}</h4>
     <Stepper label={t('Discount its active energy by')} unit="%" value={trim} step={1} decimal={false}
