@@ -278,7 +278,7 @@ describe('parseHealthCSV — what a person actually pastes', () => {
   it('maps every column of its own published header', () => {
     const en = 'Date,Weight,Body fat,Intake kcal,Protein,Carbs,Fat,Sport kcal,Steps,Bedtime,Wake time'.split(',')
     const fr = 'Date,Poids,Masse grasse,Apports kcal,Protéines,Glucides,Lipides,Sport kcal,Pas,Coucher,Réveil'.split(',')
-    const want = ['date', 'weight', 'bodyFat', 'intake', 'protein', 'carbs', 'fat', 'kcal', 'steps', 'bed', 'wake']
+    const want = ['date', 'weight', 'bodyFat', 'intake', 'protein', 'carbs', 'fat', 'sport', 'steps', 'bed', 'wake']
     for (const header of [en, fr]) {
       const map = mapHealthHeader(header)
       expect(Object.keys(map).sort()).toEqual([...want].sort())
@@ -319,7 +319,7 @@ describe('parseHealthCSV — a retroactive history', () => {
     expect(ignored).toEqual([])
     expect(payloads[0]).toMatchObject({
       d: '2026-08-22', weight: 78.4, bodyFat: 18.6,
-      intake: 1940, protein: 155, carbs: 180, fat: 62, kcal: 480, steps: 9420
+      intake: 1940, protein: 155, carbs: 180, fat: 62, sport: 480, steps: 9420
     })
     // an empty cell is a day nobody recorded, not a day of none
     expect('bodyFat' in payloads[1]).toBe(false)
@@ -347,6 +347,19 @@ describe('parseHealthCSV — a retroactive history', () => {
   it('keeps eating apart from burning when a file carries both', () => {
     const { payloads } = parseHealthCSV('Date,Intake kcal,Calories burned\n2026-08-22,1940,480')
     expect(payloads[0]).toMatchObject({ intake: 1940, kcal: 480 })
+  })
+
+  it('keeps a session apart from a whole day, which are not the same burn', () => {
+    // "Sport kcal" is training and nothing else. "Active energy" is training plus every step
+    // walked, which a maintenance figure already budgets as NEAT. Reading one as the other
+    // inflates a deficit every single day, so the columns are separate.
+    const both = parseHealthCSV('Date,Sport kcal,Active energy\n2026-08-22,480,900').payloads[0]
+    expect(both).toMatchObject({ sport: 480, kcal: 900 })
+
+    for (const h of ['Sport kcal', 'Dépense sport', 'Workout calories', 'Kcal entraînement'])
+      expect(parseHealthCSV(`Date,${h}\n2026-08-22,480`).payloads[0]).toMatchObject({ sport: 480 })
+    for (const h of ['Active energy', 'Calories burned', 'Calories brûlées', 'Énergie active'])
+      expect(parseHealthCSV(`Date,${h}\n2026-08-22,900`).payloads[0]).toMatchObject({ kcal: 900 })
   })
 })
 

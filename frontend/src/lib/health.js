@@ -59,6 +59,10 @@ export function parseHealth(raw) {
   if (steps) out.steps = Math.round(steps)
   const kcal = num(pick(data, 'active_kcal', 'activeEnergy', 'active_energy', 'activeKcal', 'energy'))
   if (kcal) out.kcal = Math.round(kcal)
+  // Training energy on its own, for a day whose session was never logged here. Distinct from
+  // active_kcal, which is the whole day and carries NEAT with it.
+  const sport = num(pick(data, 'sport_kcal', 'sportKcal', 'training_kcal', 'workout_kcal'))
+  if (sport) out.sport = Math.round(sport)
   const rhr = num(pick(data, 'resting_hr', 'restingHR', 'resting_heart_rate', 'rhr'))
   if (rhr) out.rhr = Math.round(rhr)
   const exercise = num(pick(data, 'exercise_minutes', 'exerciseMinutes', 'move_minutes'))
@@ -107,7 +111,7 @@ export function parseHealth(raw) {
 
   // A payload carrying only a date says nothing; letting it through would report a
   // successful import that wrote nothing.
-  const wrote = ['steps', 'kcal', 'rhr', 'exerciseMin', 'sleepHours', 'bed', 'weight', 'bodyFat',
+  const wrote = ['steps', 'kcal', 'sport', 'rhr', 'exerciseMin', 'sleepHours', 'bed', 'weight', 'bodyFat',
     'intake', 'protein', 'carbs', 'fat', 'workout']
   if (!wrote.some(k => out[k] != null)) throw new Error(t('that payload has no health data in it'))
   return out
@@ -137,6 +141,16 @@ export function applyHealth(S, p) {
   // Shortcut that only ever sends steps must not wipe the energy typed in by hand that
   // morning, and a hand-typed session must not wipe the steps a Shortcut sent at ten. Each
   // source knows only its own fields, and putHealth keeps exactly the ones it is handed.
+  // Training energy from a file. Onto the session logged that day when there is one, so it
+  // reads like anything else the watch measured; otherwise against the day, exactly where a
+  // hand-typed session with nothing to attach to already goes.
+  if (p.sport != null) {
+    const w = (S.workouts || []).find(x => x.d === p.d)
+    if (w) w.watch = { ...(w.watch || {}), kcal: p.sport }
+    else S.health = putHealth(S.health, { ...(healthFor(S, p.d) || {}), d: p.d, sport: p.sport })
+    report.wrote.push(t('{0} kcal of training', p.sport))
+  }
+
   if (p.steps != null || p.kcal != null || p.rhr != null || p.exerciseMin != null) {
     S.health = putHealth(S.health, { ...(healthFor(S, p.d) || {}), ...p, d: p.d })
     if (p.steps != null) report.wrote.push(t('{0} steps', p.steps))
@@ -257,9 +271,19 @@ export const CSV_COLUMNS = [
   ['protein', ['protein g', 'protein grams', 'protein', 'proteins', 'proteines']],
   ['carbs', ['carbs g', 'carb grams', 'carbs', 'carb', 'carbohydrate', 'carbohydrates', 'glucides']],
   ['steps', ['steps', 'step count', 'total steps', 'pas', 'nombre de pas']],
+  // Two different figures that a spreadsheet calls by nearly the same name, and telling them
+  // apart is the difference between an honest deficit and one inflated every day. What a
+  // *session* cost is training and nothing else. What the *day* burned actively is training
+  // plus all the walking, which a maintenance figure already budgets as NEAT — so the day
+  // total gets that NEAT taken back off it and the session figure does not. Merging the two
+  // columns, as this used to, silently applies the wrong one of those rules to half a
+  // history. Session first: "sport kcal" must claim its header before the day's list runs.
+  ['sport', ['sport kcal', 'training kcal', 'workout calories', 'workout kcal',
+    'exercise calories', 'session kcal', 'kcal sport', 'depense sport', 'sport',
+    'entrainement', 'kcal entrainement', 'seance kcal']],
   ['kcal', ['active calories', 'calories burned', 'activity calories', 'active energy',
-    'energy burned', 'sport kcal', 'exercise calories', 'workout calories', 'sport',
-    'depense sport', 'calories brulees', 'calories', 'depense']],
+    'energy burned', 'total burned', 'calories brulees', 'energie active', 'depense active',
+    'calories', 'depense']],
   ['rhr', ['resting heart rate', 'resting hr', 'lowest resting heart rate', 'rhr', 'fc repos', 'fc au repos']],
   ['weight', ['weight kg', 'weight', 'body weight', 'poids', 'poids kg']],
   // Body fat before the fat macro: "Body fat" ends in " fat" and the macro list would
@@ -394,6 +418,7 @@ export function parseHealthCSV(text) {
 
     const steps = numCell(row, map.steps); if (steps) p.steps = Math.round(steps)
     const kcal = numCell(row, map.kcal); if (kcal) p.kcal = Math.round(kcal)
+    const sport = numCell(row, map.sport); if (sport) p.sport = Math.round(sport)
     const rhr = numCell(row, map.rhr); if (rhr) p.rhr = Math.round(rhr)
     const kg = numCell(row, map.weight); if (kg) p.weight = Math.round(kg * 10) / 10
     const bf = validBodyFat(numCell(row, map.bodyFat)); if (bf != null) p.bodyFat = bf
@@ -446,20 +471,28 @@ Ask for exactly this:
   Write my whole history as CSV, one row per day, oldest first.
   First line exactly:
 
-  Date,Weight,Body fat,Intake kcal,Protein,Carbs,Fat,Sport kcal,Steps,Bedtime,Wake time
+  Date,Intake kcal,Protein,Carbs,Fat,Sport kcal,Weight,Body fat,Steps,Bedtime,Wake time
 
   Rules:
   · Date as YYYY-MM-DD (2025-03-12)
-  · Leave a cell empty when the figure was never recorded that day — never write 0
-  · Weight in kg (78.4), body fat in %, intake and sport in kcal, macros in grams
+  · Leave a cell EMPTY when the figure was never recorded that day — never write 0.
+    A day with calories but no macros leaves Protein, Carbs and Fat empty. A day with no
+    training leaves Sport kcal empty. Both are ordinary and both import fine.
+  · Intake and Sport in kcal, macros in grams, weight in kg (78.4), body fat in %
   · Bedtime and Wake time as HH:MM
   · Drop any column you have no data for at all
 
 Then paste the answer straight in here, or save it as a .csv and open the file.
 
-Only the date is required — Date,Weight alone is a complete file. Column names do not have to
-match: French names and the usual tracker exports are understood too, and the mapping is shown
-before a single day is written.
+Only the date is required — Date,Intake kcal alone is a complete file. Column names do not
+have to match: French names and the usual tracker exports are understood too, and the mapping
+is shown before a single day is written.
+
+Two burns, and they are not the same number. Sport kcal is what a session cost, and nothing
+is taken off it. Active energy is what the whole day burned actively — training plus every
+step walked — and the walking is already inside your maintenance figure as NEAT, so that
+column gets it taken back off. Put a session figure under Sport kcal; only use Active energy
+for a whole-day reading off a watch.
 
 Paste it however it came out. A fenced code block, a Markdown table of pipes, a sentence above
 it, semicolons instead of commas — all four read the same. The one thing that breaks is a

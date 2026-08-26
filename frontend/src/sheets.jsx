@@ -986,7 +986,8 @@ function PlanImport({ bundle, report, onApplied, close }) {
 // failure mode of a CSV import, and it is invisible once the rows are in.
 const healthFieldLabel = () => ({
   bed: t('Bedtime'), wake: t('Wake time'), awakeMin: t('Awake during the night'),
-  sleepDur: t('Sleep duration'), steps: t('Steps'), kcal: t('Energy burned'),
+  sleepDur: t('Sleep duration'), steps: t('Steps'), kcal: t('Active energy (whole day)'),
+  sport: t('Training energy'),
   rhr: t('Resting heart rate'), weight: t('Weight'), bodyFat: t('Body fat'),
   intake: t('Calories eaten'), protein: t('Protein'), carbs: t('Carbs'), fat: t('Fat')
 })
