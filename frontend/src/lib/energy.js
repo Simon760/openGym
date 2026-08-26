@@ -138,6 +138,35 @@ export function observedNEAT(S, days = NEAT_WINDOW, now = Date.now()) {
 }
 
 /**
+ * The everyday movement to charge a given day with, and where that figure came from.
+ *
+ * Three sources, most specific first, and the order is the whole point:
+ *
+ *   day       the file said so for that day — a NEAT column, one row per day
+ *   rest      the median of this person's own rest days, in the watch's own units
+ *   declared  the NEAT part of the maintenance figure they entered once
+ *
+ * The fallback never runs out, which is the property being bought here. A NEAT column with
+ * gaps in it is the normal case — nobody has a step-count history for every day they ever
+ * lived — and an empty cell has to mean "as usual", never "did not move". Read as zero it
+ * would hand a day the whole of its active energy as training and invent a deficit out of a
+ * walk to the shops; so a blank cell simply does not reach here, and the day falls through
+ * to the baseline it would have had if the column had never existed.
+ *
+ * The units differ by source and that matters downstream. 'day' and 'declared' are real
+ * amounts — a person's own figure, in kcal actually spent. 'rest' is a watch reading, and
+ * carries the watch's overcount with it, so it is the only one that gets trimmed before it
+ * is set against another watch reading.
+ */
+export function neatFor(S, iso, tdee = S && S.tdee, now = Date.now()) {
+  const own = num((healthFor(S, iso) || {}).neat)
+  if (own != null) return { kcal: Math.round(own), from: 'day' }
+  const seen = observedNEAT(S, NEAT_WINDOW, now)
+  if (seen) return { kcal: seen.kcal, from: 'rest', days: seen.days }
+  return { kcal: Math.round((tdeeParts(tdee) || {}).neat || 0), from: 'declared' }
+}
+
+/**
  * What training actually cost on a given day, and where the figure came from — the source
  * travels with the number because they are not equally trustworthy, and `raw` travels with
  * it because a trimmed figure that cannot be traced back to what the watch said is a number
@@ -177,14 +206,13 @@ export function sportKcal(S, iso, trim = WATCH_TRIM, tdee = S && S.tdee, now = D
 
   const day = num(hd && hd.kcal)
   if (day != null) {
-    // Measured beats declared: the rest-day baseline is this person's own, in the watch's
-    // own units, where the entered figure is a guess typed once. The declared one still
-    // stands until there are enough rest days to speak from.
-    const seen = observedNEAT(S, NEAT_WINDOW, now)
-    const trimmedRest = seen ? Math.round(seen.kcal * (1 - t)) : null
-    return trimmedRest != null
-      ? cut(day, 'watch', trimmedRest, { kind: 'rest', days: seen.days })
-      : cut(day, 'watch', (tdeeParts(tdee) || {}).neat || 0, { kind: 'declared' })
+    // What to take back off, and in whose units. A rest-day median is a watch reading set
+    // against a watch reading, so it is trimmed exactly as the day total is; a figure the
+    // person gave — for that day, or once in their maintenance — is already a real amount
+    // and trimming it would take the overcount off a number that never had one.
+    const n = neatFor(S, iso, tdee, now)
+    const off = n.from === 'rest' ? Math.round(n.kcal * (1 - t)) : n.kcal
+    return cut(day, 'watch', off, { kind: n.from, days: n.days })
   }
 
   // Nothing measured the training that day. Whether that means "rested" or "nobody recorded
@@ -233,11 +261,20 @@ export function dayBalance(S, iso, tdee = S.tdee, trim, now = Date.now()) {
   const intake = num(e && e.kcal)
   const sp = sportKcal(S, iso, trim != null ? trim : trimOf(S), tdee, now)
   const delta = sp.kcal - p.sport
-  const out = p.total + delta
+  // A day that knows its own everyday movement uses it, in place of the NEAT the maintenance
+  // figure assumes for every day alike. That figure is one number typed once; it cannot know
+  // which day was eleven kilometres of walking and which was a desk. Where the day says
+  // nothing, neatFor hands back that same declared figure and the shift is zero — which is
+  // what makes an empty cell cost nothing rather than costing a day's NEAT.
+  const n = neatFor(S, iso, tdee, now)
+  const parts = n.from === 'day' ? { ...p, neat: n.kcal, total: p.total - p.neat + n.kcal } : p
+  const out = parts.total + delta
   return {
     d: iso,
-    tdee: p.total,
-    parts: p,
+    tdee: parts.total,
+    parts,
+    neat: parts.neat,
+    neatFrom: n.from,
     planned: p.sport,
     sport: sp.kcal,
     sportRaw: sp.raw,
@@ -277,10 +314,13 @@ export function deficitTotals(S, tdee = S.tdee, days = 0, now = Date.now(), thro
   const list = (S.nutrition || []).filter(e => num(e.kcal) != null && e.d <= end && inWindow(e.d, days, now))
   if (!list.length) return null
 
-  let nutrition = 0, sportDelta = 0, sportLogged = 0, unmeasured = 0, untracked = 0, plannedDays = 0
+  let nutrition = 0, sportDelta = 0, sportLogged = 0, unmeasured = 0, untracked = 0, plannedDays = 0, neatDays = 0
   list.forEach(e => {
     const b = dayBalance(S, e.d, tdee)
-    nutrition += p.total - b.intake
+    // The day's own maintenance, not the flat one: a day carrying its own NEAT figure is
+    // held to that day's total, or the column would be read and then quietly ignored.
+    nutrition += b.tdee - b.intake
+    if (b.neatFrom === 'day') neatDays++
     sportLogged += b.sport
     // A day that says nothing about training contributes nothing to the training total. It
     // is not a day of no training, and treating it as one would charge it a whole budget.
@@ -304,6 +344,10 @@ export function deficitTotals(S, tdee = S.tdee, days = 0, now = Date.now(), thro
     sportPlanned: Math.round(p.sport * plannedDays),
     plannedDays,
     untracked,
+    // How many of those days were held to a movement figure of their own rather than to the
+    // one the maintenance total assumes for every day alike. Reported because a total quietly
+    // computed against a different maintenance on some of its days is a total nobody can check.
+    neatDays,
     total: Math.round(total),
     perDay: Math.round(total / list.length),
     kg: Math.round((total / KCAL_PER_KG_FAT) * 100) / 100,

@@ -257,6 +257,13 @@ function EnergyCard({ S }) {
           {tot.untracked > 0 && <div className="dim small" style={{ lineHeight: 1.45 }}>
             {t('{0} days recorded no training either way — neither a session nor a rest day — so they count for eating only.', tot.untracked)}
           </div>}
+          {/* Days whose import carried their own NEAT are held to their own maintenance, not
+              to the one figure typed once. Named, because a total computed against a
+              different maintenance on some of its days has to say so to be checkable. */}
+          {tot.neatDays > 0 && tdee && <div className="dim small" style={{ lineHeight: 1.45 }}>
+            {t('{0} days carried their own everyday-movement figure and are held to it, in place of the {1} kcal of NEAT your maintenance assumes.',
+              tot.neatDays, fmtNum(tdee.neat))}
+          </div>}
           {tot.nutrition < 0 && <div className="small" style={{ color: 'var(--orange)', lineHeight: 1.45 }}>
             {t('Eating sat above maintenance across this period — every gram lost came from training.')}
           </div>}

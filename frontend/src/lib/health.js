@@ -63,6 +63,10 @@ export function parseHealth(raw) {
   // active_kcal, which is the whole day and carries NEAT with it.
   const sport = num(pick(data, 'sport_kcal', 'sportKcal', 'training_kcal', 'workout_kcal'))
   if (sport) out.sport = Math.round(sport)
+  // Everyday movement on its own, separate from both burns: what the day cost outside
+  // training. Absent means unknown, never zero — see neatFor.
+  const neat = num(pick(data, 'neat_kcal', 'neatKcal', 'neat'))
+  if (neat) out.neat = Math.round(neat)
   const rhr = num(pick(data, 'resting_hr', 'restingHR', 'resting_heart_rate', 'rhr'))
   if (rhr) out.rhr = Math.round(rhr)
   const exercise = num(pick(data, 'exercise_minutes', 'exerciseMinutes', 'move_minutes'))
@@ -111,7 +115,7 @@ export function parseHealth(raw) {
 
   // A payload carrying only a date says nothing; letting it through would report a
   // successful import that wrote nothing.
-  const wrote = ['steps', 'kcal', 'sport', 'rhr', 'exerciseMin', 'sleepHours', 'bed', 'weight', 'bodyFat',
+  const wrote = ['steps', 'kcal', 'sport', 'neat', 'rhr', 'exerciseMin', 'sleepHours', 'bed', 'weight', 'bodyFat',
     'intake', 'protein', 'carbs', 'fat', 'workout']
   if (!wrote.some(k => out[k] != null)) throw new Error(t('that payload has no health data in it'))
   return out
@@ -121,7 +125,7 @@ export function parseHealth(raw) {
 export function putHealth(list, entry) {
   const rest = (list || []).filter(e => e.d !== entry.d)
   const kept = { d: entry.d, t: entry.t || Date.now() }
-  for (const k of ['steps', 'kcal', 'rhr', 'exerciseMin', 'sport', 'sportMin']) if (entry[k] != null) kept[k] = entry[k]
+  for (const k of ['steps', 'kcal', 'rhr', 'exerciseMin', 'sport', 'sportMin', 'neat']) if (entry[k] != null) kept[k] = entry[k]
   if (Object.keys(kept).length <= 2) return rest.sort(byDate)
   return [...rest, kept].sort(byDate)
 }
@@ -151,10 +155,11 @@ export function applyHealth(S, p) {
     report.wrote.push(t('{0} kcal of training', p.sport))
   }
 
-  if (p.steps != null || p.kcal != null || p.rhr != null || p.exerciseMin != null) {
+  if (p.steps != null || p.kcal != null || p.rhr != null || p.exerciseMin != null || p.neat != null) {
     S.health = putHealth(S.health, { ...(healthFor(S, p.d) || {}), ...p, d: p.d })
     if (p.steps != null) report.wrote.push(t('{0} steps', p.steps))
     if (p.kcal != null) report.wrote.push(t('{0} kcal burned', p.kcal))
+    if (p.neat != null) report.wrote.push(t('{0} kcal of everyday movement', p.neat))
     if (p.rhr != null) report.wrote.push(t('resting heart rate {0}', p.rhr))
   }
 
@@ -278,6 +283,12 @@ export const CSV_COLUMNS = [
   // total gets that NEAT taken back off it and the session figure does not. Merging the two
   // columns, as this used to, silently applies the wrong one of those rules to half a
   // history. Session first: "sport kcal" must claim its header before the day's list runs.
+  // Everyday movement, when the file happens to know it day by day. It claims its header
+  // before either burn column does, because "Dépense NEAT" starts with "dépense" and the
+  // day-total list would otherwise swallow it whole. A blank cell is not a day spent lying
+  // down: it falls back to the usual figure, in neatFor.
+  ['neat', ['neat kcal', 'kcal neat', 'neat quotidien', 'depense neat', 'non exercise activity',
+    'non exercise energy', 'activite hors sport', 'depense hors sport', 'neat']],
   ['sport', ['sport kcal', 'training kcal', 'workout calories', 'workout kcal',
     'exercise calories', 'session kcal', 'kcal sport', 'depense sport', 'sport',
     'entrainement', 'kcal entrainement', 'seance kcal']],
@@ -419,6 +430,7 @@ export function parseHealthCSV(text) {
     const steps = numCell(row, map.steps); if (steps) p.steps = Math.round(steps)
     const kcal = numCell(row, map.kcal); if (kcal) p.kcal = Math.round(kcal)
     const sport = numCell(row, map.sport); if (sport) p.sport = Math.round(sport)
+    const neat = numCell(row, map.neat); if (neat) p.neat = Math.round(neat)
     const rhr = numCell(row, map.rhr); if (rhr) p.rhr = Math.round(rhr)
     const kg = numCell(row, map.weight); if (kg) p.weight = Math.round(kg * 10) / 10
     const bf = validBodyFat(numCell(row, map.bodyFat)); if (bf != null) p.bodyFat = bf
@@ -471,14 +483,15 @@ Ask for exactly this:
   Write my whole history as CSV, one row per day, oldest first.
   First line exactly:
 
-  Date,Intake kcal,Protein,Carbs,Fat,Sport kcal,Weight,Body fat,Steps,Bedtime,Wake time
+  Date,Intake kcal,Protein,Carbs,Fat,Sport kcal,NEAT kcal,Weight,Body fat,Steps,Bedtime,Wake time
 
   Rules:
   · Date as YYYY-MM-DD (2025-03-12)
   · Leave a cell EMPTY when the figure was never recorded that day — never write 0.
     A day with calories but no macros leaves Protein, Carbs and Fat empty. A day with no
     training leaves Sport kcal empty. Both are ordinary and both import fine.
-  · Intake and Sport in kcal, macros in grams, weight in kg (78.4), body fat in %
+  · NEAT kcal is optional, day by day. An empty cell means "as usual", not "did not move".
+  · Intake, Sport and NEAT in kcal, macros in grams, weight in kg (78.4), body fat in %
   · Bedtime and Wake time as HH:MM
   · Drop any column you have no data for at all
 
@@ -493,6 +506,12 @@ is taken off it. Active energy is what the whole day burned actively — trainin
 step walked — and the walking is already inside your maintenance figure as NEAT, so that
 column gets it taken back off. Put a session figure under Sport kcal; only use Active energy
 for a whole-day reading off a watch.
+
+NEAT is the third figure, and the one nobody has to fill in: what the day cost outside
+training — the walking, the standing, the stairs. Where a day names its own, that day's
+maintenance uses it in place of the NEAT you entered once, and a day-total burn has that
+figure taken off instead of the usual one. Where the cell is empty your usual figure stands:
+an empty NEAT cell is never read as a day spent motionless.
 
 Paste it however it came out. A fenced code block, a Markdown table of pipes, a sentence above
 it, semicolons instead of commas — all four read the same. The one thing that breaks is a

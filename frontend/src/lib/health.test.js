@@ -381,3 +381,39 @@ describe('applyHealthDays — an imported history', () => {
     expect(entryFor(S, D)).toMatchObject({ kcal: 1940, p: 150, c: 170, f: 60 })
   })
 })
+
+describe('a NEAT column', () => {
+  it('reads it, under its own name and under French ones', () => {
+    for (const head of ['NEAT kcal', 'Dépense NEAT', 'Activité hors sport', 'Non-exercise activity']) {
+      const { payloads, matched } = parseHealthCSV(`Date,${head}\n2026-03-12,640\n`)
+      expect(payloads[0], head).toMatchObject({ d: '2026-03-12', neat: 640 })
+      expect(matched.find(m => m.field === 'neat').column).toBe(head)
+    }
+  })
+
+  it('claims its header before either burn column can swallow it', () => {
+    // "Dépense NEAT" starts with "dépense", which the day-total list would otherwise take.
+    const { payloads } = parseHealthCSV('Date,Sport kcal,Dépense NEAT,Énergie active\n2026-03-12,500,700,1200\n')
+    expect(payloads[0]).toMatchObject({ sport: 500, neat: 700, kcal: 1200 })
+  })
+
+  it('writes it onto the day, beside whatever else that day already knows', () => {
+    const S = { health: [{ d: D, steps: 9420 }], workouts: [], nutrition: [], bodyweight: [] }
+    applyHealth(S, { d: D, neat: 700 })
+    expect(healthFor(S, D)).toMatchObject({ steps: 9420, neat: 700 })
+  })
+
+  it('leaves an empty cell absent, so the default stands rather than a zero', () => {
+    const { payloads } = parseHealthCSV('Date,Apports kcal,NEAT kcal\n2026-03-12,2100,\n2026-03-13,2100,650\n')
+    expect(payloads[0].neat).toBeUndefined()
+    expect(payloads[1].neat).toBe(650)
+    const S = { health: [], workouts: [], nutrition: [], bodyweight: [] }
+    applyHealthDays(S, payloads)
+    expect(healthFor(S, '2026-03-12')).toBe(null)
+    expect(healthFor(S, '2026-03-13').neat).toBe(650)
+  })
+
+  it('reads it from a Shortcut payload too', () => {
+    expect(parseHealth('{"date":"2026-03-12","neat_kcal":700}')).toMatchObject({ neat: 700 })
+  })
+})

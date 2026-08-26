@@ -407,7 +407,8 @@ function TdeeSheet({ close }) {
 
   const FIELDS = [
     ['bmr', t('BMR'), t('What the body spends doing nothing at all.')],
-    ['neat', t('NEAT'), t('Walking, standing, fidgeting — everything that is not a session.')],
+    ['neat', t('NEAT'), t('Walking, standing, fidgeting — everything that is not a session.')
+      + ' ' + t('A day whose import carried its own figure is held to that one instead.')],
     ['other', t('Other'), t('Digestion, the cold, anything else you count separately.')],
     ['sport', t('Sport already included'), t('Training the total above already contains — so a day you do not train is charged this much less. Leave it at 0 if your figure is what you burn on any day, training or not.')]
   ]
@@ -1005,7 +1006,7 @@ function PlanImport({ bundle, report, onApplied, close }) {
 const healthFieldLabel = () => ({
   bed: t('Bedtime'), wake: t('Wake time'), awakeMin: t('Awake during the night'),
   sleepDur: t('Sleep duration'), steps: t('Steps'), kcal: t('Active energy (whole day)'),
-  sport: t('Training energy'),
+  sport: t('Training energy'), neat: t('Everyday movement'),
   rhr: t('Resting heart rate'), weight: t('Weight'), bodyFat: t('Body fat'),
   intake: t('Calories eaten'), protein: t('Protein'), carbs: t('Carbs'), fat: t('Fat')
 })
@@ -1209,6 +1210,7 @@ function HealthImport({ close, arrived }) {
       pending.steps != null && [label.steps, pending.steps],
       pending.kcal != null && [label.kcal, pending.kcal + ' kcal'],
       pending.exerciseMin != null && [t('Exercise minutes'), pending.exerciseMin + ' min'],
+      pending.neat != null && [label.neat, pending.neat + ' kcal'],
       pending.rhr != null && [label.rhr, pending.rhr],
       pending.bed && pending.wake && [t('Sleep'), pending.bed + ' → ' + pending.wake],
       pending.sleepHours != null && [t('Sleep'), fmtNum(pending.sleepHours) + ' h'],
