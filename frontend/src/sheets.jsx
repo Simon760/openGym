@@ -690,9 +690,12 @@ function ProjectionSheet({ close }) {
     <h4 className="sec">{t('Which gives')}</h4>
     <div className="small" style={{ fontVariantNumeric: 'tabular-nums', lineHeight: 1.9 }}>
       <div className="row between"><span className="dim">{t('Deficit over {0} days', proj.days)}</span><b>{fmtNum(proj.deficit)} kcal</b></div>
-      <div className="row between"><span className="dim">{t('÷ {0} kcal a kilo', fmtNum(KCAL_PER_KG_FAT))}</span><b>{fmtNum(Math.round((proj.deficit / KCAL_PER_KG_FAT) * 100) / 100)} {st.unit}</b></div>
+      {/* Two decimals here and nowhere else. One decimal turned 0.96 kg into "1", and a
+          middle line that does not visibly lead to the line under it is worse than no middle
+          line: it makes a correct answer look wrong, which is the same as being wrong. */}
+      <div className="row between"><span className="dim">{t('÷ {0} kcal a kilo', fmtNum(KCAL_PER_KG_FAT))}</span><b>{fmtNum2(proj.deficit / KCAL_PER_KG_FAT)} {st.unit}</b></div>
       <div className="row between" style={{ borderTop: '1px solid var(--sep)', paddingTop: 4, marginTop: 4 }}>
-        <span className="dim">{fmtNum(proj.fromKg)} − {t('that')}</span><b style={{ color: 'var(--acc)' }}>{fmtNum(proj.kg)} {st.unit}</b>
+        <span className="dim">{fmtNum2(proj.fromKg)} − {t('that')}</span><b style={{ color: 'var(--acc)' }}>{fmtNum2(proj.kg)} {st.unit}</b>
       </div>
     </div>
     {rows.some(b => b.big) && <div className="small" style={{ color: 'var(--yellow)', marginTop: 10, lineHeight: 1.45 }}>

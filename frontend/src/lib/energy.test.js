@@ -585,3 +585,42 @@ describe('a window of N days holds N days', () => {
     expect(deficitTotals(st, 2300, 0, Date.UTC(2026, 0, 2, 15)).days).toBe(40)
   })
 })
+
+describe('a projection that shows its working has to add up on screen', () => {
+  // The reported total must equal the sum of the rows the sheet prints, exactly. That is why
+  // each day's deficit is rounded to the kcal and the rounded values are what get summed:
+  // summing full-precision values and printing rounded ones would leave a total that does not
+  // match its own column, which reads as a bug even when the arithmetic is better for it.
+  const P = { bmr: 1723, neat: 270, other: 80, sport: 230, stepBase: 9000 }
+  const NOW = Date.UTC(2026, 0, 2, 20)
+  const st = S({
+    tdee: P, watchTrim: 0.28,
+    bodyweight: [{ d: day(-15), w: 79.5 }],
+    nutrition: Array.from({ length: 20 }, (_, i) => ({ d: day(1 - i), kcal: 1830 + (i % 5) * 47 })),
+    workouts: [{ d: day(-3), id: 'w', watch: { kcal: 512 } }, { d: day(-8), id: 'x', watch: { kcal: 431 } }],
+    health: [{ d: day(-2), steps: 13117 }, { d: day(-6), steps: 5240 }]
+  })
+
+  it('sums the printed rows to the printed total', () => {
+    const p = projectedWeight(st, P, NOW)
+    const rows = st.nutrition.filter(e => e.d > p.from && e.d <= p.to)
+      .map(e => dayBalance(st, e.d, P, undefined, NOW).deficit)
+    expect(rows).toHaveLength(p.days)
+    expect(rows.reduce((a, x) => a + x, 0)).toBe(p.deficit)   // exactly, not within a kcal
+  })
+
+  it('divides once, at the end, from the anchor', () => {
+    const p = projectedWeight(st, P, NOW)
+    const exact = p.fromKg - p.deficit / KCAL_PER_KG_FAT
+    expect(p.kg).toBe(Math.round(exact * 100) / 100)
+  })
+
+  it('keeps two decimals, since one turns 0.96 kg into 1', () => {
+    // The number the middle line of the sheet prints. At one decimal it read "1 kg" beside a
+    // deficit of 7 386 and a result of 78.5 — arithmetic that does not visibly work.
+    const kg = 7386 / KCAL_PER_KG_FAT
+    expect(Math.round(kg * 10) / 10).toBe(1)                  // what it used to print
+    expect(Math.round(kg * 100) / 100).toBe(0.96)             // what it prints now
+    expect(Math.round((79.5 - kg) * 100) / 100).toBe(78.54)
+  })
+})
