@@ -35,7 +35,7 @@ const num0 = v => (Number.isFinite(+v) && +v > 0 ? +v : 0)
 // "30d" twenty-nine. Nobody would have called that a bug; they would have quietly stopped
 // trusting the card.
 const inWindow = (iso, days, now) =>
-  !days || dayNum(iso) > dayNum(lastFinished(now)) - days
+  !days || dayNum(iso) > dayNum(isoOf(new Date(now - 86400000))) - days
 const dayNum = iso => new Date(iso + 'T12:00:00').getTime() / 86400000
 
 /**
@@ -45,6 +45,31 @@ const dayNum = iso => new Date(iso + 'T12:00:00').getTime() / 86400000
  * therefore stops at yesterday unless a caller names the day it is closing.
  */
 const lastFinished = now => isoOf(new Date(now - 86400000))
+
+/* Whether a day still being lived counts. Off, the totals stop at yesterday; on, they run to
+   today the moment it has an intake on it.
+
+   The default is off, and the reason is a real failure rather than caution: a day logged as
+   far as lunch reads as a thousand-kcal deficit, because the maintenance is charged whole and
+   only half the food is in. Someone who logs as they eat would watch the figure balloon every
+   morning and collapse every evening. Someone who logs the whole day in one go at the end of
+   it has the opposite problem — a finished day sitting outside the total for no visible
+   reason — and this switch is for them. */
+export const countsToday = S => !!(S && S.countToday)
+
+/**
+ * The last day a total may include, for this profile.
+ *
+ * Today only ever qualifies once it has an intake logged. Without one dayBalance returns a
+ * null deficit and the day contributes nothing anyway, so counting it would do nothing but
+ * widen the date range with a day that says nothing.
+ */
+function lastDay(S, now) {
+  const today = isoOf(new Date(now))
+  if (!countsToday(S)) return lastFinished(now)
+  return ((S && S.nutrition) || []).some(e => e.d === today && num(e.kcal) != null)
+    ? today : lastFinished(now)
+}
 
 // Below the first a body would be dying; above the second it is a Tour de France stage.
 // Refused rather than stored — a mistyped total poisons every reading on the page at once.
@@ -414,12 +439,13 @@ export function dayBalance(S, iso, tdee = S.tdee, trim, now = Date.now()) {
  * with a sport of 0 and reported separately.
  *
  * `through` names the last day to count, for a caller closing a day out — the evening digest
- * passes the day it is reporting. Everything else stops at yesterday; see lastFinished.
+ * passes the day it is reporting. Everything else stops at yesterday, unless the profile
+ * asks for today to count — see lastDay.
  */
 export function deficitTotals(S, tdee = S.tdee, days = 0, now = Date.now(), through = null) {
   const p = tdeeParts(tdee)
   if (!p) return null
-  const end = through || lastFinished(now)
+  const end = through || lastDay(S, now)
   // Sorted here rather than trusted: `from`, `to` and `span` are read off the ends of this
   // list, and a state that arrived newest-first — an import, a database round trip — would
   // otherwise report a negative span and a reversed date range with no other symptom.
@@ -494,7 +520,7 @@ export function projectedWeight(S, tdee = S && S.tdee, now = Date.now()) {
   const weighIns = (S.bodyweight || []).filter(b => num(b.w) != null).sort((a, b) => (a.d < b.d ? -1 : 1))
   const last = weighIns[weighIns.length - 1]
   if (!last || !tdeeParts(tdee)) return null
-  const end = lastFinished(now)
+  const end = lastDay(S, now)
   if (last.d >= end) return { from: last.d, to: last.d, fromKg: num(last.w), kg: num(last.w), days: 0, span: 0, deficit: 0, gaps: 0 }
   const days = (S.nutrition || []).filter(e => num(e.kcal) != null && e.d > last.d && e.d <= end)
   let deficit = 0
@@ -667,7 +693,7 @@ export function impliedTDEE(S, days = 0, now = Date.now()) {
 
   // Intake only counts inside the span the weigh-ins cover, and today is left out for the
   // same reason it is left out of the totals: a day in progress would drag the mean down.
-  const end = to < lastFinished(now) ? to : lastFinished(now)
+  const end = to < lastDay(S, now) ? to : lastDay(S, now)
   const logged = (S.nutrition || []).filter(e => num(e.kcal) != null && e.d >= from && e.d <= end)
   if (logged.length < IMPLIED_MIN_DAYS) return { tdee: null, why: 'days', days: logged.length }
   const coverage = logged.length / (span + 1)
@@ -726,7 +752,7 @@ export function predictedVsActual(S, tdee = S.tdee, days = 0, now = Date.now()) 
 /** Chart points for the daily deficit, oldest first. Only finished days that can be computed. */
 export const deficitSeries = (S, tdee = S.tdee, days = 0, now = Date.now(), through = null) =>
   (S.nutrition || [])
-    .filter(e => num(e.kcal) != null && e.d <= (through || lastFinished(now)) && inWindow(e.d, days, now))
+    .filter(e => num(e.kcal) != null && e.d <= (through || lastDay(S, now)) && inWindow(e.d, days, now))
     .map(e => ({ b: dayBalance(S, e.d, tdee), d: e.d }))
     .filter(x => x.b && x.b.deficit != null)
     .map(x => ({ t: new Date(x.d + 'T12:00:00').getTime(), y: x.b.deficit, d: x.d }))

@@ -28,7 +28,7 @@ import { validBodyFat, composition, sleepFor, putSleep, validSleep, sleepHours, 
 import { parseHealth, applyHealth, parseHealthCSV, applyHealthDays, shortcutRecipe, shortcutLink, historySpec } from './lib/health.js'
 import { suppOn, suppName, tookOn, setTook, suppStreak, suppRate } from './lib/supp.js'
 import { weekFor, weekOfBlock, setWeekDay, duplicateBlock, emptyBlock, blocksOf, activeBlock, blockFromCurrent, startBlock, cancelSwitch, upcoming, daysUntil, removeBlock, sessionsIn, weekIndexAt, MAX_WEEKS, WEEKDAYS } from './lib/blocks.js'
-import { impliedTDEE, tdeeParts, trimOf, stepBaseOf, restStrictOf, projectedWeight, recordCalibration, calibration, dayBalance, KCAL_PER_KG_FAT, BIG_EFFORT, TDEE_PARTS, TDEE_MIN, TDEE_MAX, TRIM_MAX, IMPLIED_MIN_SPAN, IMPLIED_MIN_DAYS, IMPLIED_MIN_WEIGHINS } from './lib/energy.js'
+import { impliedTDEE, tdeeParts, trimOf, stepBaseOf, restStrictOf, countsToday, projectedWeight, recordCalibration, calibration, dayBalance, KCAL_PER_KG_FAT, BIG_EFFORT, TDEE_PARTS, TDEE_MIN, TDEE_MAX, TRIM_MAX, IMPLIED_MIN_SPAN, IMPLIED_MIN_DAYS, IMPLIED_MIN_WEIGHINS } from './lib/energy.js'
 import { APP_NAME, FILE_PREFIX } from './lib/brand.js'
 
 const S = () => useStore.getState().S
@@ -659,8 +659,11 @@ function ProjectionSheet({ close }) {
   return <>
     <h3>{t('Projected weight')}</h3>
     <div className="muted small" style={{ marginBottom: 12, lineHeight: 1.45 }}>
-      {t('{0} on {1}, then every finished day logged since — today is still being lived and is counted below, not in. Each line is the day’s own arithmetic; no day is carried over into the next.',
-        fmtKg(proj.fromKg) + ' ' + st.unit, fmtDate(proj.from, true))}
+      {countsToday(st)
+        ? t('{0} on {1}, then every day logged since, today included once you have logged what you ate. Each line is the day’s own arithmetic; no day is carried over into the next.',
+          fmtKg(proj.fromKg) + ' ' + st.unit, fmtDate(proj.from, true))
+        : t('{0} on {1}, then every finished day logged since — today is still being lived and is counted below, not in. Each line is the day’s own arithmetic; no day is carried over into the next.',
+          fmtKg(proj.fromKg) + ' ' + st.unit, fmtDate(proj.from, true))}
     </div>
 
     <div style={{ overflowX: 'auto', margin: '0 -2px' }}>
@@ -728,6 +731,10 @@ function ProjectionSheet({ close }) {
           <span>{t('which would make it')}</span>
           <span>{fmtNum2(withToday)} {st.unit}</span>
         </div>
+        <Button size="sm" variant="ghost" style={{ marginTop: 6 }}
+          onClick={() => { update(s => { s.countToday = true }); toast(t('Today counts from now on')) }}>
+          {t('Count today too')}
+        </Button>
       </div>
     })()}
 

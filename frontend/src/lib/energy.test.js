@@ -649,3 +649,51 @@ describe('the anchor keeps the precision it was given', () => {
     }
   })
 })
+
+describe('counting the day you are standing in', () => {
+  const P = { bmr: 1723, neat: 270, other: 80, sport: 230, stepBase: 9000 }
+  const NOW = Date.UTC(2026, 0, 2, 20)          // today is day(1), evening
+  const base = over => S({
+    tdee: P,
+    bodyweight: [{ d: day(-10), w: 79.45 }],
+    nutrition: Array.from({ length: 12 }, (_, i) => ({ d: day(1 - i), kcal: 1900 })),
+    ...over
+  })
+
+  it('stops at yesterday unless asked otherwise', () => {
+    const p = projectedWeight(base(), P, NOW)
+    expect(p.to).toBe(day(0))
+    expect(isoOf(new Date(NOW))).toBe(day(1))
+  })
+
+  it('runs to today when the profile asks and the food is logged', () => {
+    const p = projectedWeight(base({ countToday: true }), P, NOW)
+    expect(p.to).toBe(day(1))
+    expect(p.days).toBe(projectedWeight(base(), P, NOW).days + 1)
+  })
+
+  it('still stops at yesterday when today has no intake on it', () => {
+    // Nothing to count: a day with no food logged has a null deficit and contributes nothing,
+    // so counting it would only widen the date range with a day that says nothing.
+    const st = base({ countToday: true })
+    st.nutrition = st.nutrition.filter(e => e.d !== day(1))
+    expect(projectedWeight(st, P, NOW).to).toBe(day(0))
+  })
+
+  it('carries the same cutoff into the totals, so the two cannot disagree', () => {
+    const off = deficitTotals(base(), P, 0, NOW)
+    const on = deficitTotals(base({ countToday: true }), P, 0, NOW)
+    expect(off.to).toBe(day(0))
+    expect(on.to).toBe(day(1))
+    expect(on.days).toBe(off.days + 1)
+    expect(on.total).toBe(off.total + dayBalance(base({ countToday: true }), day(1), P, undefined, NOW).deficit)
+  })
+
+  it('and into the chart, so the graph and the figure above it still match', () => {
+    const st = base({ countToday: true })
+    const pts = deficitSeries(st, P, 0, NOW)
+    const tot = deficitTotals(st, P, 0, NOW)
+    expect(pts.length).toBe(tot.days)
+    expect(Math.abs(pts.reduce((a, x) => a + x.y, 0) - tot.total)).toBeLessThanOrEqual(tot.days)
+  })
+})
