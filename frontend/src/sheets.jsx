@@ -3,7 +3,7 @@ import { useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
 import { EXDB, EXIDX, BODYPARTS, isCardio, isBodyweightEq, allExercises, equipmentOf, exName, exSearchText } from './lib/exercises.js'
 import { fmtDate, fmtNum, fmtNum2, fmtVol, fmtDur, durPart, todayISO, isoOf, uid, exCount, DAYN, MONTHS_LONG, ACCENTS } from './lib/format.js'
-import { lastEntryFor, bestWeightFor, buildSets, effectiveRoutineId, workoutVolume, setsDone, setsDoneActive, lastBW, supersetUnits, unitOf, setLabel, defaultConfig, cleanupSg, modeOf, effortOf, isBw, isPerSide, sideReps } from './lib/history.js'
+import { lastEntryFor, bestWeightFor, buildSets, effectiveRoutineId, effectiveRoutine, weekDays, swapDays, workoutVolume, setsDone, setsDoneActive, lastBW, supersetUnits, unitOf, setLabel, defaultConfig, cleanupSg, modeOf, effortOf, isBw, isPerSide, sideReps } from './lib/history.js'
 import { beep, vibrate } from './lib/sound.js'
 import { t, instrFor, getLang, INSTR_LANGS } from './lib/i18n.js'
 import { nav } from './lib/nav.js'
@@ -1732,6 +1732,22 @@ function DayOverride({ iso, close }) {
     close()
     toast(v === '' ? t('Back to weekly plan') : v === 'rest' ? t('{0} set to rest', fmtDate(iso)) : t('{0} planned for {1}', (st.routines.find(r => r.id === v) || {}).name, fmtDate(iso)))
   }
+  // The other days of this week, with what each is set to. A day already trained is left out:
+  // its session is a fact, and moving what was planned for it would say nothing true.
+  // Today onward only. A swap moves both sessions, and moving one onto a day that has already
+  // gone puts it somewhere it can never be done — the missed-session case is the list above,
+  // where you simply pick that routine for today.
+  const trained = new Set((st.workouts || []).map(w => w.d))
+  const swappable = weekDays(iso)
+    .filter(d => d !== iso && d >= todayISO() && !trained.has(d))
+    .map(d => ({ iso: d, r: effectiveRoutine(st, d) }))
+    .filter(o => o.r || effectiveRoutine(st, iso))
+  const doSwap = other => {
+    let ok
+    update(s => { ok = swapDays(s, iso, other) })
+    close()
+    if (ok) toast(t('{0} and {1} swapped', fmtDate(iso), fmtDate(other)))
+  }
   return <>
     <h3>{fmtDate(iso, true)}</h3>
     <div className="muted small" style={{ marginBottom: 12 }}>{t('Weekly plan:')} {weeklyR ? weeklyR.name : t('Rest')}{hasOvr && <span style={{ color: 'var(--orange)' }}> · {t('changed for this day')}</span>}<br />{t('Sick, missed a day or want a different session? Pick what to train instead.')}</div>
@@ -1743,6 +1759,27 @@ function DayOverride({ iso, close }) {
       <div className="item" onClick={() => set('rest')}><span className="lrow-i" style={{ background: 'var(--surface-3)' }}><Icon name="moon" /></span><div className="grow"><div className="tt">{t('Rest / skip this day')}</div></div>{effId === null && <Icon name="check" className="accent" />}</div>
       {hasOvr && <div className="item" onClick={() => set('')}><span className="lrow-i" style={{ background: 'var(--surface-3)' }}><Icon name="reset" /></span><div className="grow"><div className="tt">{t('Back to weekly plan')}</div></div></div>}
     </div>
+
+    {/* Trading two days, which is the commoner move and was impossible: picking a routine
+        for today left today's own session still sitting on the day it came from. A swap is
+        two exceptions written at once, so both ends of it move. */}
+    {swappable.length > 0 && <>
+      <h4 className="sec">{t('Or trade it with another day')}</h4>
+      <div className="list">
+        {swappable.map(o => <div key={o.iso} className="item" onClick={() => doSwap(o.iso)}>
+          <span className="lrow-i" style={{ background: o.r ? undefined : 'var(--surface-3)' }}>
+            <Icon name={o.r ? glyphOf(o.r.emoji) : 'moon'} /></span>
+          <div className="grow" style={{ minWidth: 0 }}>
+            <div className="tt">{fmtDate(o.iso, true)}</div>
+            <div className="ss">{o.r ? o.r.name : t('Rest')}</div>
+          </div>
+          <Icon name="shuffle" className="chev" />
+        </div>)}
+      </div>
+      <div className="dim small" style={{ margin: '8px 2px 0', lineHeight: 1.45 }}>
+        {t('Only these two days move. Every other week keeps the programme it has.')}
+      </div>
+    </>}
   </>
 }
 export const dayOverrideSheet = iso => ui().openSheet(close => <DayOverride iso={iso} close={close} />)

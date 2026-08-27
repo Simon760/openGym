@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { weekFor, weekOfBlock, setWeekDay, duplicateBlock, emptyBlock, blockAt, activeBlock, blockFromCurrent, startBlock, cancelSwitch,
   upcoming, daysUntil, removeBlock, sessionsIn, weekIndexAt, entryAt } from './blocks.js'
-import { effectiveRoutineId } from './history.js'
+import { effectiveRoutineId, swapDays, weekDays } from './history.js'
 import { hydrate } from './hydrate.js'
 import { todayISO } from './format.js'
 
@@ -284,5 +284,54 @@ describe('building a second block without wrecking the first', () => {
     expect(weekOfBlock(s, null, copy.id)).toEqual({ 2: 'upper' })   // the first, none being live
     expect(weekOfBlock(s, 1, copy.id)).toEqual({ 4: 'legs' })
     expect(weekOfBlock(s, null, null)).toEqual({ 1: 'push', 3: 'pull', 5: 'legs' })
+  })
+})
+
+describe('trading two days inside the same week', () => {
+  // "I'll do legs on Thursday instead" is about this week, not about every Thursday. It has
+  // to be two per-day exceptions, or editing it would move every Thursday there has ever been.
+  const monday = (() => { const d = new Date(); d.setDate(d.getDate() + ((8 - d.getDay()) % 7 || 7)); return d.toISOString().slice(0, 10) })()
+  const plus = n => new Date(new Date(monday + 'T12:00:00').getTime() + n * 864e5).toISOString().slice(0, 10)
+  const st = () => S({
+    blocks: [{ id: 'a', name: 'A', weeks: [{ 1: 'push', 3: 'pull', 5: 'legs' }] }],
+    blockLog: [{ from: iso(-30), blockId: 'a' }]
+  })
+
+  it('moves both ends, so nothing is left behind', () => {
+    const s = st()
+    expect(effectiveRoutineId(s, plus(0))).toBe('push')     // Monday
+    expect(effectiveRoutineId(s, plus(3))).toBe(null)       // Thursday, a rest day
+    expect(swapDays(s, plus(0), plus(3))).toBe(true)
+    expect(effectiveRoutineId(s, plus(3))).toBe('push')
+    expect(effectiveRoutineId(s, plus(0))).toBe(null)       // and Monday really is free now
+  })
+
+  it('leaves the block alone, so every other week is untouched', () => {
+    const s = st()
+    swapDays(s, plus(0), plus(3))
+    expect(s.blocks[0].weeks[0]).toEqual({ 1: 'push', 3: 'pull', 5: 'legs' })
+    expect(effectiveRoutineId(s, plus(7))).toBe('push')     // the Monday after
+    expect(effectiveRoutineId(s, plus(10))).toBe(null)      // the Thursday after
+  })
+
+  it('trades two training days both ways', () => {
+    const s = st()
+    swapDays(s, plus(0), plus(2))                            // Monday push ↔ Wednesday pull
+    expect(effectiveRoutineId(s, plus(0))).toBe('pull')
+    expect(effectiveRoutineId(s, plus(2))).toBe('push')
+  })
+
+  it('does nothing when neither day has a session on it', () => {
+    const s = st()
+    expect(swapDays(s, plus(1), plus(3))).toBe(false)
+    expect(Object.keys(s.dayPlan)).toHaveLength(0)
+  })
+
+  it('gives the seven days of the week a date falls in, Monday first', () => {
+    const days = weekDays(plus(3))
+    expect(days).toHaveLength(7)
+    expect(days[0]).toBe(plus(0))
+    expect(days[6]).toBe(plus(6))
+    expect(new Date(days[0] + 'T12:00:00').getDay()).toBe(1)
   })
 })

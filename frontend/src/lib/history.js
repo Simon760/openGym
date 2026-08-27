@@ -171,6 +171,38 @@ export function effectiveRoutineId(S, iso) {
   // what last month was supposed to have been.
   return weekFor(S, iso)[wd] || null
 }
+/**
+ * The seven days of the week a date falls in, Monday first — the span a swap is offered
+ * across, because "I'll do legs on Thursday instead" is a thing said about this week.
+ */
+export function weekDays(iso) {
+  const d = new Date(iso + 'T12:00:00')
+  const back = (d.getDay() + 6) % 7          // getDay: 0 = Sunday, and a week starts Monday
+  const monday = new Date(d.getTime() - back * 86400000)
+  return Array.from({ length: 7 }, (_, i) => isoOf(new Date(monday.getTime() + i * 86400000)))
+}
+
+/**
+ * Trade two days' sessions, without touching the programme either of them came from.
+ *
+ * Written as two per-day exceptions rather than as an edit to the week, because that is what
+ * it is: this Thursday does legs, every other Thursday still does whatever the block says.
+ * Editing the block instead would move every Thursday there has ever been.
+ *
+ * A day whose session moves away becomes a rest day rather than falling back to the plan —
+ * otherwise swapping Monday's push onto Thursday would leave Monday still saying push, and
+ * you would have swapped nothing.
+ */
+export function swapDays(S, a, b) {
+  if (!a || !b || a === b) return false
+  const ra = effectiveRoutineId(S, a)
+  const rb = effectiveRoutineId(S, b)
+  if (!ra && !rb) return false
+  S.dayPlan[a] = rb || 'rest'
+  S.dayPlan[b] = ra || 'rest'
+  return true
+}
+
 export function effectiveRoutine(S, iso) {
   const id = effectiveRoutineId(S, iso)
   return id ? S.routines.find(r => r.id === id) || null : null

@@ -97,6 +97,9 @@ export default function Home() {
     if (routine) return startFlow(routine.id)
     dayOverrideSheet(iso)
   }
+  // Tapping the row starts what is planned, which is right nine times out of ten and left no
+  // way at all to say "not that today". This is the tenth time.
+  const canRePlan = !dayW && !S.active
 
   return <div className="narrow">
     <div className="hdr">
@@ -127,10 +130,17 @@ export default function Home() {
               : routine ? routine.name : t('Rest day')}{todayOvr && routine ? ' · ' + t('rescheduled') : ''}</div>
           </div>
         </div>
-        {dayW ? <Icon name="chevronRight" className="chev" />
-          : isToday && S.active ? <span className="tag" style={{ color: 'var(--orange)', background: 'color-mix(in srgb,var(--orange) 16%,transparent)' }}>{t('Resume')}</span>
-          : isToday && routine ? <span className="tag acc">{t('Start')}</span>
-          : <Icon name="plus" className="chev" />}
+        <div className="row" style={{ gap: 8, flex: 'none' }}>
+          {/* A second target, small and beside the first: the row starts what is planned, and
+              this changes what is planned. Both are one tap and neither is hidden behind the
+              other. */}
+          {canRePlan && <button className="tag" style={{ border: 0 }}
+            onClick={e => { e.stopPropagation(); dayOverrideSheet(iso) }}>{t('Change')}</button>}
+          {dayW ? <Icon name="chevronRight" className="chev" />
+            : isToday && S.active ? <span className="tag" style={{ color: 'var(--orange)', background: 'color-mix(in srgb,var(--orange) 16%,transparent)' }}>{t('Resume')}</span>
+            : isToday && routine ? <span className="tag acc">{t('Start')}</span>
+            : <Icon name="plus" className="chev" />}
+        </div>
       </div>
 
       {/* What the watch measured today. It sits here, under the day it belongs to, because
