@@ -624,3 +624,28 @@ describe('a projection that shows its working has to add up on screen', () => {
     expect(Math.round((79.5 - kg) * 100) / 100).toBe(78.54)
   })
 })
+
+describe('the anchor keeps the precision it was given', () => {
+  // Every projection is measured from one weigh-in, so a fifty-gram rounding on the way in is
+  // fifty grams of error on every day after it — which is most of a fortnight's projected loss.
+  const P = { bmr: 1723, neat: 270, other: 80, sport: 230, stepBase: 9000 }
+  const NOW = Date.UTC(2026, 0, 2, 20)
+  const at = w => projectedWeight(S({
+    tdee: P,
+    bodyweight: [{ d: day(-15), w }],
+    nutrition: Array.from({ length: 20 }, (_, i) => ({ d: day(1 - i), kcal: 1900 }))
+  }), P, NOW)
+
+  it('carries hundredths through to the answer', () => {
+    const a = at(79.45), b = at(79.5)
+    expect(a.fromKg).toBe(79.45)
+    expect(Math.round((b.kg - a.kg) * 100) / 100).toBe(0.05)   // exactly the input difference
+  })
+
+  it('shifts the whole projection by whatever the anchor shifts by', () => {
+    for (const [w, other] of [[79.45, 79.5], [80, 80.02], [77.31, 77.4]]) {
+      const d = Math.round((at(other).kg - at(w).kg) * 100) / 100
+      expect(d, `${w} vs ${other}`).toBe(Math.round((other - w) * 100) / 100)
+    }
+  })
+})

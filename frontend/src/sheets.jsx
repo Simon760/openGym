@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
 import { EXDB, EXIDX, BODYPARTS, isCardio, isBodyweightEq, allExercises, equipmentOf, exName, exSearchText } from './lib/exercises.js'
-import { fmtDate, fmtNum, fmtNum2, fmtVol, fmtDur, durPart, todayISO, isoOf, uid, exCount, DAYN, MONTHS_LONG, ACCENTS } from './lib/format.js'
+import { fmtDate, fmtNum, fmtNum2, fmtKg, fmtVol, fmtDur, durPart, todayISO, isoOf, uid, exCount, DAYN, MONTHS_LONG, ACCENTS } from './lib/format.js'
 import { lastEntryFor, bestWeightFor, buildSets, effectiveRoutineId, effectiveRoutine, weekDays, swapDays, workoutVolume, setsDone, setsDoneActive, lastBW, supersetUnits, unitOf, setLabel, defaultConfig, cleanupSg, modeOf, effortOf, isBw, isPerSide, sideReps } from './lib/history.js'
 import { beep, vibrate } from './lib/sound.js'
 import { t, instrFor, getLang, INSTR_LANGS } from './lib/i18n.js'
@@ -74,13 +74,27 @@ const W_LO = 1
 const wHi = unit => (unit === 'lb' ? 660 : 300)
 function WeightInput({ value, setValue, unit }) {
   const W_HI = wHi(unit)
-  const clamp = x => Math.max(W_LO, Math.min(W_HI, Math.round((x || 0) * 10) / 10))
+  // Hundredths, not tenths. A scale reading 79.45 was rounded to 79.5 on the way in, and
+  // fifty grams is most of a fortnight's projected loss — the one number here that has to
+  // survive intact, since every projection is measured from it.
+  const clamp = x => Math.max(W_LO, Math.min(W_HI, Math.round((x || 0) * 100) / 100))
   const sv = Math.max(W_LO, Math.min(W_HI, value))
   const onSlide = v => setValue(clamp(v))
+  // The readout is the field: the buttons walk it in tenths, tapping it types the exact
+  // figure. Without that there was no way to enter a hundredth at all.
+  const [raw, setRaw] = useState(null)
   return <>
     <div className="bwstep">
       <button className="bw-pm" onClick={() => onSlide(value - 0.1)} aria-label="minus 0.1"><Icon name="minus" /></button>
-      <div className="bw-read">{fmtNum(value)}<span className="u"> {unit}</span></div>
+      <div className="bw-read">
+        <input inputMode="decimal" value={raw ?? fmtKg(value)}
+          onFocus={e => { setRaw(String(value)); e.target.select() }}
+          onChange={e => { const x = e.target.value.replace(',', '.'); setRaw(e.target.value); const n = parseFloat(x); if (isFinite(n)) setValue(clamp(n)) }}
+          onBlur={() => setRaw(null)}
+          style={{ font: 'inherit', color: 'inherit', background: 'none', border: 0, width: '3.4em',
+            textAlign: 'center', padding: 0, outline: 'none' }} />
+        <span className="u"> {unit}</span>
+      </div>
       <button className="bw-pm" onClick={() => onSlide(value + 0.1)} aria-label="plus 0.1"><Icon name="plus" /></button>
     </div>
     <div className="chips" style={{ justifyContent: 'center', margin: '8px 0' }}>
@@ -111,7 +125,7 @@ function BwSheet({ onDone, close, iso = todayISO() }) {
   })
   const comp = composition({ w: v, bf })
   const save = () => {
-    const n = Math.round((v || 0) * 10) / 10
+    const n = Math.round((v || 0) * 100) / 100
     if (!n || n <= 0) { toast(t('Enter a valid weight')); return }
     const pct = validBodyFat(bf)
     update(s => {
@@ -278,7 +292,7 @@ function GoalSheet({ close }) {
     <WeightInput value={v} setValue={setV} unit={st.unit} />
     <div style={{ height: 14 }} />
     <Button variant="primary" onClick={() => {
-      const n = Math.round((v || 0) * 10) / 10
+      const n = Math.round((v || 0) * 100) / 100
       if (!n || n <= 0) { toast(t('Enter a valid weight')); return }
       update(s => { s.targetW = n }); close()
       const b = lastBW(S()); toast(t('Goal set: {0}', fmtNum(n) + ' ' + st.unit) + (b ? ' (' + t('{0} to go', fmtNum(Math.abs(n - b.w))) + ')' : ''))
@@ -646,7 +660,7 @@ function ProjectionSheet({ close }) {
     <h3>{t('Projected weight')}</h3>
     <div className="muted small" style={{ marginBottom: 12, lineHeight: 1.45 }}>
       {t('{0} on {1}, then every day logged since. Each line is the day’s own arithmetic — no day is carried over into the next.',
-        fmtNum(proj.fromKg) + ' ' + st.unit, fmtDate(proj.from, true))}
+        fmtKg(proj.fromKg) + ' ' + st.unit, fmtDate(proj.from, true))}
     </div>
 
     <div style={{ overflowX: 'auto', margin: '0 -2px' }}>

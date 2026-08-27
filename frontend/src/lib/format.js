@@ -29,6 +29,11 @@ export const durPart = ms => (ms >= 60000 ? [fmtDur(ms)] : [])
 export const fmtNum = n => ((Math.round(n * 10) / 10) || 0).toLocaleString(dateLocale())
 // Two decimals, for a figure where rounding to one would move a limit in the wrong
 // direction: a 0.554 kg ceiling shown as "0.6" invites the reader over it.
+// A body weight, at the precision it was actually given. A scale that reads 79.45 must not
+// come back as 79.5: over a fortnight that fifty grams is most of an argument about a
+// projection. Trailing zeros are dropped, so 79.5 does not become "79.50" everywhere.
+export const fmtKg = n => (Math.round((n || 0) * 100) / 100)
+  .toLocaleString(dateLocale(), { maximumFractionDigits: 2 })
 export const fmtNum2 = n => ((Math.round(n * 100) / 100) || 0)
   .toLocaleString(dateLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 // Volume stays in the profile's unit throughout: the old shorthand turned anything over
