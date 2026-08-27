@@ -61,7 +61,7 @@ export function hydrate(state) {
   delete S.json
 
   for (const k of ['bodyweight', 'routines', 'workouts', 'customEx', 'nutrition', 'sleep', 'health', 'blocks', 'blockLog', 'calib']) S[k] = list(S[k])
-  for (const k of ['week', 'dayPlan', 'exWeights']) S[k] = dict(S[k])
+  for (const k of ['week', 'dayPlan', 'exWeights', 'supp']) S[k] = dict(S[k])
 
   S.routines = S.routines
     .filter(r => r && typeof r === 'object')

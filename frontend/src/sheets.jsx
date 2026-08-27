@@ -26,6 +26,7 @@ import { MOBILE, shareExport, shareText, canShareText } from './lib/mobile.js'
 import { entryFor, hasMacros, kcalFromMacros, derivedMismatch, remainingOf, putEntry, MACROS, MACRO_NAME } from './lib/nutrition.js'
 import { validBodyFat, composition, sleepFor, putSleep, validSleep, sleepHours, hoursBetween, validTime, BF_MIN, BF_MAX, SLEEP_MIN, SLEEP_MAX } from './lib/body.js'
 import { parseHealth, applyHealth, parseHealthCSV, applyHealthDays, shortcutRecipe, shortcutLink, historySpec } from './lib/health.js'
+import { suppOn, suppName, tookOn, setTook, suppStreak, suppRate } from './lib/supp.js'
 import { weekFor, weekOfBlock, setWeekDay, duplicateBlock, emptyBlock, blocksOf, activeBlock, blockFromCurrent, startBlock, cancelSwitch, upcoming, daysUntil, removeBlock, sessionsIn, weekIndexAt, MAX_WEEKS, WEEKDAYS } from './lib/blocks.js'
 import { impliedTDEE, tdeeParts, trimOf, stepBaseOf, restStrictOf, projectedWeight, recordCalibration, calibration, dayBalance, KCAL_PER_KG_FAT, BIG_EFFORT, TDEE_PARTS, TDEE_MIN, TDEE_MAX, TRIM_MAX, IMPLIED_MIN_SPAN, IMPLIED_MIN_DAYS, IMPLIED_MIN_WEIGHINS } from './lib/energy.js'
 import { APP_NAME, FILE_PREFIX } from './lib/brand.js'
@@ -297,11 +298,22 @@ function NutriSheet({ close, iso = todayISO() }) {
     return { kcal: e?.kcal || 0, p: e?.p || 0, c: e?.c || 0, f: e?.f || 0 }
   })
   const set = (k, n) => setV(o => ({ ...o, [k]: n || 0 }))
+  // Asked here because logging the day's calories already happens every evening, and a
+  // reminder hung off a moment that already exists is the only kind that survives a fortnight.
+  const [took, setTookState] = useState(() => tookOn(st, iso))
+  const asking = suppOn(st)
+  const streak = suppStreak(st)
+  const rate = suppRate(st, 30)
   const derived = kcalFromMacros(v)
   const mismatch = derivedMismatch(v)
   const left = remainingOf(v, st.nutriGoal)
   const save = () => {
-    update(s => { s.nutrition = putEntry(s.nutrition, { d: iso, ...v }) })
+    update(s => {
+      s.nutrition = putEntry(s.nutrition, { d: iso, ...v })
+      // Saved even when nothing else on this sheet was: a day whose only event was the
+      // tablet is still a day the streak should count.
+      if (asking && took != null) setTook(s, iso, took)
+    })
     close()
     toast(v.kcal || derived ? t('Intake saved') : t('Intake cleared'))
   }
@@ -332,6 +344,32 @@ function NutriSheet({ close, iso = todayISO() }) {
     {left && <div className="small" style={{ marginTop: 8, color: left.kcal < 0 ? 'var(--orange)' : 'var(--label-2)' }}>
       {left.kcal < 0 ? t('{0} kcal over target', fmtNum(-left.kcal)) : t('{0} kcal left today', fmtNum(left.kcal))}
     </div>}
+
+    {/* One question, and a streak so the answer is worth giving. Creatine works by
+        saturation: a dose missed on Tuesday is not made up on Wednesday, it just lowers the
+        average — so what matters is the run, not any single day. */}
+    {asking && <>
+      <div style={{ height: 14 }} />
+      <div className="today-row" style={{ cursor: 'default' }}>
+        <div className="row" style={{ gap: 9, minWidth: 0 }}>
+          <span className="lrow-i" style={{ background: took ? 'var(--acc)' : 'var(--surface-3)' }}>
+            <Icon name={took ? 'checkCircle' : 'flame'} />
+          </span>
+          <div style={{ minWidth: 0 }}>
+            <div className="lbl2">{t('Did you take your {0}?', suppName(st))}</div>
+            <div className="ttl" style={{ fontSize: 15 }}>
+              {streak > 0 ? t('{0} days running', streak) : t('Not answered')}
+            </div>
+          </div>
+        </div>
+        <Segmented style={{ flex: 'none' }} value={took === null ? '' : took ? 'y' : 'n'}
+          onChange={x => setTookState(x === 'y')}
+          options={[{ value: 'y', label: t('Yes') }, { value: 'n', label: t('No') }]} />
+      </div>
+      {rate && rate.answered >= 7 && <div className="dim small" style={{ margin: '6px 2px 0', lineHeight: 1.45 }}>
+        {t('{0} of the last {1} days answered — {2} %.', rate.taken, rate.answered, rate.pct)}
+      </div>}
+    </>}
 
     <div style={{ height: 14 }} />
     <Button variant="primary" onClick={save}>{t('Save')}</Button>

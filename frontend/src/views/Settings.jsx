@@ -16,6 +16,7 @@ import { loadStarterPlan, confirmSheet, importFromApp, healthImportSheet } from 
 import Icon from '../components/Icon.jsx'
 import { Section, Row, SelectRow, Switch, Segmented, Button, TextField } from '../components/ui.jsx'
 import { APP_NAME, FILE_PREFIX, UPSTREAM, UPSTREAM_REPO } from '../lib/brand.js'
+import { suppOn } from '../lib/supp.js'
 
 export default function Settings() {
   const nav = useNavigate()
@@ -153,6 +154,16 @@ export default function Settings() {
       <Row icon="bell" iconTint="var(--pink)" title={t('Sounds')}>
         <Switch checked={!!S.sound} onChange={v => update(s => { s.sound = v })} />
       </Row>
+      {/* The daily-supplement question, asked on the intake sheet. Named rather than
+          hard-coded to creatine: the habit is the point, not the powder. */}
+      <Row icon="flame" iconTint="var(--teal)" title={t('Ask about a daily supplement')}>
+        <Switch checked={suppOn(S)} onChange={v => update(s => { s.suppOn = v })} />
+      </Row>
+      {suppOn(S) && <Row icon="pencil" iconTint="var(--teal)" title={t('Call it')}>
+        <input className="numf" style={{ width: 130, textAlign: 'right' }} maxLength={24}
+          value={S.suppName ?? ''} placeholder={t('Creatine')}
+          onChange={e => update(s => { s.suppName = e.target.value.slice(0, 24) })} />
+      </Row>}
       {/* Two names for the same judgement, so the column asks in the scale you already think in.
           The (i) sits before the control — you read it on the way to the choice, not after it. */}
       <Row icon="target" iconTint="var(--purple)" title={t('Effort per set')}>
