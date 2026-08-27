@@ -236,10 +236,19 @@ describe('deficitTotals', () => {
 describe('the day still being lived', () => {
   const iso = n => { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10) }
 
-  it('keeps today out of the totals, because lunch is not a day', () => {
-    // at four in the afternoon the log holds one meal, and counting it would book a
-    // 1 500 kcal deficit that dinner is about to erase
-    const st = S({ nutrition: [{ d: iso(1), kcal: 1900 }, { d: iso(0), kcal: 600 }] })
+  it('counts today, since intake is one entry for the whole day', () => {
+    const st = S({ nutrition: [{ d: iso(1), kcal: 1900 }, { d: iso(0), kcal: 2000 }] })
+    const t = deficitTotals(st, 2100)
+    expect(t.days).toBe(2)
+    expect(t.to).toBe(iso(0))
+    expect(t.total).toBe(200 + 100)
+    expect(deficitSeries(st, 2100)).toHaveLength(2)
+  })
+
+  it('keeps it out when told to, for someone logging half a day', () => {
+    // At four in the afternoon that log holds one meal, and counting it books a deficit that
+    // dinner is about to erase. Off, the day waits until tomorrow.
+    const st = S({ countToday: false, nutrition: [{ d: iso(1), kcal: 1900 }, { d: iso(0), kcal: 600 }] })
     const t = deficitTotals(st, 2100)
     expect(t.days).toBe(1)
     expect(t.to).toBe(iso(1))
@@ -399,13 +408,19 @@ describe('projectedWeight', () => {
   })
   const NOW = Date.UTC(2026, 0, 2, 18)      // day(1), mid-afternoon
 
-  it('counts forward from the last weigh-in and stops at yesterday', () => {
+  it('counts forward from the last weigh-in, today included', () => {
     const p = projectedWeight(st, st.tdee, NOW)
     expect(p.from).toBe(day(-DAYS))
     expect(p.fromKg).toBe(79.5)
     expect(isoOf(new Date(NOW))).toBe(day(1))        // today is logged...
-    expect(p.to).toBe(day(0))                        // ...and is still left out
-    expect(p.days).toBe(DAYS)                        // day(-11) through day(0)
+    expect(p.to).toBe(day(1))                        // ...and counts
+    expect(p.days).toBe(DAYS + 1)
+  })
+
+  it('leaves today out when the profile says so', () => {
+    const p = projectedWeight(S({ ...st, countToday: false }), st.tdee, NOW)
+    expect(p.to).toBe(day(0))
+    expect(p.days).toBe(DAYS)
   })
 
   it('explains itself with exactly the days it counted', () => {
@@ -491,7 +506,7 @@ describe('the projection is anchored, never chained', () => {
     const later = projectedWeight(base([{ d: day(-3), w: 78.9 }]), P, NOW)
     expect(later.from).toBe(day(-3))
     expect(later.fromKg).toBe(78.9)
-    expect(later.days).toBe(3)                 // day(-2), day(-1), day(0) — today left out
+    expect(later.days).toBe(4)                 // day(-2) through day(1), today included
   })
 
   it('rounds once, at the end, not once a day', () => {
@@ -660,40 +675,41 @@ describe('counting the day you are standing in', () => {
     ...over
   })
 
-  it('stops at yesterday unless asked otherwise', () => {
+  it('runs to today by default, since a day is logged in one go', () => {
     const p = projectedWeight(base(), P, NOW)
-    expect(p.to).toBe(day(0))
     expect(isoOf(new Date(NOW))).toBe(day(1))
-  })
-
-  it('runs to today when the profile asks and the food is logged', () => {
-    const p = projectedWeight(base({ countToday: true }), P, NOW)
     expect(p.to).toBe(day(1))
-    expect(p.days).toBe(projectedWeight(base(), P, NOW).days + 1)
   })
 
-  it('still stops at yesterday when today has no intake on it', () => {
+  it('stops at yesterday when the profile asks it to', () => {
+    const p = projectedWeight(base({ countToday: false }), P, NOW)
+    expect(p.to).toBe(day(0))
+    expect(p.days).toBe(projectedWeight(base(), P, NOW).days - 1)
+  })
+
+  it('stops at yesterday anyway when today has no intake on it', () => {
     // Nothing to count: a day with no food logged has a null deficit and contributes nothing,
     // so counting it would only widen the date range with a day that says nothing.
-    const st = base({ countToday: true })
+    const st = base()
     st.nutrition = st.nutrition.filter(e => e.d !== day(1))
     expect(projectedWeight(st, P, NOW).to).toBe(day(0))
   })
 
   it('carries the same cutoff into the totals, so the two cannot disagree', () => {
-    const off = deficitTotals(base(), P, 0, NOW)
-    const on = deficitTotals(base({ countToday: true }), P, 0, NOW)
+    const off = deficitTotals(base({ countToday: false }), P, 0, NOW)
+    const on = deficitTotals(base(), P, 0, NOW)
     expect(off.to).toBe(day(0))
     expect(on.to).toBe(day(1))
     expect(on.days).toBe(off.days + 1)
-    expect(on.total).toBe(off.total + dayBalance(base({ countToday: true }), day(1), P, undefined, NOW).deficit)
+    expect(on.total).toBe(off.total + dayBalance(base(), day(1), P, undefined, NOW).deficit)
   })
 
   it('and into the chart, so the graph and the figure above it still match', () => {
-    const st = base({ countToday: true })
-    const pts = deficitSeries(st, P, 0, NOW)
-    const tot = deficitTotals(st, P, 0, NOW)
-    expect(pts.length).toBe(tot.days)
-    expect(Math.abs(pts.reduce((a, x) => a + x.y, 0) - tot.total)).toBeLessThanOrEqual(tot.days)
+    for (const st of [base(), base({ countToday: false })]) {
+      const pts = deficitSeries(st, P, 0, NOW)
+      const tot = deficitTotals(st, P, 0, NOW)
+      expect(pts.length).toBe(tot.days)
+      expect(Math.abs(pts.reduce((a, x) => a + x.y, 0) - tot.total)).toBeLessThanOrEqual(tot.days)
+    }
   })
 })

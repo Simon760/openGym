@@ -46,16 +46,18 @@ const dayNum = iso => new Date(iso + 'T12:00:00').getTime() / 86400000
  */
 const lastFinished = now => isoOf(new Date(now - 86400000))
 
-/* Whether a day still being lived counts. Off, the totals stop at yesterday; on, they run to
-   today the moment it has an intake on it.
+/* Whether a day still being lived counts. On, the totals run to today the moment it has an
+   intake on it; off, they stop at yesterday.
 
-   The default is off, and the reason is a real failure rather than caution: a day logged as
-   far as lunch reads as a thousand-kcal deficit, because the maintenance is charged whole and
-   only half the food is in. Someone who logs as they eat would watch the figure balloon every
-   morning and collapse every evening. Someone who logs the whole day in one go at the end of
-   it has the opposite problem — a finished day sitting outside the total for no visible
-   reason — and this switch is for them. */
-export const countsToday = S => !!(S && S.countToday)
+   On by default, because intake is one entry for the whole day rather than a meal at a time:
+   there is no such thing here as a day logged as far as lunch. The figure arrives when the
+   day is done, and a finished day sitting outside the total for no visible reason is the only
+   failure this can actually produce.
+
+   The switch stays for the case the model cannot see: someone who opens the sheet at noon and
+   puts in what they have eaten so far is describing half a day, and half a day charged a whole
+   maintenance reads as a deficit nobody earned. Off, that day waits until tomorrow. */
+export const countsToday = S => (S && S.countToday) !== false
 
 /**
  * The last day a total may include, for this profile.

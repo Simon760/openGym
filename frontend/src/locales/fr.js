@@ -662,7 +662,7 @@ export default {
   'that payload has no health data in it': 'ce contenu ne comporte aucune donnée santé',
   '{0} steps': '{0} pas',
   '{0} kcal burned': '{0} kcal brûlées',
-  'Count the day in progress': 'Compter la journée en cours',
+  'Count today once it is logged': 'Compter aujourd\'hui dès qu\'il est logué',
   'Count today too': 'Compter aussi aujourd\'hui',
   'Today counts from now on': 'Aujourd\'hui compte désormais',
   '{0} on {1}, then every day logged since, today included once you have logged what you ate. Each line is the day’s own arithmetic; no day is carried over into the next.': '{0} le {1}, puis chaque jour logué depuis, aujourd\'hui compris dès que tu as noté ce que tu as mangé. Chaque ligne est l\'arithmétique de son propre jour ; aucun jour n\'est reporté sur le suivant.',

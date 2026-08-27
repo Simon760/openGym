@@ -17,6 +17,7 @@ import Icon from '../components/Icon.jsx'
 import { Section, Row, SelectRow, Switch, Segmented, Button, TextField } from '../components/ui.jsx'
 import { APP_NAME, FILE_PREFIX, UPSTREAM, UPSTREAM_REPO } from '../lib/brand.js'
 import { suppOn } from '../lib/supp.js'
+import { countsToday } from '../lib/energy.js'
 
 export default function Settings() {
   const nav = useNavigate()
@@ -154,10 +155,10 @@ export default function Settings() {
       <Row icon="bell" iconTint="var(--pink)" title={t('Sounds')}>
         <Switch checked={!!S.sound} onChange={v => update(s => { s.sound = v })} />
       </Row>
-      {/* Whether the day you are standing in counts. Off by default because a day logged as
-          far as lunch reads as a huge deficit; on for anyone who logs the whole day at once. */}
-      <Row icon="clock" iconTint="var(--blue)" title={t('Count the day in progress')}>
-        <Switch checked={!!S.countToday} onChange={v => update(s => { s.countToday = v })} />
+      {/* Intake is one entry for the whole day, so today is counted as soon as it has one.
+          Turn this off only if you log part of a day before it is over. */}
+      <Row icon="clock" iconTint="var(--blue)" title={t('Count today once it is logged')}>
+        <Switch checked={countsToday(S)} onChange={v => update(s => { s.countToday = v })} />
       </Row>
       {/* The daily-supplement question, asked on the intake sheet. Named rather than
           hard-coded to creatine: the habit is the point, not the powder. */}

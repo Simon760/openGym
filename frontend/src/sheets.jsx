@@ -731,10 +731,10 @@ function ProjectionSheet({ close }) {
           <span>{t('which would make it')}</span>
           <span>{fmtNum2(withToday)} {st.unit}</span>
         </div>
-        <Button size="sm" variant="ghost" style={{ marginTop: 6 }}
+        {!countsToday(st) && <Button size="sm" variant="ghost" style={{ marginTop: 6 }}
           onClick={() => { update(s => { s.countToday = true }); toast(t('Today counts from now on')) }}>
           {t('Count today too')}
-        </Button>
+        </Button>}
       </div>
     })()}
 

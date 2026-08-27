@@ -669,7 +669,7 @@ export default {
   'that payload has no health data in it': 'that payload has no health data in it',
   '{0} steps': '{0} steps',
   '{0} kcal burned': '{0} kcal burned',
-  'Count the day in progress': 'Count the day in progress',
+  'Count today once it is logged': 'Count today once it is logged',
   'Count today too': 'Count today too',
   'Today counts from now on': 'Today counts from now on',
   '{0} on {1}, then every day logged since, today included once you have logged what you ate. Each line is the day’s own arithmetic; no day is carried over into the next.': '{0} on {1}, then every day logged since, today included once you have logged what you ate. Each line is the day’s own arithmetic; no day is carried over into the next.',
