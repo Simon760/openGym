@@ -659,7 +659,7 @@ function ProjectionSheet({ close }) {
   return <>
     <h3>{t('Projected weight')}</h3>
     <div className="muted small" style={{ marginBottom: 12, lineHeight: 1.45 }}>
-      {t('{0} on {1}, then every day logged since. Each line is the day’s own arithmetic — no day is carried over into the next.',
+      {t('{0} on {1}, then every finished day logged since — today is still being lived and is counted below, not in. Each line is the day’s own arithmetic; no day is carried over into the next.',
         fmtKg(proj.fromKg) + ' ' + st.unit, fmtDate(proj.from, true))}
     </div>
 
@@ -712,6 +712,25 @@ function ProjectionSheet({ close }) {
         <span className="dim">{fmtNum2(proj.fromKg)} − {t('that')}</span><b style={{ color: 'var(--acc)' }}>{fmtNum2(proj.kg)} {st.unit}</b>
       </div>
     </div>
+    {/* Today, beside the figure rather than inside it. Excluded because an unfinished day
+        understates what was eaten and so overstates the deficit — but invisible exclusion is
+        how two calculations disagree by a day and nobody can see why. */}
+    {(() => {
+      const b = dayBalance(st, todayISO(), st.tdee)
+      if (!b || b.deficit == null || proj.to >= todayISO()) return null
+      const withToday = proj.fromKg - (proj.deficit + b.deficit) / KCAL_PER_KG_FAT
+      return <div className="small dim" style={{ marginTop: 10, lineHeight: 1.6, fontVariantNumeric: 'tabular-nums' }}>
+        <div className="row between">
+          <span>{t('Today so far, not counted')}</span>
+          <span>{(b.deficit > 0 ? '+' : '') + fmtNum(b.deficit)} kcal</span>
+        </div>
+        <div className="row between">
+          <span>{t('which would make it')}</span>
+          <span>{fmtNum2(withToday)} {st.unit}</span>
+        </div>
+      </div>
+    })()}
+
     {rows.some(b => b.big) && <div className="small" style={{ color: 'var(--yellow)', marginTop: 10, lineHeight: 1.45 }}>
       {t('The days marked ! spent over {0} kcal on effort. The same formula runs on them as on every other day — the mark is there so an unusual figure gets a second look before it moves a month of totals.', fmtNum(BIG_EFFORT))}
     </div>}
