@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
 import { EXDB, EXIDX, BODYPARTS, isCardio, isBodyweightEq, allExercises, equipmentOf, exName, exSearchText } from './lib/exercises.js'
-import { fmtDate, fmtNum, fmtVol, fmtDur, durPart, todayISO, uid, exCount, DAYN, MONTHS_LONG, ACCENTS } from './lib/format.js'
+import { fmtDate, fmtNum, fmtNum2, fmtVol, fmtDur, durPart, todayISO, isoOf, uid, exCount, DAYN, MONTHS_LONG, ACCENTS } from './lib/format.js'
 import { lastEntryFor, bestWeightFor, buildSets, effectiveRoutineId, workoutVolume, setsDone, setsDoneActive, lastBW, supersetUnits, unitOf, setLabel, defaultConfig, cleanupSg, modeOf, effortOf, isBw, isPerSide, sideReps } from './lib/history.js'
 import { beep, vibrate } from './lib/sound.js'
 import { t, instrFor, getLang, INSTR_LANGS } from './lib/i18n.js'
@@ -26,6 +26,7 @@ import { MOBILE, shareExport, shareText, canShareText } from './lib/mobile.js'
 import { entryFor, hasMacros, kcalFromMacros, derivedMismatch, remainingOf, putEntry, MACROS, MACRO_NAME } from './lib/nutrition.js'
 import { validBodyFat, composition, sleepFor, putSleep, validSleep, sleepHours, hoursBetween, validTime, BF_MIN, BF_MAX, SLEEP_MIN, SLEEP_MAX } from './lib/body.js'
 import { parseHealth, applyHealth, parseHealthCSV, applyHealthDays, shortcutRecipe, shortcutLink, historySpec } from './lib/health.js'
+import { weekFor, weekOfBlock, setWeekDay, blocksOf, activeBlock, blockFromCurrent, startBlock, cancelSwitch, upcoming, daysUntil, removeBlock, sessionsIn, weekIndexAt, MAX_WEEKS, WEEKDAYS } from './lib/blocks.js'
 import { impliedTDEE, tdeeParts, trimOf, stepBaseOf, restStrictOf, projectedWeight, recordCalibration, calibration, dayBalance, KCAL_PER_KG_FAT, BIG_EFFORT, TDEE_PARTS, TDEE_MIN, TDEE_MAX, TRIM_MAX, IMPLIED_MIN_SPAN, IMPLIED_MIN_DAYS, IMPLIED_MIN_WEIGHINS } from './lib/energy.js'
 import { APP_NAME, FILE_PREFIX } from './lib/brand.js'
 
@@ -1723,7 +1724,7 @@ export const discardPendingProgram = () => confirmSheet({
 function DayOverride({ iso, close }) {
   const st = useStore(s => s.S)
   const wd = new Date(iso + 'T12:00:00').getDay()
-  const weeklyR = st.routines.find(r => r.id === st.week[wd])
+  const weeklyR = st.routines.find(r => r.id === weekFor(st, iso)[wd])
   const hasOvr = st.dayPlan[iso] !== undefined
   const effId = effectiveRoutineId(st, iso)
   const set = v => {
@@ -1746,21 +1747,162 @@ function DayOverride({ iso, close }) {
 }
 export const dayOverrideSheet = iso => ui().openSheet(close => <DayOverride iso={iso} close={close} />)
 
-function DayAssign({ day, close }) {
+/* ============================ training blocks ============================ */
+/**
+ * The blocks, and the one tap that switches between them.
+ *
+ * Switching is dated rather than immediate-only, because "I change on the 15th" is something
+ * you know now and should be able to stop thinking about — and because a dated switch is what
+ * makes the calendar's past stay put. Nothing here rewrites a day that has already happened.
+ */
+function BlocksSheet({ close }) {
   const st = useStore(s => s.S)
-  const set = v => { update(s => { if (v) s.week[day] = v; else delete s.week[day] }); close() }
+  const blocks = blocksOf(st)
+  const at = activeBlock(st)
+  const soon = upcoming(st)
+  const [naming, setNaming] = useState(null)     // null | {id?, name}
+  const [when, setWhen] = useState(null)         // null | blockId awaiting a date
+
+  const saveCurrent = () => setNaming({ name: t('Block {0}', blocks.length + 1) })
+  const commitName = () => {
+    const name = (naming.name || '').trim()
+    if (!name) { toast(t('Give it a name')); return }
+    update(s => {
+      if (naming.id) { const b = blocksOf(s).find(x => x.id === naming.id); if (b) b.name = name.slice(0, 40) }
+      else { const b = blockFromCurrent(s, name); s.blocks = [...blocksOf(s), b]; startBlock(s, b.id) }
+    })
+    setNaming(null)
+    toast(naming.id ? t('Renamed') : t('Block saved and running'))
+  }
+
+  const switchTo = (id, inDays) => {
+    const from = isoOf(new Date(Date.now() + inDays * 86400000))
+    update(s => { startBlock(s, id, from) })
+    setWhen(null)
+    toast(inDays ? t('Starts {0}', fmtDate(from, true)) : t('Running now'))
+  }
+
+  const addWeek = id => update(s => {
+    const b = blocksOf(s).find(x => x.id === id)
+    if (b && b.weeks.length < MAX_WEEKS) b.weeks.push({ ...b.weeks[b.weeks.length - 1] })
+  })
+  const dropWeek = id => update(s => {
+    const b = blocksOf(s).find(x => x.id === id)
+    if (b && b.weeks.length > 1) b.weeks.pop()
+  })
+  const del = id => confirmSheet({
+    title: t('Delete this block?'),
+    message: t('The routines inside it stay. Only the schedule and its switches go.'),
+    confirmText: t('Delete'), danger: true,
+    onConfirm: () => update(s => { if (!removeBlock(s, id)) toast(t('That one is running — switch to another first')) })
+  })
+
+  if (naming) return <>
+    <h3>{naming.id ? t('Rename') : t('Save this schedule as a block')}</h3>
+    <div className="muted small" style={{ marginBottom: 12, lineHeight: 1.45 }}>
+      {naming.id ? '' : t('Takes the week you have set up right now, exactly as it is, and starts running it under a name you can come back to.')}
+    </div>
+    <input className="numf" style={{ width: '100%', textAlign: 'left', padding: '11px 12px' }} autoFocus
+      maxLength={40} value={naming.name} onChange={e => setNaming(n => ({ ...n, name: e.target.value }))} />
+    <div style={{ height: 14 }} />
+    <Button variant="primary" icon="check" onClick={commitName}>{t('Save')}</Button>
+    <div style={{ height: 8 }} />
+    <Button variant="ghost" className="dim" onClick={() => setNaming(null)}>{t('Cancel')}</Button>
+  </>
+
+  if (when) {
+    const b = blocksOf(st).find(x => x.id === when)
+    return <>
+      <h3>{t('When does {0} start?', b ? b.name : '')}</h3>
+      <div className="muted small" style={{ marginBottom: 12, lineHeight: 1.45 }}>
+        {t('Everything before that date keeps the block it already had. Nothing that has happened moves.')}
+      </div>
+      {[[0, t('Today')], [1, t('Tomorrow')], [7, t('In a week')], [14, t('In two weeks')], [28, t('In four weeks')]]
+        .map(([n, label]) => <div key={n} className="item" onClick={() => switchTo(when, n)}>
+          <div className="grow"><div className="tt">{label}</div>
+            {n > 0 && <div className="ss">{fmtDate(isoOf(new Date(Date.now() + n * 86400000)), true)}</div>}</div>
+          <Icon name="chevronRight" className="chev" />
+        </div>)}
+      <div style={{ height: 12 }} />
+      <Button variant="ghost" className="dim" onClick={() => setWhen(null)}>{t('Back')}</Button>
+    </>
+  }
+
+  return <>
+    <h3>{t('Blocks')}</h3>
+    <div className="muted small" style={{ marginBottom: 12, lineHeight: 1.45 }}>
+      {t('A whole schedule under a name. Switch and every day from the switch onward follows the new one — every day before it stays exactly as it was.')}
+    </div>
+
+    {soon.length > 0 && <div className="card" style={{ padding: 12, marginBottom: 12, borderLeft: '3px solid var(--yellow)' }}>
+      {soon.map(e => <div key={e.from} className="row between" style={{ gap: 10 }}>
+        <div style={{ minWidth: 0 }}>
+          <div className="tt" style={{ fontSize: 15 }}>{e.block.name}</div>
+          <div className="ss">{t('starts in {0} days · {1}', daysUntil(e.from), fmtDate(e.from, true))}</div>
+        </div>
+        <Button size="sm" variant="ghost" className="dim" onClick={() => update(s => cancelSwitch(s, e.from))}>{t('Cancel')}</Button>
+      </div>)}
+    </div>}
+
+    {blocks.length ? <div className="list">
+      {blocks.map(b => {
+        const running = at && at.block.id === b.id
+        return <div key={b.id} className="item" style={{ alignItems: 'flex-start' }}>
+          <span className="lrow-i" style={{ background: running ? 'var(--acc)' : 'var(--surface-3)' }}><Icon name="calendar" /></span>
+          <div className="grow" style={{ minWidth: 0 }} onClick={() => (running ? setNaming({ id: b.id, name: b.name }) : setWhen(b.id))}>
+            <div className="tt">{b.name}{running && <span className="tag acc" style={{ marginLeft: 6 }}>{t('running')}</span>}</div>
+            <div className="ss">
+              {b.weeks.length > 1 ? t('{0} weeks, alternating · {1} sessions', b.weeks.length, sessionsIn(b)) : t('{0} sessions a week', sessionsIn(b))}
+              {running && at.from ? ' · ' + t('since {0}', fmtDate(at.from, true)) : ''}
+            </div>
+            {/* Icon-sized on purpose: this row lives inside a list item beside a Switch
+                button, which leaves it under two hundred pixels. Three worded buttons wrapped
+                onto three lines and made a two-line card four lines tall. */}
+            <div style={{ display: 'flex', gap: 4, marginTop: 8, alignItems: 'center' }}>
+              <Button size="xs" variant="ghost" className="dim" disabled={b.weeks.length < 2}
+                onClick={e => { e.stopPropagation(); dropWeek(b.id) }} aria-label={t('One week fewer')}>−</Button>
+              <span className="dim small" style={{ minWidth: 62, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
+                {t('{0} wk', b.weeks.length)}
+              </span>
+              <Button size="xs" variant="ghost" className="dim" disabled={b.weeks.length >= MAX_WEEKS}
+                onClick={e => { e.stopPropagation(); addWeek(b.id) }} aria-label={t('One week more')}>+</Button>
+              {!running && <Button size="xs" variant="ghost" className="dim" icon="trash" style={{ marginLeft: 'auto' }}
+                onClick={e => { e.stopPropagation(); del(b.id) }} aria-label={t('Delete')} />}
+            </div>
+          </div>
+          {!running && <Button size="sm" variant="tinted" onClick={() => setWhen(b.id)}>{t('Switch')}</Button>}
+        </div>
+      })}
+    </div> : <div className="empty"><div className="ico"><Icon name="calendar" /></div>{t('No blocks yet.')}</div>}
+
+    <div style={{ height: 14 }} />
+    <Button icon="plus" onClick={saveCurrent}>{t('Save this week as a block')}</Button>
+    <div className="dim small" style={{ margin: '8px 2px 0', lineHeight: 1.45 }}>
+      {t('A block with two weeks alternates them, counting from the day you switched to it — so a block started on a Thursday changes over every seventh day from that Thursday.')}
+    </div>
+    <div style={{ height: 12 }} />
+    <Button variant="ghost" className="dim" onClick={close}>{t('Close')}</Button>
+  </>
+}
+
+export const blocksSheet = () => ui().openSheet(close => <BlocksSheet close={close} />)
+
+function DayAssign({ day, weekIdx = null, close }) {
+  const st = useStore(s => s.S)
+  const cur = weekOfBlock(st, weekIdx)
+  const set = v => { update(s => { setWeekDay(s, day, v, { weekIdx }) }); close() }
   return <>
     <h3>{t(DAYN[day])}</h3>
     <div className="list">
-      <div className="item" onClick={() => set('')}><span className="lrow-i" style={{ background: 'var(--surface-3)' }}><Icon name="moon" /></span><div className="grow"><div className="tt">{t('Rest day')}</div></div>{!st.week[day] && <Icon name="check" className="accent" />}</div>
+      <div className="item" onClick={() => set('')}><span className="lrow-i" style={{ background: 'var(--surface-3)' }}><Icon name="moon" /></span><div className="grow"><div className="tt">{t('Rest day')}</div></div>{!cur[day] && <Icon name="check" className="accent" />}</div>
       {st.routines.map(r => <div key={r.id} className="item" onClick={() => set(r.id)}>
         <span className="lrow-i"><Icon name={glyphOf(r.emoji)} /></span>
         <div className="grow"><div className="tt">{r.name}</div><div className="ss">{exCount(r.ex.length)}</div></div>
-        {st.week[day] === r.id && <Icon name="check" className="accent" />}</div>)}
+        {cur[day] === r.id && <Icon name="check" className="accent" />}</div>)}
     </div>
   </>
 }
-export const dayAssignSheet = day => ui().openSheet(close => <DayAssign day={day} close={close} />)
+export const dayAssignSheet = (day, weekIdx = null) => ui().openSheet(close => <DayAssign day={day} weekIdx={weekIdx} close={close} />)
 
 /* ============================ workout detail ============================ */
 function WorkoutDetail({ w, close }) {

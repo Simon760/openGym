@@ -25,6 +25,7 @@ import { dayBalance, sportKcal, trimOf } from './energy.js'
 import { fmtNum, fmtDate, todayISO, isoOf } from './format.js'
 import { t } from './i18n.js'
 import { APP_NAME } from './brand.js'
+import { weekFor } from './blocks.js'
 
 // A period listing more sessions than this is summarised rather than printed in full: the
 // digest has to survive being pasted into a message box, and the tail of a long history is
@@ -227,7 +228,7 @@ export function trainingDigest(S, days = 7, now = Date.now()) {
   const lines = []
   const seen = new Set()
   ;[0, 1, 2, 3, 4, 5, 6].forEach(d => {
-    const rid = S.week && S.week[d]
+    const rid = weekFor(S, isoOf(new Date(now)))[d]
     const r = rid && (S.routines || []).find(x => x.id === rid)
     if (!r) return
     ;(r.ex || []).forEach(cfg => {

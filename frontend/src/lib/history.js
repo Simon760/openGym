@@ -2,6 +2,7 @@
 import { todayISO, isoOf, weekKey, fmtNum } from './format.js'
 import { isCardio, isBodyweightEq } from './exercises.js'
 import { t } from './i18n.js'
+import { weekFor } from './blocks.js'
 
 // How an exercise is logged (issue #16). This used to be derived from the body part alone,
 // which meant a plank or a farmer's carry could only be timed by filing it under cardio.
@@ -165,7 +166,10 @@ export function effectiveRoutineId(S, iso) {
   if (ov === 'rest') return null
   if (ov && S.routines.some(r => r.id === ov)) return ov
   const wd = new Date(iso + 'T12:00:00').getDay()
-  return S.week[wd] || null
+  // The schedule in force on *that* day, not the one in force now. A day in March answers to
+  // whatever block was running in March, which is what stops a switch today from rewriting
+  // what last month was supposed to have been.
+  return weekFor(S, iso)[wd] || null
 }
 export function effectiveRoutine(S, iso) {
   const id = effectiveRoutineId(S, iso)

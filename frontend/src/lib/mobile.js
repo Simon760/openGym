@@ -10,6 +10,7 @@
 // Like the demo build, MOBILE is replaced at build time, so all of this folds away in
 // web bundles; the Capacitor plugins are only ever imported behind it.
 import { t } from './i18n.js'
+import { weekFor } from './blocks.js'
 
 export const MOBILE = import.meta.env.VITE_MOBILE === '1'
 
@@ -44,7 +45,9 @@ export async function syncReminder(S, interactive = false) {
     if (perm.display !== 'granted' && interactive) perm = await LocalNotifications.requestPermissions()
     if (perm.display !== 'granted') return false
     const [hour, minute] = (r.time || '08:00').split(':').map(Number)
-    const notifications = Object.entries(S.week || {})
+    // The week in force today. A block that alternates cannot be a repeating weekly alarm,
+    // so an A/B profile gets this week's shape until the next time these are rescheduled.
+    const notifications = Object.entries(weekFor(S) || {})
       .filter(([, rid]) => rid && (S.routines || []).some(x => x.id === rid))
       .map(([day, rid]) => ({
         id: 100 + Number(day),

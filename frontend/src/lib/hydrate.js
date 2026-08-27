@@ -60,7 +60,7 @@ export function hydrate(state) {
   delete S.v
   delete S.json
 
-  for (const k of ['bodyweight', 'routines', 'workouts', 'customEx', 'nutrition', 'sleep', 'health']) S[k] = list(S[k])
+  for (const k of ['bodyweight', 'routines', 'workouts', 'customEx', 'nutrition', 'sleep', 'health', 'blocks', 'blockLog', 'calib']) S[k] = list(S[k])
   for (const k of ['week', 'dayPlan', 'exWeights']) S[k] = dict(S[k])
 
   S.routines = S.routines
@@ -69,10 +69,24 @@ export function hydrate(state) {
   S.workouts = S.workouts.map(workout).filter(Boolean)
   S.active = S.active ? workout(S.active) : null
 
+  // A block's weeks are a list of dicts, and the database flattens both shapes: the list
+  // becomes an object keyed "0","1" and each week loses any day it had no routine for. Put
+  // back for the same reason the routines are — a plan that reads as empty is a plan gone.
+  S.blocks = S.blocks
+    .filter(b => b && typeof b === 'object' && b.id)
+    .map(b => ({ ...b, weeks: list(b.weeks).map(dict).map(w => w || {}) }))
+    .map(b => ({ ...b, weeks: b.weeks.length ? b.weeks : [{}] }))
+  S.blockLog = S.blockLog.filter(e => e && e.from && e.blockId)
+
   // A day pointing at a routine that is no longer there renders as a rest day either way,
   // but leaving it means the pointer comes back the moment a new routine reuses that id.
   const ids = new Set(S.routines.map(r => r.id))
   for (const d of Object.keys(S.week)) if (!ids.has(S.week[d])) delete S.week[d]
+  const blockIds = new Set(S.blocks.map(b => b.id))
+  S.blocks.forEach(b => b.weeks.forEach(w => {
+    for (const d of Object.keys(w)) if (!ids.has(w[d])) delete w[d]
+  }))
+  S.blockLog = S.blockLog.filter(e => blockIds.has(e.blockId))
 
   return S
 }

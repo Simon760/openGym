@@ -8,6 +8,7 @@ import { bwSheet, goalSheet, dayOverrideSheet, workoutDetailSheet, calendarSheet
 import { entryFor, kcalFromMacros, macroSplit, remainingOf, MACROS, MACRO_NAME, MACRO_COLOR } from '../lib/nutrition.js'
 import { composition, sleepFor, lastSleep, sleepHours, whenOf, sinceStart, bwAsOf } from '../lib/body.js'
 import { dayBalance, projectedWeight } from '../lib/energy.js'
+import { weekFor } from '../lib/blocks.js'
 import LineChart from '../components/LineChart.jsx'
 import Icon from '../components/Icon.jsx'
 import { Button } from '../components/ui.jsx'
@@ -53,7 +54,7 @@ export default function Home() {
   const wkLabel = weekOffset === 0 ? t('This week') : `${monday.getDate()} ${monday.toLocaleDateString(dateLocale(), { month: 'short' })} – ${sunday.getDate()} ${sunday.toLocaleDateString(dateLocale(), { month: 'short' })}`
 
   const wThisWeek = S.workouts.filter(w => weekKey(w.d) === weekKey(todayISO())).length
-  const plannedPerWeek = Object.keys(S.week).filter(k => S.week[k]).length
+  const plannedPerWeek = Object.keys(weekFor(S)).filter(k => weekFor(S)[k]).length
   const bwPoints = S.bodyweight.slice(-30).map(b => ({ t: whenOf(b), y: b.w, d: b.d }))
 
   const comp = composition(bw)
