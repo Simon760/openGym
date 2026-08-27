@@ -26,7 +26,7 @@ import { MOBILE, shareExport, shareText, canShareText } from './lib/mobile.js'
 import { entryFor, hasMacros, kcalFromMacros, derivedMismatch, remainingOf, putEntry, MACROS, MACRO_NAME } from './lib/nutrition.js'
 import { validBodyFat, composition, sleepFor, putSleep, validSleep, sleepHours, hoursBetween, validTime, BF_MIN, BF_MAX, SLEEP_MIN, SLEEP_MAX } from './lib/body.js'
 import { parseHealth, applyHealth, parseHealthCSV, applyHealthDays, shortcutRecipe, shortcutLink, historySpec } from './lib/health.js'
-import { weekFor, weekOfBlock, setWeekDay, blocksOf, activeBlock, blockFromCurrent, startBlock, cancelSwitch, upcoming, daysUntil, removeBlock, sessionsIn, weekIndexAt, MAX_WEEKS, WEEKDAYS } from './lib/blocks.js'
+import { weekFor, weekOfBlock, setWeekDay, duplicateBlock, emptyBlock, blocksOf, activeBlock, blockFromCurrent, startBlock, cancelSwitch, upcoming, daysUntil, removeBlock, sessionsIn, weekIndexAt, MAX_WEEKS, WEEKDAYS } from './lib/blocks.js'
 import { impliedTDEE, tdeeParts, trimOf, stepBaseOf, restStrictOf, projectedWeight, recordCalibration, calibration, dayBalance, KCAL_PER_KG_FAT, BIG_EFFORT, TDEE_PARTS, TDEE_MIN, TDEE_MAX, TRIM_MAX, IMPLIED_MIN_SPAN, IMPLIED_MIN_DAYS, IMPLIED_MIN_WEIGHINS } from './lib/energy.js'
 import { APP_NAME, FILE_PREFIX } from './lib/brand.js'
 
@@ -1760,20 +1760,30 @@ function BlocksSheet({ close }) {
   const blocks = blocksOf(st)
   const at = activeBlock(st)
   const soon = upcoming(st)
-  const [naming, setNaming] = useState(null)     // null | {id?, name}
+  // mode: 'save' snapshots the running week and starts it · 'copy' clones one · 'empty'
+  // starts from nothing · 'rename' just renames. All four end in a name, so they share a step.
+  const [naming, setNaming] = useState(null)     // null | {mode, id?, name}
   const [when, setWhen] = useState(null)         // null | blockId awaiting a date
 
-  const saveCurrent = () => setNaming({ name: t('Block {0}', blocks.length + 1) })
+  const nextName = () => t('Block {0}', blocks.length + 1)
   const commitName = () => {
     const name = (naming.name || '').trim()
     if (!name) { toast(t('Give it a name')); return }
+    let made = null
     update(s => {
-      if (naming.id) { const b = blocksOf(s).find(x => x.id === naming.id); if (b) b.name = name.slice(0, 40) }
-      else { const b = blockFromCurrent(s, name); s.blocks = [...blocksOf(s), b]; startBlock(s, b.id) }
+      if (naming.mode === 'rename') { const b = blocksOf(s).find(x => x.id === naming.id); if (b) b.name = name.slice(0, 40) }
+      else if (naming.mode === 'copy') made = duplicateBlock(s, naming.id, name)
+      else if (naming.mode === 'empty') made = emptyBlock(s, name)
+      else { made = blockFromCurrent(s, name); s.blocks = [...blocksOf(s), made]; startBlock(s, made.id) }
     })
     setNaming(null)
-    toast(naming.id ? t('Renamed') : t('Block saved and running'))
+    if (naming.mode === 'rename') { toast(t('Renamed')); return }
+    if (naming.mode === 'save') { toast(t('Block saved and running')); return }
+    // A block built to be edited opens straight into the editor, because that is the next
+    // thing you were going to do and it is two taps away otherwise.
+    if (made) { ui().editBlock(made.id); close(); toast(t('Set up its week, then switch when you are ready')) }
   }
+  const edit = id => { ui().editBlock(id); close() }
 
   const switchTo = (id, inDays) => {
     const from = isoOf(new Date(Date.now() + inDays * 86400000))
@@ -1798,9 +1808,14 @@ function BlocksSheet({ close }) {
   })
 
   if (naming) return <>
-    <h3>{naming.id ? t('Rename') : t('Save this schedule as a block')}</h3>
+    <h3>{{ rename: t('Rename'), copy: t('Duplicate'), empty: t('New block'),
+      save: t('Save this schedule as a block') }[naming.mode]}</h3>
     <div className="muted small" style={{ marginBottom: 12, lineHeight: 1.45 }}>
-      {naming.id ? '' : t('Takes the week you have set up right now, exactly as it is, and starts running it under a name you can come back to.')}
+      {{ rename: '',
+        copy: t('A copy you can change freely. The one you are following now is not touched.'),
+        empty: t('Seven rest days to start from. Set the week up, then switch to it when you want it.'),
+        save: t('Takes the week you have set up right now, exactly as it is, and starts running it under a name you can come back to.')
+      }[naming.mode]}
     </div>
     <input className="numf" style={{ width: '100%', textAlign: 'left', padding: '11px 12px' }} autoFocus
       maxLength={40} value={naming.name} onChange={e => setNaming(n => ({ ...n, name: e.target.value }))} />
@@ -1849,7 +1864,7 @@ function BlocksSheet({ close }) {
         const running = at && at.block.id === b.id
         return <div key={b.id} className="item" style={{ alignItems: 'flex-start' }}>
           <span className="lrow-i" style={{ background: running ? 'var(--acc)' : 'var(--surface-3)' }}><Icon name="calendar" /></span>
-          <div className="grow" style={{ minWidth: 0 }} onClick={() => (running ? setNaming({ id: b.id, name: b.name }) : setWhen(b.id))}>
+          <div className="grow" style={{ minWidth: 0 }} onClick={() => setNaming({ mode: 'rename', id: b.id, name: b.name })}>
             <div className="tt">{b.name}{running && <span className="tag acc" style={{ marginLeft: 6 }}>{t('running')}</span>}</div>
             <div className="ss">
               {b.weeks.length > 1 ? t('{0} weeks, alternating · {1} sessions', b.weeks.length, sessionsIn(b)) : t('{0} sessions a week', sessionsIn(b))}
@@ -1859,6 +1874,10 @@ function BlocksSheet({ close }) {
                 button, which leaves it under two hundred pixels. Three worded buttons wrapped
                 onto three lines and made a two-line card four lines tall. */}
             <div style={{ display: 'flex', gap: 4, marginTop: 8, alignItems: 'center' }}>
+              <Button size="xs" variant="tinted" onClick={e => { e.stopPropagation(); edit(b.id) }}>{t('Edit')}</Button>
+              <Button size="xs" variant="ghost" className="dim" icon="shuffle"
+                onClick={e => { e.stopPropagation(); setNaming({ mode: 'copy', id: b.id, name: b.name + ' 2' }) }}
+                aria-label={t('Duplicate')} />
               <Button size="xs" variant="ghost" className="dim" disabled={b.weeks.length < 2}
                 onClick={e => { e.stopPropagation(); dropWeek(b.id) }} aria-label={t('One week fewer')}>−</Button>
               <span className="dim small" style={{ minWidth: 62, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
@@ -1876,7 +1895,11 @@ function BlocksSheet({ close }) {
     </div> : <div className="empty"><div className="ico"><Icon name="calendar" /></div>{t('No blocks yet.')}</div>}
 
     <div style={{ height: 14 }} />
-    <Button icon="plus" onClick={saveCurrent}>{t('Save this week as a block')}</Button>
+    {!at && <Button icon="plus" onClick={() => setNaming({ mode: 'save', name: nextName() })}>{t('Save this week as a block')}</Button>}
+    {!at && <div style={{ height: 8 }} />}
+    <Button variant={at ? undefined : 'ghost'} icon="plus" onClick={() => setNaming({ mode: 'empty', name: nextName() })}>
+      {t('New block, from scratch')}
+    </Button>
     <div className="dim small" style={{ margin: '8px 2px 0', lineHeight: 1.45 }}>
       {t('A block with two weeks alternates them, counting from the day you switched to it — so a block started on a Thursday changes over every seventh day from that Thursday.')}
     </div>
@@ -1887,10 +1910,10 @@ function BlocksSheet({ close }) {
 
 export const blocksSheet = () => ui().openSheet(close => <BlocksSheet close={close} />)
 
-function DayAssign({ day, weekIdx = null, close }) {
+function DayAssign({ day, weekIdx = null, blockId = null, close }) {
   const st = useStore(s => s.S)
-  const cur = weekOfBlock(st, weekIdx)
-  const set = v => { update(s => { setWeekDay(s, day, v, { weekIdx }) }); close() }
+  const cur = weekOfBlock(st, weekIdx, blockId)
+  const set = v => { update(s => { setWeekDay(s, day, v, { weekIdx, blockId }) }); close() }
   return <>
     <h3>{t(DAYN[day])}</h3>
     <div className="list">
@@ -1902,7 +1925,7 @@ function DayAssign({ day, weekIdx = null, close }) {
     </div>
   </>
 }
-export const dayAssignSheet = (day, weekIdx = null) => ui().openSheet(close => <DayAssign day={day} weekIdx={weekIdx} close={close} />)
+export const dayAssignSheet = (day, weekIdx = null, blockId = null) => ui().openSheet(close => <DayAssign day={day} weekIdx={weekIdx} blockId={blockId} close={close} />)
 
 /* ============================ workout detail ============================ */
 function WorkoutDetail({ w, close }) {

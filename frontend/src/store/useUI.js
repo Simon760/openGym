@@ -20,6 +20,11 @@ let workDone = null
 export const useUI = create((set, get) => ({
   sheets: [],          // { id, render:(close)=>JSX, kind:'sheet'|'center', locked }
   toastMsg: '',
+  // Which block the Plan screen is editing. Null means the one running, which is the answer
+  // almost always. Kept here rather than in the saved state because it is a place you are
+  // looking, not a fact about your training — it should not sync to another device or come
+  // back tomorrow.
+  planBlock: null,
   timer: null,         // rest countdown between sets — { left, total, endsAt }
   work: null,          // work countdown DURING a timed set (issue #16) — { left, total, endsAt, label }
 
@@ -31,6 +36,7 @@ export const useUI = create((set, get) => ({
   },
   closeSheet(id) { set(s => ({ sheets: s.sheets.filter(x => x.id !== id) })) },
   closeAll() { set({ sheets: [] }) },
+  editBlock(id) { set({ planBlock: id || null }) },
 
   toast(msg) {
     set({ toastMsg: msg })

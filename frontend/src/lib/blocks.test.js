@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { weekFor, weekOfBlock, setWeekDay, blockAt, activeBlock, blockFromCurrent, startBlock, cancelSwitch,
+import { weekFor, weekOfBlock, setWeekDay, duplicateBlock, emptyBlock, blockAt, activeBlock, blockFromCurrent, startBlock, cancelSwitch,
   upcoming, daysUntil, removeBlock, sessionsIn, weekIndexAt, entryAt } from './blocks.js'
 import { effectiveRoutineId } from './history.js'
 import { hydrate } from './hydrate.js'
@@ -236,5 +236,53 @@ describe('setting up the week that is not running yet', () => {
     setWeekDay(s, 4, 'legs', { weekIdx: 9 })
     expect(s.blocks[0].weeks).toHaveLength(2)
     expect(s.blocks[0].weeks[1][4]).toBe('legs')            // clamped to the last one
+  })
+})
+
+describe('building a second block without wrecking the first', () => {
+  // The gap the first version left: with a block running, the only way to a second one was to
+  // edit the running week and snapshot it — which destroys the programme being followed.
+  const st = () => S({
+    blocks: [{ id: 'a', name: 'Hypertrophie', weeks: [{ 1: 'push', 3: 'pull', 5: 'legs' }] }],
+    blockLog: [{ from: iso(-30), blockId: 'a' }]
+  })
+
+  it('copies one under a new name, leaving the original alone', () => {
+    const s = st()
+    const copy = duplicateBlock(s, 'a', 'Force')
+    expect(copy.name).toBe('Force')
+    expect(copy.weeks).toEqual([{ 1: 'push', 3: 'pull', 5: 'legs' }])
+    expect(copy.id).not.toBe('a')
+    setWeekDay(s, 1, 'upper', { blockId: copy.id })
+    expect(copy.weeks[0][1]).toBe('upper')
+    expect(s.blocks[0].weeks[0][1]).toBe('push')      // the original is untouched
+  })
+
+  it('starts an empty one when nothing should carry over', () => {
+    const s = st()
+    const b = emptyBlock(s, 'Deload')
+    expect(b.weeks).toEqual([{}])
+    expect(s.blocks).toHaveLength(2)
+  })
+
+  it('edits a block that is not running, and changes nothing until it is', () => {
+    const s = st()
+    const copy = duplicateBlock(s, 'a', 'Force')
+    setWeekDay(s, 2, 'upper', { blockId: copy.id })
+    // Today still reads the block being followed, whatever the editor is pointed at.
+    expect(weekFor(s, iso(0))).toEqual({ 1: 'push', 3: 'pull', 5: 'legs' })
+    expect(weekFor(s, iso(20))).toEqual({ 1: 'push', 3: 'pull', 5: 'legs' })
+    startBlock(s, copy.id, iso(7))
+    expect(weekFor(s, iso(6))).toEqual({ 1: 'push', 3: 'pull', 5: 'legs' })
+    expect(weekFor(s, iso(7))).toEqual({ 1: 'push', 2: 'upper', 3: 'pull', 5: 'legs' })
+  })
+
+  it('shows a non-running block’s week to the editor', () => {
+    const s = st()
+    const copy = duplicateBlock(s, 'a', 'Force')
+    copy.weeks = [{ 2: 'upper' }, { 4: 'legs' }]
+    expect(weekOfBlock(s, null, copy.id)).toEqual({ 2: 'upper' })   // the first, none being live
+    expect(weekOfBlock(s, 1, copy.id)).toEqual({ 4: 'legs' })
+    expect(weekOfBlock(s, null, null)).toEqual({ 1: 'push', 3: 'pull', 5: 'legs' })
   })
 })

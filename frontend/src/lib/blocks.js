@@ -90,27 +90,50 @@ export function weekFor(S, iso = todayISO()) {
  * you set up week B while week A is the one running. Left out, it writes the week actually
  * in force — which is what tapping a day on the schedule means.
  */
-export function setWeekDay(S, wd, routineId, { iso = todayISO(), weekIdx = null } = {}) {
+export function setWeekDay(S, wd, routineId, { iso = todayISO(), weekIdx = null, blockId = null } = {}) {
   const at = blockAt(S, iso)
-  if (at && at.block) {
-    if (!Array.isArray(at.block.weeks) || !at.block.weeks.length) at.block.weeks = [{}]
-    const i = weekIdx == null ? weekIndexAt(at.block, at.from, iso)
-      : Math.max(0, Math.min(at.block.weeks.length - 1, weekIdx))
-    const w = at.block.weeks[i] || (at.block.weeks[i] = {})
+  // A named block wins over whatever is running: setting up next month's programme must not
+  // require switching onto it first, which would rewrite this week to do it.
+  const target = blockId ? blockById(S, blockId) : (at && at.block)
+  if (target) {
+    if (!Array.isArray(target.weeks) || !target.weeks.length) target.weeks = [{}]
+    const live = at && at.block && at.block.id === target.id ? weekIndexAt(target, at.from, iso) : 0
+    const i = weekIdx == null ? live : Math.max(0, Math.min(target.weeks.length - 1, weekIdx))
+    const w = target.weeks[i] || (target.weeks[i] = {})
     if (routineId) w[wd] = routineId; else delete w[wd]
     return
   }
   if (routineId) S.week[wd] = routineId; else delete S.week[wd]
 }
 
-/** The week a block editor is showing — the one in force, or the one being set up ahead. */
-export function weekOfBlock(S, weekIdx = null, iso = todayISO()) {
+/** The week a block editor is showing — any block, any of its weeks, running or not. */
+export function weekOfBlock(S, weekIdx = null, blockId = null, iso = todayISO()) {
   const at = blockAt(S, iso)
-  if (!at || !at.block) return (S && S.week) || {}
-  const weeks = at.block.weeks && at.block.weeks.length ? at.block.weeks : [{}]
-  const i = weekIdx == null ? weekIndexAt(at.block, at.from, iso)
-    : Math.max(0, Math.min(weeks.length - 1, weekIdx))
+  const target = blockId ? blockById(S, blockId) : (at && at.block)
+  if (!target) return (S && S.week) || {}
+  const weeks = target.weeks && target.weeks.length ? target.weeks : [{}]
+  const live = at && at.block && at.block.id === target.id ? weekIndexAt(target, at.from, iso) : 0
+  const i = weekIdx == null ? live : Math.max(0, Math.min(weeks.length - 1, weekIdx))
   return weeks[i] || {}
+}
+
+/** A copy of a block under a new name, so a second programme can be built without wrecking
+ *  the one being followed. The obvious way to write next month's plan, and the one the first
+ *  version of this had no answer for. */
+export function duplicateBlock(S, id, name) {
+  const src = blockById(S, id)
+  if (!src) return null
+  const copy = { id: uid(), name: String(name || '').slice(0, 40) || (src.name + ' 2'),
+    emoji: src.emoji || 'dumbbell', weeks: src.weeks.map(w => ({ ...w })) }
+  S.blocks = [...blocksOf(S), copy]
+  return copy
+}
+
+/** An empty block, for a programme that shares nothing with the current one. */
+export function emptyBlock(S, name) {
+  const b = { id: uid(), name: String(name || '').slice(0, 40) || 'Block', emoji: 'dumbbell', weeks: [{}] }
+  S.blocks = [...blocksOf(S), b]
+  return b
 }
 
 /** A block built from whatever schedule is in force today — the one-tap way to get started. */
