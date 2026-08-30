@@ -7,7 +7,7 @@ import { t, dateLocale } from '../lib/i18n.js'
 import { bwSheet, goalSheet, dayOverrideSheet, workoutDetailSheet, calendarSheet, startFlow, loadStarterPlan, bwDeltaColor, nutriSheet, nutriGoalSheet, digestSheet, openPendingProgram, discardPendingProgram, sleepSheet, tdeeSheet, watchSheet, projectionSheet } from '../sheets.jsx'
 import { entryFor, kcalFromMacros, macroSplit, remainingOf, MACROS, MACRO_NAME, MACRO_COLOR } from '../lib/nutrition.js'
 import { composition, sleepFor, lastSleep, sleepHours, whenOf, sinceStart, bwAsOf } from '../lib/body.js'
-import { dayBalance, projectedWeight } from '../lib/energy.js'
+import { dayBalance, projectedWeight, KCAL_PER_KG_FAT } from '../lib/energy.js'
 import { weekFor } from '../lib/blocks.js'
 import LineChart from '../components/LineChart.jsx'
 import Icon from '../components/Icon.jsx'
@@ -228,17 +228,33 @@ export default function Home() {
             unanchored adds error in the same direction. Shown only once it has days to speak
             from, and captioned as a tendency, because the scale answers to glycogen water and
             salt long before it answers to fat. */}
-        {proj && proj.days >= 2 && Math.abs(proj.change) >= 0.05 && (
+        {proj && proj.days >= 1 && Math.abs(proj.change) >= 0.05 && (
           <div className="small row" style={{ color: 'var(--label-2)', marginTop: 4, gap: 5, cursor: 'pointer' }}
             onClick={e => { e.stopPropagation(); projectionSheet() }}>
             <Icon name="bolt" style={{ fontSize: 13 }} />
             <span>
-              {t('≈ {0} today, on the {1} days logged since', fmtNum(proj.kg) + ' ' + S.unit, proj.days)}
+              {t('≈ {0} today, on the {1} days logged since', fmtKg(proj.kg) + ' ' + S.unit, proj.days)}
               {proj.gaps > 0 && ' · ' + t('{0} days unlogged, so it reads high', proj.gaps)}
             </span>
             <Icon name="chevronRight" style={{ fontSize: 11, opacity: .5 }} />
           </div>
         )}
+        {/* Weighed in today: the reading *is* the anchor, so there is nothing yet to project
+            over and the line above has no days to speak from. It used to simply vanish, which
+            reads as a bug on the one morning you did the thing the app asks for. What can be
+            said instead is what the scale should show next time — today's deficit lands on
+            tomorrow morning, not on a weight already measured. */}
+        {proj && proj.days === 0 && (() => {
+          const b = dayBalance(S, todayISO())
+          if (!b || b.deficit == null || Math.abs(b.deficit) < 60) return null
+          const next = proj.fromKg - b.deficit / KCAL_PER_KG_FAT
+          return <div className="small row" style={{ color: 'var(--label-2)', marginTop: 4, gap: 5, cursor: 'pointer' }}
+            onClick={e => { e.stopPropagation(); projectionSheet() }}>
+            <Icon name="bolt" style={{ fontSize: 13 }} />
+            <span>{t('weighed today · ≈ {0} tomorrow, on today’s {1} kcal', fmtKg(next) + ' ' + S.unit, fmtNum(b.deficit))}</span>
+            <Icon name="chevronRight" style={{ fontSize: 11, opacity: .5 }} />
+          </div>
+        })()}
         {S.targetW && (
           <div className="small row" style={{ color: 'var(--yellow)', marginTop: 4, gap: 5 }}>
             <Icon name="target" style={{ fontSize: 13 }} />

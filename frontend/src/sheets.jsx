@@ -643,6 +643,26 @@ function ProjectionSheet({ close }) {
     <h3>{t('Projected weight')}</h3>
     <div className="muted small">{t('It needs a weigh-in, and days logged after it.')}</div>
   </>
+  // Weighed in today, so the anchor is today and there is nothing between it and now. Not an
+  // error — the opposite: the figure the projection was estimating has just been measured.
+  if (!proj.days) return <>
+    <h3>{t('Projected weight')}</h3>
+    <div className="muted small" style={{ marginBottom: 12, lineHeight: 1.45 }}>
+      {t('You weighed in on {0}, so there is nothing to project over yet — the scale has just said what this was estimating. From tomorrow it starts counting again from {1}.',
+        fmtDate(proj.from, true), fmtKg(proj.fromKg) + ' ' + st.unit)}
+    </div>
+    {(() => {
+      const b = dayBalance(st, todayISO(), st.tdee)
+      if (!b || b.deficit == null) return null
+      return <div className="small" style={{ fontVariantNumeric: 'tabular-nums', lineHeight: 1.9 }}>
+        <div className="row between"><span className="dim">{t('Today’s deficit so far')}</span><b>{(b.deficit > 0 ? '+' : '') + fmtNum(b.deficit)} kcal</b></div>
+        <div className="row between"><span className="dim">{t('so tomorrow should read')}</span>
+          <b style={{ color: 'var(--acc)' }}>{fmtNum2(proj.fromKg - b.deficit / KCAL_PER_KG_FAT)} {st.unit}</b></div>
+      </div>
+    })()}
+    <div style={{ height: 14 }} />
+    <Button variant="ghost" className="dim" onClick={close}>{t('Close')}</Button>
+  </>
 
   const rows = (st.nutrition || [])
     // Bounded at both ends by the projection's own range: today is still being lived and is
