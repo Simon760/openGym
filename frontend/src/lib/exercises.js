@@ -38,9 +38,38 @@ export const exName = ex => (ex && (ex.custom ? ex.n : (NAMES && NAMES[ex.id]) |
  * files it under "développé couché".
  */
 export const exSearchText = ex => {
-  const fr = NAMES && NAMES[ex.id]
-  return (fr ? fr + ' ' + ex.n : ex.n).toLowerCase()
+  const fr = NAMES && NAMES[ex && ex.id]
+  const n = ex && typeof ex.n === 'string' ? ex.n : String((ex && ex.n) ?? '')
+  return (fr ? fr + ' ' + n : n).toLowerCase()
 }
+
+/**
+ * Does an exercise match a search? One place, and defensive about every field it reads.
+ *
+ * This used to be written inline, twice, as a chain of `.includes` straight off the record —
+ * and a record is not guaranteed to have those fields. An exercise created by importing a
+ * shared plan carried a name and a body part and nothing else, so `ex.tg.includes(q)` threw
+ * the moment a search became non-empty, which is to say on the first letter typed. The whole
+ * app went blank, from one imported exercise, in two different screens.
+ *
+ * A search is the last place that should be brittle: it runs over records from the catalogue,
+ * from imports, from other people's shared plans and from a text box. Everything is coerced.
+ */
+export const exMatches = (ex, ql) => {
+  if (!ql) return true
+  if (!ex) return false
+  const has = v => typeof v === 'string' && v.toLowerCase().includes(ql)
+  return exSearchText(ex).includes(ql) || has(ex.tg) || has(ex.eq) || has(ex.desc)
+}
+
+/**
+ * What a complete exercise record looks like, for anything that builds one.
+ *
+ * Every caller is making a user-side exercise — created by hand, or by an import that found
+ * no catalogue match — so `custom` is asserted rather than defaulted. Only the fields a
+ * search reads are filled in, and only when they are missing.
+ */
+export const fillEx = ex => ({ tg: '', eq: 'custom', desc: '', ...ex, custom: true })
 
 // Custom (user-created) exercises live in synced state S.customEx (issue #11) and are
 // merged into the id index here so every EXIDX[id] lookup keeps working unchanged.

@@ -1,4 +1,5 @@
 // Put a state back into the shape the app renders, whatever a round trip did to it.
+import { fillEx } from './exercises.js'
 //
 // This exists because of one property of Firebase Realtime Database: **it cannot store an
 // empty container**. `set(ref, { ex: [] })` does not write an empty array — it deletes the
@@ -62,6 +63,11 @@ export function hydrate(state) {
 
   for (const k of ['bodyweight', 'routines', 'workouts', 'customEx', 'nutrition', 'sleep', 'health', 'blocks', 'blockLog', 'calib']) S[k] = list(S[k])
   for (const k of ['week', 'dayPlan', 'exWeights', 'supp']) S[k] = dict(S[k])
+
+  // An exercise that arrived from an imported plan carried a name and a body part and
+  // nothing else, and every search that touched it threw on the first letter typed. The
+  // writers are fixed; these are the records already sitting in people's databases.
+  S.customEx = S.customEx.filter(e => e && typeof e === 'object' && e.id).map(fillEx)
 
   S.routines = S.routines
     .filter(r => r && typeof r === 'object')

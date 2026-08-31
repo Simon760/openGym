@@ -16,7 +16,7 @@
 // The report says which happened to every exercise, so the review screen can show the whole
 // resolution before a single routine is written.
 
-import { EXIDX, BODYPARTS, isBodyweightEq } from './exercises.js'
+import { EXIDX, BODYPARTS, isBodyweightEq, fillEx } from './exercises.js'
 import { matchExercise, CATEGORY_BP } from './import-csv.js'
 import { muscleSlug, musclesOf, MUSCLE_NAME } from './muscles.js'
 import { modeOf } from './history.js'
@@ -112,7 +112,9 @@ function readExercise(raw, report) {
   if (id) {
     report.matched.push({ from: name, to: EXIDX[id].n, id })
   } else {
-    created = { id: uid(), n: name, bp: bodyPartOf(pick(raw, 'bodyPart', 'bp', 'muscle', 'group', 'groupe')) }
+    // Complete, not just named: a record missing tg or eq used to blow up every search
+    // that touched it, from the first letter typed.
+    created = fillEx({ id: uid(), n: name, bp: bodyPartOf(pick(raw, 'bodyPart', 'bp', 'muscle', 'group', 'groupe')) })
     // A body part alone spreads a flat, invented share over the muscles in it, which for a
     // compound is wrong in the direction that matters: "chest" fatigues the chest and
     // nothing else, so an imported bench press leaves the triceps and shoulders reading as
