@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { hydrate } from './hydrate.js'
+import { setVol } from './history.js'
 
 // What Realtime Database actually hands back. Every one of these was a crash behind the
 // error boundary, not a cosmetic loss: the app trusts its own schema and calls .length.
@@ -35,6 +36,18 @@ describe('hydrate — a state that came back from Firebase', () => {
     const S = hydrate({ workouts: [{ d: '2025-08-11', name: 'Push' }, { d: '2025-08-12', entries: [{ id: '0314' }] }] })
     expect(S.workouts[0].entries).toEqual([])
     expect(S.workouts[1].entries[0].sets).toEqual([])
+  })
+
+  it('restores the extra loads carried on a set', () => {
+    // Three levels of array in one path — workouts, entries, sets — and the loads on a set
+    // are a fourth. The cloud brings every one of them home keyed "0","1".
+    const S = hydrate({ workouts: { 0: { d: '2025-08-11', entries: { 0: {
+      id: '0314', sets: { 0: { w: 100, r: 10, done: true, drops: { 0: { w: 60, r: 10 } } } } } } } } })
+    expect(S.workouts[0].entries[0].sets[0].drops).toEqual([{ w: 60, r: 10 }])
+    expect(setVol(S.workouts[0].entries[0].sets[0])).toBe(1600)
+    // a set that never carried one keeps not carrying one, rather than gaining an empty list
+    expect(hydrate({ workouts: [{ d: '2025-08-11', entries: [{ id: '0314', sets: [{ w: 50, r: 8 }] }] }] })
+      .workouts[0].entries[0].sets[0]).toEqual({ w: 50, r: 8 })
   })
 
   it('does the same for a workout that was still running', () => {

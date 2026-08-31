@@ -634,6 +634,16 @@ h4.sec{
 }
 .setrow .setgo:disabled{opacity:.3;cursor:default}
 .setrow .setgo:not(:disabled):active{background:var(--surface-3)}
+/* An extra load carried on the set above (a drop, a pyramid rung). It shares the set's
+   columns exactly — the numbers have to line up or the pair stops reading as one set — and
+   loses the hairline and the numbered chip, both of which would make it look like a set of
+   its own. Its dimming is left to .setrow.done once the set is ticked. */
+.setrow.drop{padding-top:1px}
+.setrow.drop:not(.done){opacity:.82}
+.setrow.drop::before{display:none}
+.setrow.drop .n{background:none;color:var(--label-3);font-size:14px}
+.setrow.drop .eff-sp{flex:1.1}
+.setrow.drop.eff3 .eff-sp{flex:.85}
 /* exercise-config sheet: three steppers side by side on narrow phones */
 .cfgrow{gap:8px}
 .cfgrow>div{flex:1;min-width:0}

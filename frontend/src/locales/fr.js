@@ -662,6 +662,8 @@ export default {
   'that payload has no health data in it': 'ce contenu ne comporte aucune donnée santé',
   '{0} steps': '{0} pas',
   '{0} kcal burned': '{0} kcal brûlées',
+  'Another load on this set': 'Une autre charge sur cette série',
+  'Remove this load': 'Retirer cette charge',
   '{0} warm-up set, counted in none of the above.': '{0} série d\'échauffement, comptée dans aucun des chiffres ci-dessus.',
   'W': 'É',
   'Tap to mark as a warm-up': 'Appuie pour marquer comme échauffement',

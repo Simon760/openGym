@@ -669,6 +669,8 @@ export default {
   'that payload has no health data in it': 'that payload has no health data in it',
   '{0} steps': '{0} steps',
   '{0} kcal burned': '{0} kcal burned',
+  'Another load on this set': 'Another load on this set',
+  'Remove this load': 'Remove this load',
   '{0} warm-up set, counted in none of the above.': '{0} warm-up set, counted in none of the above.',
   'W': 'W',
   'Tap to mark as a warm-up': 'Tap to mark as a warm-up',

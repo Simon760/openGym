@@ -16,7 +16,7 @@
 //   · fewer sets than prescribed                       → miss
 // So a session that fell apart can never advance the load as though it had succeeded.
 
-import { modeOf, repStep, isWorking } from './history.js'
+import { modeOf, repStep, isWorking, setTop, setTopReps } from './history.js'
 import { EXIDX } from './exercises.js'
 
 export const POLICIES = ['off', 'linear', 'greyskull', 'double', 'time']
@@ -110,16 +110,16 @@ export function readSession(entry, fallback) {
     const held = sets.map(s => (isWorking(s) ? (s.sec || 0) : 0))
     return {
       mode, goal, held,
-      weight: Math.max(0, ...sets.filter(isWorking).map(s => s.w || 0)),
+      weight: Math.max(0, ...sets.filter(isWorking).map(setTop)),
       best: Math.max(0, ...held),
       ok: goal > 0 && enough && held.length > 0 && held.every(h => h >= goal)
     }
   }
   const goal = target.reps || 0
-  const reps = sets.map(s => (isWorking(s) ? (s.r || 0) : 0))
+  const reps = sets.map(s => (isWorking(s) ? setTopReps(s) : 0))
   return {
     mode, goal, reps,
-    weight: Math.max(0, ...sets.filter(s => s.done).map(s => s.w || 0)),
+    weight: Math.max(0, ...sets.filter(isWorking).map(setTop)),
     count: reps.length,                                   // the dimension bodyweight work grows (#33)
     low: reps.length ? Math.min(...reps) : 0,
     amrap: reps.length ? reps[reps.length - 1] : 0,       // Greyskull's final set

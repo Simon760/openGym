@@ -103,12 +103,14 @@ export function setLabel(id, s, cfg) {
   // rather than "0×12", which says a set was performed with no weight and means nothing.
   // A per-side set needs no mark here: the number logged is the total, the same as every
   // other set in the app.
-  const reps = s.r || 0
-  if (isBw({ ...c, id: c.id ?? id })) {
-    const load = s.w > 0 ? `+${fmtNum(s.w)} × ` : ''
-    return `${load}${reps}` + effortTail(s)
-  }
-  return `${fmtNum(s.w || 0)}×${reps}` + effortTail(s)
+  // A set can carry more than one load — a drop, or a pyramid rung — and every piece is
+  // shown. Printing only the first would under-report the set everywhere the label is read:
+  // history, the digest, the last-time line above the sets you are about to do. The arrow is
+  // the joiner rather than a plus because it also says which way the set ran, and because a
+  // bodyweight piece already starts with a plus for the belt.
+  const bw = isBw({ ...c, id: c.id ?? id })
+  const piece = x => (bw ? (x.w > 0 ? `+${fmtNum(x.w)} × ${x.r}` : `${x.r}`) : `${fmtNum(x.w)}×${x.r}`)
+  return segsOf(s).map(piece).join('\u2192') + effortTail(s)
 }
 // Default config for a freshly added exercise.
 export function defaultConfig(id, mode) {
@@ -151,6 +153,36 @@ export function cleanupSg(ex) {
  * bug. So one predicate, and everything that counts anything uses it.
  */
 export const isWorking = s => !!(s && s.done && !s.warm)
+
+/**
+ * A set can carry more than one load.
+ *
+ * "Ten at 10, then ten at 5 without putting it down" is one set, not two, and logging it as
+ * two says something false about both: the rest between them, the number of sets performed,
+ * and — for a descending set — a working set at 5 kg that never happened. So the extra loads
+ * ride on the set as `drops`, and everything that reads a weight goes through here.
+ *
+ * The direction is deliberately not named. A drop set descends and a pyramid ascends, and
+ * the arithmetic is identical either way: the volume is the sum of the pieces, and the load
+ * that counts as a record is the heaviest of them, wherever it sits in the sequence.
+ */
+// Extra loads as a list, whatever they arrived as. A state read back from the cloud brings
+// arrays home as objects keyed "0","1" — hydrate repairs that, but this is read on every set
+// of every workout and is not the place to find out that one slipped through.
+const dropsOf = s => (s && Array.isArray(s.drops) ? s.drops : [])
+export const segsOf = s => [
+  { w: (s && s.w) || 0, r: (s && s.r) || 0 },
+  ...(dropsOf(s).map(d => ({ w: (d && d.w) || 0, r: (d && d.r) || 0 })))
+]
+export const setVol = s => segsOf(s).reduce((v, x) => v + x.w * x.r, 0)
+export const setTop = s => segsOf(s).reduce((m, x) => (x.w > m ? x.w : m), 0)
+// The reps done at that heaviest load — the number that belongs with setTop. A descending
+// set tops out where it started and an ascending one where it ended, so pairing the top load
+// with the first piece's reps would tell the progression engine you did ten at a weight you
+// only did five at. Ties keep the earlier piece, which is where a drop set's work is.
+export const setTopReps = s => segsOf(s).reduce((b, x) => (x.w > b.w ? x : b), { w: -1, r: 0 }).r
+export const setReps = s => segsOf(s).reduce((n, x) => n + x.r, 0)
+export const hasDrops = s => dropsOf(s).length > 0
 export const isWarm = s => !!(s && s.warm)
 
 export function lastEntryFor(S, exId) {
@@ -167,7 +199,9 @@ export function bestWeightFor(S, exId) {
   let best = 0
   S.workouts.forEach(w => w.entries.forEach(e => {
     if (e.id === exId) {
-      e.sets.forEach(s => { if (isWorking(s) && s.w > best) best = s.w })
+      // The heaviest piece of the set, which for a descending set is where it started and
+      // for an ascending one is where it ended. Either way it is the load that was lifted.
+      e.sets.forEach(s => { if (isWorking(s) && setTop(s) > best) best = setTop(s) })
       if (e.topW && e.topW > best) best = e.topW
     }
   }))
@@ -257,7 +291,7 @@ export function workoutVolume(w) {
   let v = 0
   // No special case for unilateral work: a per-side set logs its total, so both sides are
   // already in the rep count that arrives here.
-  ;((w && w.entries) || []).forEach(e => ((e && e.sets) || []).forEach(s => { if (isWorking(s)) v += (s.w || 0) * (s.r || 0) }))
+  ;((w && w.entries) || []).forEach(e => ((e && e.sets) || []).forEach(s => { if (isWorking(s)) v += setVol(s) }))
   return v
 }
 export function setsDone(w) {

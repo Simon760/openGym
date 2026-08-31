@@ -38,10 +38,13 @@ const dict = v => {
   return v && typeof v === 'object' ? v : {}
 }
 
-/** One logged or running workout: entries, and the sets inside them. */
+/** One set: itself, and the extra loads it may carry — a third level of array to repair. */
+const set = s => (s && typeof s === 'object' && s.drops != null ? { ...s, ...(list(s.drops).length ? { drops: list(s.drops) } : {}) } : s)
+
+/** One logged or running workout: entries, the sets inside them, and each set's extra loads. */
 const workout = w => (!w || typeof w !== 'object' ? null : {
   ...w,
-  entries: list(w.entries).map(e => (e && typeof e === 'object' ? { ...e, sets: list(e.sets) } : null)).filter(Boolean)
+  entries: list(w.entries).map(e => (e && typeof e === 'object' ? { ...e, sets: list(e.sets).map(set) } : null)).filter(Boolean)
 })
 
 /**

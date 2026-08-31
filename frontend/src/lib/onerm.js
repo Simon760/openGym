@@ -10,7 +10,7 @@
 // which is exactly why REP_CAP exists.
 
 import { whenOf } from './body.js'
-import { isWorking } from './history.js'
+import { isWorking, segsOf } from './history.js'
 
 // Above this many reps an estimate says more about work capacity than about maximal strength,
 // and the formulas disagree by double digits. Refusing to guess beats printing a fantasy.
@@ -48,8 +48,12 @@ export function bestSetOf(entry, formula = DEFAULT_FORMULA) {
   let best = null
   ;(entry?.sets || []).forEach(s => {
     if (!isWorking(s)) return
-    const est = estimate1RM(s.w, s.r, formula)
-    if (est !== null && (!best || est > best.est)) best = { est, w: Number(s.w), r: Math.round(Number(s.r)) }
+    // Every load in the set, not just the first: a set that ascends 60 → 100 has its best
+    // estimate in the last piece, and one that drops 100 → 60 has it in the first.
+    segsOf(s).forEach(x => {
+      const est = estimate1RM(x.w, x.r, formula)
+      if (est !== null && (!best || est > best.est)) best = { est, w: Number(x.w), r: Math.round(Number(x.r)) }
+    })
   })
   return best
 }

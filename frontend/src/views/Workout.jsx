@@ -59,7 +59,7 @@ function Elapsed({ start }) {
 }
 
 /* ---------- one exercise block (reps: weight×reps · time: a held duration · cardio: duration+speed) ---------- */
-function ExerciseBlock({ entryIdx, compact, onToggle, onField, onAddSet, onRemoveSet, onStartTimed, onWarm }) {
+function ExerciseBlock({ entryIdx, compact, onToggle, onField, onAddSet, onRemoveSet, onStartTimed, onWarm, onDrop, onDropField }) {
   const S = useStore(s => s.S)
   const working = useUI(s => s.work)
   const entry = S.active.entries[entryIdx]
@@ -117,6 +117,15 @@ function ExerciseBlock({ entryIdx, compact, onToggle, onField, onAddSet, onRemov
       <button aria-label="Increase" onClick={() => bump(s, i, col, 1)}><Icon name="plus" /></button>
     </div>
   )
+  // A second load on the same set — a drop, or the next rung of a pyramid. Same controls,
+  // indented under their set, because they belong to it rather than standing beside it.
+  const dcell = (d, i, k, col, cls) => (
+    <div className={'stp ' + cls}>
+      <button aria-label="Decrease" onClick={() => onDropField(i, k, col.f, Math.max(0, Math.round((((d[col.f] || 0) - col.step)) * 100) / 100))}><Icon name="minus" /></button>
+      <span className="val"><NumberField decimal={col.dec} value={d[col.f] ?? ''} onChange={v => onDropField(i, k, col.f, v)} /></span>
+      <button aria-label="Increase" onClick={() => onDropField(i, k, col.f, Math.max(0, Math.round((((d[col.f] || 0) + col.step)) * 100) / 100))}><Icon name="plus" /></button>
+    </div>
+  )
   return <>
     <Media ex={ex} key={entry.id} compact={compact} minimizable />
     <div className="row between" style={{ marginBottom: 6 }}>
@@ -140,7 +149,8 @@ function ExerciseBlock({ entryIdx, compact, onToggle, onField, onAddSet, onRemov
     <div className="card" style={{ marginTop: 10, marginBottom: 0 }}>
       {/* the header carries the same eff3 sizing as the rows, or the labels drift off their columns */}
       <div className={'sethead' + (col3 ? ' eff3' : '')}><span className="n-sp" /><span className="w-sp">{col1.hd}</span>{col2 && <span className="r-sp">{col2.hd}</span>}{col3 && <span className="eff-sp">{col3.hd}</span>}{timed && <span className="ck-sp" />}<span className="ck-sp" /></div>
-      {entry.sets.map((s, i) => <div key={i} className={'setrow' + (s.done ? ' done' : '') + (col3 ? ' eff3' : '')}
+      {/* One set can render several rows: itself, then any extra loads carried on it. */}
+      {entry.sets.map((s, i) => [<div key={i} className={'setrow' + (s.done ? ' done' : '') + (col3 ? ' eff3' : '')}
         style={s.warm ? { opacity: .62 } : undefined}>
         {/* The set number doubles as the warm-up toggle. A warm-up is logged like any other
             set and counted in none of the figures — not volume, not a record, and above all
@@ -158,7 +168,27 @@ function ExerciseBlock({ entryIdx, compact, onToggle, onField, onAddSet, onRemov
         {timed && <button className="setgo" aria-label={t('Start set')} disabled={s.done || !!working}
           onClick={() => onStartTimed(i)}><Icon name="play" /></button>}
         <Check checked={s.done} onChange={() => onToggle(i)} />
-      </div>)}
+      </div>,
+      // The extra loads of this set, then the button that adds one. Reps only — a second
+      // load is never cardio and never timed, so the columns are always weight and reps.
+      ...(!cardio && !timed ? (s.drops || []).map((d, k) => <div key={i + '-' + k}
+        className={'setrow drop' + (s.done ? ' done' : '') + (col3 ? ' eff3' : '')}>
+        <div className="n" aria-hidden="true">↳</div>
+        {dcell(d, i, k, col1, 'w')}
+        {col2 && dcell(d, i, k, col2, 'r')}
+        {col3 && <span className="eff-sp" />}
+        <button className="setgo" aria-label={t('Remove this load')} onClick={() => onDrop(i, k, null)}><Icon name="minus" /></button>
+      </div>) : []),
+      // Deliberately quiet: this belongs to a minority of sets, and one accent-coloured
+      // call to action under every row would shout louder than the sets themselves.
+      ...(!cardio && !timed ? [<div key={i + '-add'} style={{ padding: '0 0 6px 34px' }}>
+        <button onClick={() => onDrop(i, null, { w: 0, r: s.r || 0 })}
+          style={{ background: 'none', border: 0, padding: '3px 0', font: 'inherit', fontSize: 12,
+            color: 'var(--label-3)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+          <Icon name="plus" style={{ fontSize: 13 }} />{t('Another load on this set')}
+        </button>
+      </div>] : [])
+      ])}
       <div style={{ height: 8 }} />
       <div className="row">
         <Button size="sm" icon="minus" disabled={entry.sets.length <= 1} onClick={onRemoveSet}>{t('Remove set')}</Button>
@@ -200,6 +230,15 @@ function ActiveWorkout() {
   })
   const removeSet = idx => mutEntry(idx, e => { if (e.sets.length > 1) e.sets.pop() })
   const setWarm = (idx, i) => mutEntry(idx, e => { e.sets[i].warm = !e.sets[i].warm })
+  // k === null adds; add === null removes. One handler, because a drop list is small enough
+  // that two would only be two things to keep in step.
+  const setDrop = (idx, i, k, add) => mutEntry(idx, e => {
+    const s = e.sets[i]
+    if (add) { s.drops = [...(s.drops || []), add]; return }
+    s.drops = (s.drops || []).filter((_, j) => j !== k)
+    if (!s.drops.length) delete s.drops
+  })
+  const setDropField = (idx, i, k, f, v) => mutEntry(idx, e => { e.sets[i].drops[k][f] = v })
 
   // A timed set is held, not typed. The work timer records what was actually held — an early
   // finish logs 0:38 of a 0:45 target rather than crediting the full prescription — and then
@@ -290,11 +329,11 @@ function ActiveWorkout() {
           {unit.map((idx, k) => <div key={idx} className="ss-ex">
             {k > 0 && <div className="ss-amp">+</div>}
             <ExerciseBlock entryIdx={idx} compact
-              onToggle={i => toggle(idx, i)} onField={(i, f, v) => setField(idx, i, f, v)} onAddSet={() => addSet(idx)} onRemoveSet={() => removeSet(idx)} onStartTimed={i => startTimed(idx, i)} onWarm={i => setWarm(idx, i)} />
+              onToggle={i => toggle(idx, i)} onField={(i, f, v) => setField(idx, i, f, v)} onAddSet={() => addSet(idx)} onRemoveSet={() => removeSet(idx)} onStartTimed={i => startTimed(idx, i)} onWarm={i => setWarm(idx, i)} onDrop={(i, k, add) => setDrop(idx, i, k, add)} onDropField={(i, k, f, v) => setDropField(idx, i, k, f, v)} />
           </div>)}
         </div>
       ) : (
-        <ExerciseBlock entryIdx={cur} onToggle={i => toggle(cur, i)} onField={(i, f, v) => setField(cur, i, f, v)} onAddSet={() => addSet(cur)} onRemoveSet={() => removeSet(cur)} onStartTimed={i => startTimed(cur, i)} onWarm={i => setWarm(cur, i)} />
+        <ExerciseBlock entryIdx={cur} onToggle={i => toggle(cur, i)} onField={(i, f, v) => setField(cur, i, f, v)} onAddSet={() => addSet(cur)} onRemoveSet={() => removeSet(cur)} onStartTimed={i => startTimed(cur, i)} onWarm={i => setWarm(cur, i)} onDrop={(i, k, add) => setDrop(cur, i, k, add)} onDropField={(i, k, f, v) => setDropField(cur, i, k, f, v)} />
       )}
     </> : <div className="empty"><div className="ico"><Icon name="shuffle" /></div>{t('Freestyle workout — add your first exercise.')}</div>}
 
