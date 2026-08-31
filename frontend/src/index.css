@@ -706,10 +706,24 @@ h4.sec{
 .sheet .grab{width:36px;height:5px;border-radius:99px;background:var(--label-4);margin:6px auto 14px}
 .sheet h3{font-size:20px;font-weight:600;letter-spacing:-.021em;margin-bottom:14px}
 .center{
-  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
-  width:min(84vw,300px);background:var(--bg-el);border-radius:var(--r-lg);padding:20px;
+  position:absolute;left:50%;width:min(84vw,300px);
+  background:var(--bg-el);border-radius:var(--r-lg);padding:20px;
   box-shadow:0 20px 60px -12px rgba(0,0,0,.5);
   animation:pop .28s var(--ease);
+  /* A centred dialog taller than the screen used to overflow it in both directions at once:
+     half of it went off the top, under the status bar, and half off the bottom, and neither
+     end could be scrolled to because nothing here clamped a height or offered a scroller.
+     The finish summary of a long session is exactly that tall — four tiles, one line per new
+     record, the watch prompt and the body map — so the duration and the muscle split were
+     both simply unreachable (issue: "ya un beug", 31/08).
+     Centred on the SAFE box rather than the raw viewport: shifting the midpoint by half the
+     difference of the two insets leaves an equal 16px above and below, so the top edge clears
+     the status bar and the bottom clears the home indicator whatever the phone. */
+  top:calc(50% + (var(--sat) - var(--sab)) / 2);
+  transform:translate(-50%,-50%);
+  max-height:calc(100vh - var(--sat) - var(--sab) - 32px);
+  overflow-y:auto;-webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;
 }
 :root[data-theme="light"] .center{background:#fff}
 @keyframes pop{from{transform:translate(-50%,-50%) scale(.94);opacity:0}to{transform:translate(-50%,-50%) scale(1);opacity:1}}
