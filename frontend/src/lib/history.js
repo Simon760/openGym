@@ -141,13 +141,25 @@ export function cleanupSg(ex) {
   })
 }
 
+/**
+ * A set logged as a warm-up: done, and deliberately not counted.
+ *
+ * Warm-ups are real work that must not enter any figure the app reasons from. Two plates for
+ * five is not a record, it is not volume worth reporting, and it is certainly not the set the
+ * progression engine should read to decide next week's weight — a bar-only warm-up counted as
+ * "last time" would walk a lifter's programme backwards, week after week, faster than any
+ * bug. So one predicate, and everything that counts anything uses it.
+ */
+export const isWorking = s => !!(s && s.done && !s.warm)
+export const isWarm = s => !!(s && s.warm)
+
 export function lastEntryFor(S, exId) {
   for (let i = S.workouts.length - 1; i >= 0; i--) {
     const en = S.workouts[i].entries.find(e => e.id === exId)
     // `target` is what the session prescribed; finished workouts carry it so labels and the
     // progression engine can read a session back the way it was logged. Older workouts have
     // none — modeOf() falls back to the body part for them, which is what they were.
-    if (en && en.sets.some(s => s.done)) return { d: S.workouts[i].d, sets: en.sets.filter(s => s.done), target: en.target || null }
+    if (en && en.sets.some(isWorking)) return { d: S.workouts[i].d, sets: en.sets.filter(isWorking), target: en.target || null }
   }
   return null
 }
@@ -155,7 +167,7 @@ export function bestWeightFor(S, exId) {
   let best = 0
   S.workouts.forEach(w => w.entries.forEach(e => {
     if (e.id === exId) {
-      e.sets.forEach(s => { if (s.done && s.w > best) best = s.w })
+      e.sets.forEach(s => { if (isWorking(s) && s.w > best) best = s.w })
       if (e.topW && e.topW > best) best = e.topW
     }
   }))
@@ -245,14 +257,16 @@ export function workoutVolume(w) {
   let v = 0
   // No special case for unilateral work: a per-side set logs its total, so both sides are
   // already in the rep count that arrives here.
-  w.entries.forEach(e => e.sets.forEach(s => { if (s.done) v += (s.w || 0) * (s.r || 0) }))
+  ;((w && w.entries) || []).forEach(e => ((e && e.sets) || []).forEach(s => { if (isWorking(s)) v += (s.w || 0) * (s.r || 0) }))
   return v
 }
 export function setsDone(w) {
   let n = 0
-  w.entries.forEach(e => e.sets.forEach(s => { if (s.done) n++ }))
+  ;((w && w.entries) || []).forEach(e => ((e && e.sets) || []).forEach(s => { if (isWorking(s)) n++ }))
   return n
 }
+/* Counted for the progress bar during a session, where a warm-up you ticked is a thing you
+   did and should not read as still to do. */
 export function setsDoneActive(A) {
   let n = 0
   if (A) A.entries.forEach(e => e.sets.forEach(s => { if (s.done) n++ }))

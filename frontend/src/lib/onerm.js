@@ -10,6 +10,7 @@
 // which is exactly why REP_CAP exists.
 
 import { whenOf } from './body.js'
+import { isWorking } from './history.js'
 
 // Above this many reps an estimate says more about work capacity than about maximal strength,
 // and the formulas disagree by double digits. Refusing to guess beats printing a fantasy.
@@ -46,7 +47,7 @@ export function estimate1RM(w, r, formula = DEFAULT_FORMULA) {
 export function bestSetOf(entry, formula = DEFAULT_FORMULA) {
   let best = null
   ;(entry?.sets || []).forEach(s => {
-    if (!s.done) return
+    if (!isWorking(s)) return
     const est = estimate1RM(s.w, s.r, formula)
     if (est !== null && (!best || est > best.est)) best = { est, w: Number(s.w), r: Math.round(Number(s.r)) }
   })

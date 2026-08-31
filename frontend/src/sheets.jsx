@@ -3,7 +3,7 @@ import { useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
 import { EXDB, EXIDX, BODYPARTS, isCardio, isBodyweightEq, allExercises, equipmentOf, exName, exSearchText, exMatches } from './lib/exercises.js'
 import { fmtDate, fmtNum, fmtNum2, fmtKg, fmtVol, fmtDur, durPart, todayISO, isoOf, uid, exCount, DAYN, MONTHS_LONG, ACCENTS } from './lib/format.js'
-import { lastEntryFor, bestWeightFor, buildSets, effectiveRoutineId, effectiveRoutine, weekDays, swapDays, workoutVolume, setsDone, setsDoneActive, lastBW, supersetUnits, unitOf, setLabel, defaultConfig, cleanupSg, modeOf, effortOf, isBw, isPerSide, sideReps } from './lib/history.js'
+import { lastEntryFor, bestWeightFor, buildSets, effectiveRoutineId, effectiveRoutine, weekDays, swapDays, workoutVolume, setsDone, setsDoneActive, lastBW, supersetUnits, unitOf, setLabel, defaultConfig, cleanupSg, modeOf, effortOf, isBw, isPerSide, sideReps, isWorking } from './lib/history.js'
 import { beep, vibrate } from './lib/sound.js'
 import { t, instrFor, getLang, INSTR_LANGS } from './lib/i18n.js'
 import { nav } from './lib/nav.js'
@@ -2150,7 +2150,15 @@ export function WorkoutRow({ w, onClick }) {
 export function startFlow(routineId) {
   beginWorkout(routineId)
 }
-export function beginWorkout(routineId, bw) {
+/**
+ * Start a session, live or typed up afterwards.
+ *
+ * `opts.log` means the training already happened: no clock, no rest timer, and the day is
+ * whatever day it was rather than today. Everything else — the set rows, the prescriptions,
+ * the supersets, the finish summary — is the same screen, because a second entry UI would be
+ * a second place for every future fix to be forgotten.
+ */
+export function beginWorkout(routineId, bw, { log = false, d = todayISO() } = {}) {
   const st = S()
   const r = routineId ? st.routines.find(x => x.id === routineId) : null
   // The prescription is applied as the session is built, so you walk up to the bar with the
@@ -2164,7 +2172,9 @@ export function beginWorkout(routineId, bw) {
     // The weight the session is remembered against: the last one recorded, since nothing is
     // asked for at the door any more. The summary shows it and nothing computes from it.
     const last = lastBW(st)
-    s.active = { id: uid(), d: todayISO(), start: Date.now(), routineId, name: r ? r.name : t('Freestyle'), bw: bw ?? (last ? last.w : null), cur: 0, entries }
+    s.active = { id: uid(), d: log ? d : todayISO(), start: Date.now(), routineId,
+      name: r ? r.name : t('Freestyle'), bw: bw ?? (last ? last.w : null), cur: 0, entries,
+      ...(log ? { log: true } : {}) }
   })
   useUI.getState().stopRest()
   nav('/workout')
@@ -2232,13 +2242,85 @@ function WorkoutComplete({ close }) {
 }
 export const workoutCompleteSheet = () => ui().openSheet(close => <WorkoutComplete close={close} />, { kind: 'center' })
 
+/* ============================ a session typed up afterwards ============================ */
+/**
+ * Which routine, and which day. Then the ordinary workout screen, minus the clock.
+ *
+ * The day comes first because it is the thing that makes this different from starting a
+ * workout, and offering "today" among the choices matters: a session finished an hour ago and
+ * never opened in the app is the commonest case of all.
+ */
+function LogPastSheet({ close }) {
+  const st = useStore(s => s.S)
+  const [d, setD] = useState(todayISO())
+  const days = Array.from({ length: 8 }, (_, i) => isoOf(new Date(Date.now() - i * 86400000)))
+  const taken = new Set((st.workouts || []).map(w => w.d))
+  const planned = effectiveRoutine(st, d)
+  const others = (st.routines || []).filter(r => !planned || r.id !== planned.id)
+
+  const go = id => { close(); beginWorkout(id, undefined, { log: true, d }) }
+
+  return <>
+    <h3>{t('Log a session you already did')}</h3>
+    <div className="muted small" style={{ marginBottom: 12, lineHeight: 1.45 }}>
+      {t('Same screen as a live session, without the clock or the rest timer — you type what you did and finish.')}
+    </div>
+    <h4 className="sec">{t('Which day')}</h4>
+    <div className="chips">
+      {days.map(x => <button key={x} className={'chip nocap' + (x === d ? ' on' : '')} onClick={() => setD(x)}>
+        {x === todayISO() ? t('Today') : fmtDate(x, true)}{taken.has(x) ? ' ·' : ''}
+      </button>)}
+    </div>
+    {taken.has(d) && <div className="small" style={{ color: 'var(--yellow)', margin: '8px 2px 0', lineHeight: 1.45 }}>
+      {t('You already logged a session that day. This adds a second one.')}
+    </div>}
+    <h4 className="sec">{t('Which routine')}</h4>
+    <div className="list">
+      {planned && <div className="item" onClick={() => go(planned.id)}>
+        <span className="lrow-i" style={{ background: 'var(--acc)' }}><Icon name={glyphOf(planned.emoji)} /></span>
+        <div className="grow"><div className="tt">{planned.name}</div><div className="ss">{t('planned that day')} · {exCount(planned.ex.length)}</div></div>
+        <Icon name="chevronRight" className="chev" />
+      </div>}
+      {others.map(r => <div key={r.id} className="item" onClick={() => go(r.id)}>
+        <span className="lrow-i"><Icon name={glyphOf(r.emoji)} /></span>
+        <div className="grow"><div className="tt">{r.name}</div><div className="ss">{exCount(r.ex.length)}</div></div>
+        <Icon name="chevronRight" className="chev" />
+      </div>)}
+      <div className="item" onClick={() => go(null)}>
+        <span className="lrow-i" style={{ background: 'var(--surface-3)' }}><Icon name="shuffle" /></span>
+        <div className="grow"><div className="tt">{t('Freestyle')}</div><div className="ss">{t('pick the exercises as you go')}</div></div>
+        <Icon name="chevronRight" className="chev" />
+      </div>
+    </div>
+    <div style={{ height: 12 }} />
+    <Button variant="ghost" className="dim" onClick={close}>{t('Cancel')}</Button>
+  </>
+}
+export const logPastSheet = () => ui().openSheet(close => <LogPastSheet close={close} />)
+
 function FinishSummary({ w, prs, e1prs = [], close }) {
   const st = useStore(s => s.S)
+  // The watch is in your hand and the number is on its screen. Asked ten hours later it is a
+  // number nobody remembers, and the deficit for the day goes without it — which is the one
+  // figure a training session actually moves.
+  const [kcal, setKcal] = useState(() => (w.watch && w.watch.kcal) || 0)
+  const [saved, setSaved] = useState(false)
+  const warm = (w.entries || []).reduce((n, e) => n + (e.sets || []).filter(x => x.warm && x.done).length, 0)
+  const saveKcal = () => {
+    update(s => {
+      const t = (s.workouts || []).find(x => x.id === w.id)
+      if (t) t.watch = { ...(t.watch || {}), kcal: Math.round(kcal) }
+    })
+    setSaved(true); toast(t('{0} kcal saved on this session', fmtNum(Math.round(kcal))))
+  }
   return <div style={{ textAlign: 'center', padding: '8px 0' }}>
     <div style={{ fontSize: 44, display: 'flex', justifyContent: 'center', color: 'var(--acc)' }}><Icon name="trophy" /></div>
     <h3 style={{ margin: '8px 0' }}>{t('Workout complete!')}</h3>
     <div className="tiles" style={{ textAlign: 'left' }}>
-      <div className="tile"><div className="l">{t('Duration')}</div><div className="v" style={{ fontSize: '1.1rem' }}>{fmtDur(w.end - w.start)}</div></div>
+      {/* A session typed up afterwards has no duration, and `end - start` on two absent
+          fields printed "NaN min". Its day is the useful thing there instead. */}
+      <div className="tile"><div className="l">{w.end && w.start ? t('Duration') : t('Day')}</div>
+        <div className="v" style={{ fontSize: '1.1rem' }}>{w.end && w.start ? fmtDur(w.end - w.start) : fmtDate(w.d, true)}</div></div>
       <div className="tile"><div className="l">{t('Volume')}</div><div className="v" style={{ fontSize: '1.1rem' }}>{fmtVol(w.vol, st.unit)}</div></div>
       <div className="tile"><div className="l">{t('Sets')}</div><div className="v" style={{ fontSize: '1.1rem' }}>{setsDone(w)}</div></div>
       <div className="tile"><div className="l">{t('PRs')}</div><div className="v" style={{ fontSize: 20 }}>{prs.length || '—'}</div></div>
@@ -2247,6 +2329,23 @@ function FinishSummary({ w, prs, e1prs = [], close }) {
       {prs.map(id => <div key={id} className="small accent exn row" style={{ gap: 5 }}><Icon name="trophy" style={{ fontSize: 13 }} />{t('New PR:')} {exName(EXIDX[id]) || id}</div>)}
       {e1prs.map(p => <div key={p.id} className="small accent exn row" style={{ gap: 5 }}><Icon name="chartLine" style={{ fontSize: 13 }} />{t('Best estimated 1RM:')} {exName(EXIDX[p.id]) || p.id} · {fmtNum(p.est)} {st.unit}</div>)}
     </div>}
+    {/* Only when there were any, and named rather than silently dropped: a set you ticked
+        and then do not see in the count reads as a set the app lost. */}
+    {warm > 0 && <div className="small dim" style={{ textAlign: 'left', marginBottom: 10 }}>
+      {t(warm === 1 ? '{0} warm-up set, counted in none of the above.' : '{0} warm-up sets, counted in none of the above.', warm)}
+    </div>}
+
+    <h4 className="sec" style={{ textAlign: 'left' }}>{t('What did your watch say?')}</h4>
+    <div style={{ textAlign: 'left' }}>
+      <Stepper label={t('Session energy')} unit="kcal" value={kcal} step={10} decimal={false}
+        onChange={n => { setKcal(n || 0); setSaved(false) }} />
+      <div className="dim small" style={{ margin: '6px 2px 10px', lineHeight: 1.45 }}>
+        {t('Read it off the watch now — asked tomorrow it is a number nobody remembers, and the day’s deficit goes without it. The usual discount is applied when it is counted.')}
+      </div>
+      {kcal > 0 && !saved && <Button size="sm" icon="check" onClick={saveKcal}>{t('Save it on this session')}</Button>}
+      {saved && <div className="small accent row" style={{ gap: 5 }}><Icon name="checkCircle" style={{ fontSize: 13 }} />{t('Saved')}</div>}
+    </div>
+
     <h4 className="sec" style={{ textAlign: 'left' }}>{t('What you just trained')}</h4>
     <BodyMap load={loadOfWorkouts([w])} body={st.body} />
       <MuscleShare load={loadOfWorkouts([w])} />
@@ -2270,7 +2369,7 @@ function doFinishWorkout() {
   const prs = []
   const e1prs = []
   A.entries.forEach(e => {
-    const mx = Math.max(0, ...e.sets.filter(s => s.done).map(s => s.w))
+    const mx = Math.max(0, ...e.sets.filter(isWorking).map(s => s.w))
     if (mx > 0 && mx > bestWeightFor(st, e.id)) prs.push(e.id)
     // A heavier estimate without a heavier top set is its own kind of progress —
     // same weight for more reps. Reported separately so it can't be read as a load PR.
@@ -2278,7 +2377,9 @@ function doFinishWorkout() {
     if (rec && !prs.includes(e.id)) e1prs.push({ id: e.id, ...rec })
   })
   const w = {
-    id: A.id, d: A.d, start: A.start, end: Date.now(), routineId: A.routineId, name: A.name, bw: A.bw,
+    // A session typed up afterwards has no duration anybody measured. Left absent rather than
+    // filled with how long the typing took — a wrong number is worse than a missing one.
+    id: A.id, d: A.d, ...(A.log ? {} : { start: A.start, end: Date.now() }), routineId: A.routineId, name: A.name, bw: A.bw,
     // `target` (what the session prescribed) is kept alongside the sets: without it a
     // finished workout cannot say whether it hit its reps, and a timed session reads back
     // as "0 reps". It is what the progression engine works from.
