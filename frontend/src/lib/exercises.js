@@ -1,8 +1,13 @@
-import { EXDB } from './exercises-data.js'
+import { EXDB as UPSTREAM } from './exercises-data.js'
+import { EX_EXTRA } from './exercises-extra.js'
 import { t, ONLY_LANG } from './i18n.js'
 import EX_FR from '../names/fr.js'
 
-export { EXDB }
+// The catalogue is the vendored dataset plus the movements this app adds to it (see
+// exercises-extra.js). One list from here on: every lookup, filter, search and body-map
+// read downstream goes through EXDB or EXIDX and needs no idea which half a record came
+// from. Extras lead so a movement added because it was missing is the easier one to find.
+export const EXDB = [...EX_EXTRA, ...UPSTREAM]
 export const EXIDX = {}
 EXDB.forEach(e => { EXIDX[e.id] = e })
 export const BODYPARTS = [...new Set(EXDB.map(e => e.bp))].sort()
@@ -28,9 +33,24 @@ export function equipmentOf(list) {
  *
  * A custom exercise is whatever its owner typed and is never touched.
  */
-const NAMES = ONLY_LANG === 'fr' ? EX_FR : null
+// The generated table cannot name an exercise it never saw, so each extra carries its own.
+const NAMES = ONLY_LANG === 'fr' ? { ...EX_FR, ...Object.fromEntries(EX_EXTRA.filter(e => e.fr).map(e => [e.id, e.fr])) } : null
 
 export const exName = ex => (ex && (ex.custom ? ex.n : (NAMES && NAMES[ex.id]) || ex.n)) || ''
+
+/**
+ * The catalogue's own English name, when the displayed one is a translation of it.
+ *
+ * Empty for a custom exercise (its owner typed the only name it has) and for anything the
+ * generator left in English (the displayed name *is* this one). Kept on screen because the
+ * English name is what the rest of the gym world uses: a search in either language finds the
+ * exercise — see exSearchText — and this is how you confirm the one you found is the one you
+ * meant, when six French names differ by one word.
+ */
+export const exNameEn = ex => {
+  if (!ex || ex.custom || typeof ex.n !== 'string') return ''
+  return exName(ex) === ex.n ? '' : ex.n
+}
 
 /**
  * What to match a search against: both names, so the French name is findable by the English
