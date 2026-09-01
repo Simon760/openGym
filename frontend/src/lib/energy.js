@@ -37,6 +37,7 @@ const num0 = v => (Number.isFinite(+v) && +v > 0 ? +v : 0)
 const inWindow = (iso, days, now) =>
   !days || dayNum(iso) > dayNum(isoOf(new Date(now - 86400000))) - days
 const dayNum = iso => new Date(iso + 'T12:00:00').getTime() / 86400000
+const dayBefore = iso => isoOf(new Date(dayNum(iso) * 86400000 - 86400000))
 
 /**
  * The last day a total is allowed to include. A day still being lived is not a data point:
@@ -517,17 +518,27 @@ export function deficitTotals(S, tdee = S.tdee, days = 0, now = Date.now(), thro
  * `gaps` is how many days in that stretch logged no intake. Those days contribute nothing,
  * so a projection with gaps in it understates the deficit and reads high — which is worth
  * knowing before trusting the figure to a hundred grams.
+ *
+ * The weigh-in day counts, and the window is closed at both ends. You weigh yourself in the
+ * morning, so the reading is the balance up to the *end of the day before* — the first day it
+ * knows nothing about is the day you stood on the scale. Counting from the day after instead
+ * did not merely hide that day's deficit until tomorrow: no later anchor ever reached back
+ * for it either, so every weigh-in silently threw one logged day away and the projection read
+ * high by it. `until` caps the window short of the clock, for a caller scoring a prediction
+ * against a reading that cannot yet contain the days after it (see recordCalibration).
  */
-export function projectedWeight(S, tdee = S && S.tdee, now = Date.now()) {
+export function projectedWeight(S, tdee = S && S.tdee, now = Date.now(), until = null) {
   const weighIns = (S.bodyweight || []).filter(b => num(b.w) != null).sort((a, b) => (a.d < b.d ? -1 : 1))
   const last = weighIns[weighIns.length - 1]
   if (!last || !tdeeParts(tdee)) return null
-  const end = lastDay(S, now)
-  if (last.d >= end) return { from: last.d, to: last.d, fromKg: num(last.w), kg: num(last.w), days: 0, span: 0, deficit: 0, gaps: 0 }
-  const days = (S.nutrition || []).filter(e => num(e.kcal) != null && e.d > last.d && e.d <= end)
+  const clock = lastDay(S, now)
+  const end = until && until < clock ? until : clock
+  if (last.d > end) return { from: last.d, to: last.d, fromKg: num(last.w), kg: num(last.w), days: 0, span: 0, deficit: 0, gaps: 0, change: 0 }
+  const days = (S.nutrition || []).filter(e => num(e.kcal) != null && e.d >= last.d && e.d <= end)
   let deficit = 0
   days.forEach(e => { const b = dayBalance(S, e.d, tdee, undefined, now); if (b && b.deficit != null) deficit += b.deficit })
-  const span = Math.round(dayNum(end) - dayNum(last.d))
+  // Inclusive of both ends, so a same-day weigh-in and log is one day and not zero.
+  const span = Math.round(dayNum(end) - dayNum(last.d)) + 1
   const kg = num(last.w) - deficit / KCAL_PER_KG_FAT
   return {
     // `to` travels with it so a caller listing the days can stop where this stopped. A list
@@ -593,9 +604,12 @@ export function cutRate(S, tdee = S && S.tdee, days = 0, now = Date.now()) {
  * to compare — the first weigh-in of all, or a run with no intake logged in it.
  */
 export function recordCalibration(S, iso, kg, now = Date.now()) {
-  const p = projectedWeight(S, S && S.tdee, now)
+  // Capped the day before this reading: a weigh-in on the morning of the 5th says nothing
+  // about what was eaten on the 5th, so scoring the prediction against a window that
+  // included it would charge the model for a day it could not have seen.
+  const p = projectedWeight(S, S && S.tdee, now, dayBefore(iso))
   if (!p || !p.days || p.from >= iso) return null
-  const days = (S.nutrition || []).filter(e => num(e.kcal) != null && e.d > p.from && e.d <= p.to)
+  const days = (S.nutrition || []).filter(e => num(e.kcal) != null && e.d >= p.from && e.d <= p.to)
   const sport = days.reduce((a, e) => a + sportKcal(S, e.d, trimOf(S), S.tdee, now).kcal, 0)
   const pair = {
     d: iso,

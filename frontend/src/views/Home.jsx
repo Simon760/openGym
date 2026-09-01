@@ -233,7 +233,12 @@ export default function Home() {
             onClick={e => { e.stopPropagation(); projectionSheet() }}>
             <Icon name="bolt" style={{ fontSize: 13 }} />
             <span>
-              {t('≈ {0} today, on the {1} days logged since', fmtKg(proj.kg) + ' ' + S.unit, proj.days)}
+              {/* Which morning the figure is for. The anchor is a morning reading, so the
+                  window it counts ends on the morning *after* its last day: with today in
+                  it, the number is tomorrow's scale, not a second opinion about today's. */}
+              {proj.to >= todayISO()
+                ? t(proj.days === 1 ? '≈ {0} tomorrow, on the one day counted from your weigh-in' : '≈ {0} tomorrow, on the {1} days counted from your weigh-in', fmtKg(proj.kg) + ' ' + S.unit, proj.days)
+                : t(proj.days === 1 ? '≈ {0} today, on the one day counted from your weigh-in' : '≈ {0} today, on the {1} days counted from your weigh-in', fmtKg(proj.kg) + ' ' + S.unit, proj.days)}
               {proj.gaps > 0 && ' · ' + t('{0} days unlogged, so it reads high', proj.gaps)}
             </span>
             <Icon name="chevronRight" style={{ fontSize: 11, opacity: .5 }} />

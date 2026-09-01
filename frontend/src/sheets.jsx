@@ -643,31 +643,22 @@ function ProjectionSheet({ close }) {
     <h3>{t('Projected weight')}</h3>
     <div className="muted small">{t('It needs a weigh-in, and days logged after it.')}</div>
   </>
-  // Weighed in today, so the anchor is today and there is nothing between it and now. Not an
-  // error — the opposite: the figure the projection was estimating has just been measured.
+  // Weighed in, and nothing logged since — not even the weigh-in day itself, which does now
+  // count the moment it has an intake. Nothing to project over, and saying so is the answer.
   if (!proj.days) return <>
     <h3>{t('Projected weight')}</h3>
     <div className="muted small" style={{ marginBottom: 12, lineHeight: 1.45 }}>
-      {t('You weighed in on {0}, so there is nothing to project over yet — the scale has just said what this was estimating. From tomorrow it starts counting again from {1}.',
+      {t('You weighed in on {0} at {1}. Log what you eat and it starts counting from that same day — a morning weigh-in knows nothing about the day it was taken.',
         fmtDate(proj.from, true), fmtKg(proj.fromKg) + ' ' + st.unit)}
     </div>
-    {(() => {
-      const b = dayBalance(st, todayISO(), st.tdee)
-      if (!b || b.deficit == null) return null
-      return <div className="small" style={{ fontVariantNumeric: 'tabular-nums', lineHeight: 1.9 }}>
-        <div className="row between"><span className="dim">{t('Today’s deficit so far')}</span><b>{(b.deficit > 0 ? '+' : '') + fmtNum(b.deficit)} kcal</b></div>
-        <div className="row between"><span className="dim">{t('so tomorrow should read')}</span>
-          <b style={{ color: 'var(--acc)' }}>{fmtNum2(proj.fromKg - b.deficit / KCAL_PER_KG_FAT)} {st.unit}</b></div>
-      </div>
-    })()}
-    <div style={{ height: 14 }} />
     <Button variant="ghost" className="dim" onClick={close}>{t('Close')}</Button>
   </>
 
   const rows = (st.nutrition || [])
-    // Bounded at both ends by the projection's own range: today is still being lived and is
-    // not in the figure, so it must not be in the list that explains the figure either.
-    .filter(e => e.kcal != null && e.d > proj.from && e.d <= proj.to)
+    // Exactly the projection's own range, closed at both ends. The weigh-in day is the first
+    // row, not the row before the first: you weigh in the morning, so that day's food and
+    // training are the first thing the reading does not already contain.
+    .filter(e => e.kcal != null && e.d >= proj.from && e.d <= proj.to)
     .sort((a, b) => (a.d < b.d ? -1 : 1))
     .map(e => dayBalance(st, e.d, st.tdee))
     .filter(b => b && b.deficit != null)
@@ -680,9 +671,9 @@ function ProjectionSheet({ close }) {
     <h3>{t('Projected weight')}</h3>
     <div className="muted small" style={{ marginBottom: 12, lineHeight: 1.45 }}>
       {countsToday(st)
-        ? t('{0} on {1}, then every day logged since, today included once you have logged what you ate. Each line is the day’s own arithmetic; no day is carried over into the next.',
+        ? t('{0} on {1}, and every day logged from that one on — a morning weigh-in knows nothing about the day it was taken, so that day is the first one counted. Each line is the day’s own arithmetic; no day is carried over into the next.',
           fmtKg(proj.fromKg) + ' ' + st.unit, fmtDate(proj.from, true))
-        : t('{0} on {1}, then every finished day logged since — today is still being lived and is counted below, not in. Each line is the day’s own arithmetic; no day is carried over into the next.',
+        : t('{0} on {1}, and every finished day logged from that one on — today is still being lived and is counted below, not in. Each line is the day’s own arithmetic; no day is carried over into the next.',
           fmtKg(proj.fromKg) + ' ' + st.unit, fmtDate(proj.from, true))}
     </div>
 
@@ -726,7 +717,7 @@ function ProjectionSheet({ close }) {
 
     <h4 className="sec">{t('Which gives')}</h4>
     <div className="small" style={{ fontVariantNumeric: 'tabular-nums', lineHeight: 1.9 }}>
-      <div className="row between"><span className="dim">{t('Deficit over {0} days', proj.days)}</span><b>{fmtNum(proj.deficit)} kcal</b></div>
+      <div className="row between"><span className="dim">{t(proj.days === 1 ? 'Deficit over one day' : 'Deficit over {0} days', proj.days)}</span><b>{fmtNum(proj.deficit)} kcal</b></div>
       {/* Two decimals here and nowhere else. One decimal turned 0.96 kg into "1", and a
           middle line that does not visibly lead to the line under it is worse than no middle
           line: it makes a correct answer look wrong, which is the same as being wrong. */}

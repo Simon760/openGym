@@ -408,30 +408,78 @@ describe('projectedWeight', () => {
   })
   const NOW = Date.UTC(2026, 0, 2, 18)      // day(1), mid-afternoon
 
-  it('counts forward from the last weigh-in, today included', () => {
+  it('counts forward from the last weigh-in, that day included', () => {
     const p = projectedWeight(st, st.tdee, NOW)
     expect(p.from).toBe(day(-DAYS))
     expect(p.fromKg).toBe(79.5)
     expect(isoOf(new Date(NOW))).toBe(day(1))        // today is logged...
     expect(p.to).toBe(day(1))                        // ...and counts
-    expect(p.days).toBe(DAYS + 1)
+    expect(p.days).toBe(DAYS + 2)                    // and so does the day of the weigh-in
+    expect(p.span).toBe(DAYS + 2)
   })
 
   it('leaves today out when the profile says so', () => {
     const p = projectedWeight(S({ ...st, countToday: false }), st.tdee, NOW)
     expect(p.to).toBe(day(0))
-    expect(p.days).toBe(DAYS)
+    expect(p.days).toBe(DAYS + 1)
   })
 
   it('explains itself with exactly the days it counted', () => {
-    // The sheet lists every day in (from, to] — a list that ran one day further than the
-    // figure it explains would show a running total ending somewhere else.
+    // The sheet lists every day in [from, to] — a list that ran one day short or one day
+    // long would show a running total ending somewhere other than the figure above it.
     const p = projectedWeight(st, st.tdee, NOW)
-    const listed = (st.nutrition || []).filter(e => e.d > p.from && e.d <= p.to)
+    const listed = (st.nutrition || []).filter(e => e.d >= p.from && e.d <= p.to)
     expect(listed.length).toBe(p.days)
     const sum = listed.reduce((a, e) => a + dayBalance(st, e.d, st.tdee, undefined, NOW).deficit, 0)
     expect(Math.round(sum)).toBe(p.deficit)
     expect(p.kg).toBe(Math.round((79.5 - p.deficit / KCAL_PER_KG_FAT) * 100) / 100)
+  })
+
+  // Reported 01/09: weigh in, then log the day's food and training, and the day's deficit
+  // did nothing to the projected weight. It was not merely deferred to tomorrow — the window
+  // opened the day *after* the anchor, so no later anchor ever reached back for it and every
+  // weigh-in quietly discarded one logged day, leaving the projection high by it.
+  describe('the day you stood on the scale', () => {
+    const TD = { bmr: 1723, neat: 270, other: 80, sport: 230, stepBase: 9000 }
+    const one = { tdee: TD, watchTrim: 0, workouts: [], health: [], bodyweight: [{ d: day(0), w: 79 }] }
+
+    it('counts its own deficit, on the day itself', () => {
+      const st = S({ ...one, nutrition: [{ d: day(0), kcal: 1800 }] })
+      const NOW = Date.UTC(2026, 0, 1, 20)
+      const b = dayBalance(st, day(0), TD, undefined, NOW)
+      const p = projectedWeight(st, TD, NOW)
+      expect(b.deficit).toBeGreaterThan(0)
+      expect(p.days).toBe(1)
+      expect(p.deficit).toBe(Math.round(b.deficit))
+      expect(p.kg).toBe(Math.round((79 - b.deficit / KCAL_PER_KG_FAT) * 100) / 100)
+      expect(p.kg).toBeLessThan(79)
+    })
+
+    it('is still counted tomorrow, instead of being thrown away', () => {
+      const st = S({ ...one, nutrition: [{ d: day(0), kcal: 1800 }, { d: day(1), kcal: 1800 }] })
+      const p = projectedWeight(st, TD, Date.UTC(2026, 0, 2, 20))
+      expect(p.days).toBe(2)                    // both logged days, not just the second
+      const each = dayBalance(st, day(0), TD).deficit
+      expect(p.deficit).toBe(Math.round(each) * 2)
+    })
+
+    it('says nothing when the scale is the only thing that happened', () => {
+      // weighed this morning, nothing logged yet: there is no day to count, and inventing
+      // one would be worse than the silence
+      const p = projectedWeight(S({ ...one, nutrition: [] }), TD, Date.UTC(2026, 0, 1, 9))
+      expect(p.days).toBe(0)
+      expect(p.deficit).toBe(0)
+      expect(p.kg).toBe(79)
+    })
+
+    it('hands a new weigh-in only the days it could have seen', () => {
+      // The reading on the morning of day(1) contains day(0) and nothing after it.
+      const st = S({ ...one, nutrition: [{ d: day(0), kcal: 1800 }, { d: day(1), kcal: 1800 }] })
+      const pair = recordCalibration(st, day(1), 78.9, Date.UTC(2026, 0, 2, 20))
+      expect(pair.from).toBe(day(0))
+      expect(pair.days).toBe(1)                 // day(0) only — day(1) is not in that reading
+      expect(pair.predicted).toBe(projectedWeight(st, TD, Date.UTC(2026, 0, 2, 20), day(0)).kg)
+    })
   })
 
   it('names the days that logged nothing, since they drag it high', () => {
@@ -506,7 +554,7 @@ describe('the projection is anchored, never chained', () => {
     const later = projectedWeight(base([{ d: day(-3), w: 78.9 }]), P, NOW)
     expect(later.from).toBe(day(-3))
     expect(later.fromKg).toBe(78.9)
-    expect(later.days).toBe(4)                 // day(-2) through day(1), today included
+    expect(later.days).toBe(5)                 // day(-3) through day(1), both ends included
   })
 
   it('rounds once, at the end, not once a day', () => {
@@ -531,7 +579,9 @@ describe('recordCalibration', () => {
 
   it('writes the pair down before the weigh-in destroys the thing it compares', () => {
     const s = st()
-    const before = projectedWeight(s, P, NOW)
+    // Scored against the days this reading can contain: a weigh-in on the morning of day(0)
+    // knows nothing about what is eaten on day(0), so the window stops the evening before.
+    const before = projectedWeight(s, P, NOW, day(-1))
     const pair = recordCalibration(s, day(0), 78.9, NOW)
     expect(pair.predicted).toBe(before.kg)
     expect(pair.actual).toBe(78.9)
@@ -618,7 +668,7 @@ describe('a projection that shows its working has to add up on screen', () => {
 
   it('sums the printed rows to the printed total', () => {
     const p = projectedWeight(st, P, NOW)
-    const rows = st.nutrition.filter(e => e.d > p.from && e.d <= p.to)
+    const rows = st.nutrition.filter(e => e.d >= p.from && e.d <= p.to)
       .map(e => dayBalance(st, e.d, P, undefined, NOW).deficit)
     expect(rows).toHaveLength(p.days)
     expect(rows.reduce((a, x) => a + x, 0)).toBe(p.deficit)   // exactly, not within a kcal
