@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
 import { exOr, exName } from '../lib/exercises.js'
-import { effectiveRoutine, lastEntryFor, bestWeightFor, buildSets, setsDoneActive, supersetUnits, unitOf, setLabel, modeOf, isBw, isPerSide, sideReps, repStep, EFFORT, effortOf, stepEffort, capEffort } from '../lib/history.js'
+import { effectiveRoutine, lastEntryFor, bestWeightFor, buildSets, defaultConfig, warmEntry, setsDoneActive, supersetUnits, unitOf, setLabel, modeOf, isBw, isPerSide, sideReps, repStep, EFFORT, effortOf, stepEffort, capEffort } from '../lib/history.js'
 import { fmtNum, fmtDate, todayISO, exCount, DAYN } from '../lib/format.js'
 import { beep, vibrate } from '../lib/sound.js'
 import { t } from '../lib/i18n.js'
@@ -100,6 +100,10 @@ function ExerciseBlock({ entryIdx, compact, onToggle, onField, onAddSet, onRemov
   // worth typing, while an outdoor run is the opposite.
   const col3 = cardio ? { f: 'km', step: 0.5, dec: true, opt: true, hd: t('Distance (km)') }
     : mode === 'reps' && eff ? { ...eff, eff: kind, dec: true, opt: true, hd: t(eff.hd) } : null
+  // Does a set here carry a weight at all? True for an ordinary lift, and for bodyweight work
+  // once there is something on the belt; false for a plain pull-up, where col1 is the reps and
+  // there is no second column. Only such a set can carry a second load.
+  const loaded = !cardio && !timed && !!col2
   // The effort column walks its own scale — see stepEffort. Weight and reps step up from 0
   // with no ceiling, as they always did.
   const bump = (s, i, col, dir) => {
@@ -133,6 +137,7 @@ function ExerciseBlock({ entryIdx, compact, onToggle, onField, onAddSet, onRemov
       <button className="iconbtn" aria-label={t('Details')} onClick={() => exerciseDetailSheet(ex)}><Icon name="info" /></button>
     </div>
     <div className="row" style={{ gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+      {entry.warm && <span className="tag" style={{ color: 'var(--yellow)' }}><Icon name="stretch" />{t('Warm-up')}</span>}
       {cardio && <span className="tag acc"><Icon name="figureRun" />{t('Cardio')}</span>}
       {/* You log the total; this is the split, so the set in front of you is unambiguous
           without the rep count having to mean two different things (issue #31). */}
@@ -169,9 +174,11 @@ function ExerciseBlock({ entryIdx, compact, onToggle, onField, onAddSet, onRemov
           onClick={() => onStartTimed(i)}><Icon name="play" /></button>}
         <Check checked={s.done} onChange={() => onToggle(i)} />
       </div>,
-      // The extra loads of this set, then the button that adds one. Reps only — a second
-      // load is never cardio and never timed, so the columns are always weight and reps.
-      ...(!cardio && !timed ? (s.drops || []).map((d, k) => <div key={i + '-' + k}
+      // The extra loads of this set, then the button that adds one. Weight and reps only: a
+      // second load is never cardio and never timed, and — the reason for `loaded` — a set
+      // with no load at all cannot carry a second one. A pull-up was being offered "another
+      // load on this set" under a row that has one stepper and no weight in sight.
+      ...(loaded ? (s.drops || []).map((d, k) => <div key={i + '-' + k}
         className={'setrow drop' + (s.done ? ' done' : '') + (col3 ? ' eff3' : '')}>
         <div className="n" aria-hidden="true">↳</div>
         {dcell(d, i, k, col1, 'w')}
@@ -181,7 +188,7 @@ function ExerciseBlock({ entryIdx, compact, onToggle, onField, onAddSet, onRemov
       </div>) : []),
       // Deliberately quiet: this belongs to a minority of sets, and one accent-coloured
       // call to action under every row would shout louder than the sets themselves.
-      ...(!cardio && !timed ? [<div key={i + '-add'} style={{ padding: '0 0 6px 34px' }}>
+      ...(loaded ? [<div key={i + '-add'} style={{ padding: '0 0 6px 34px' }}>
         <button onClick={() => onDrop(i, null, { w: 0, r: s.r || 0 })}
           style={{ background: 'none', border: 0, padding: '3px 0', font: 'inherit', fontSize: 12,
             color: 'var(--label-3)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -349,6 +356,15 @@ function ActiveWorkout() {
       s.active.entries.push({ id: ex.id, target: { ...cfg }, plan, sets: applyPrescription(buildSets(s, full), plan) })
       s.active.cur = s.active.entries.length - 1
     }), null, S.routines.find(r => r.id === A.routineId)))} icon="plus">{t('Add exercise')}</Button>
+    <div style={{ height: 8 }} />
+    {/* The same picker, filed in front of the lifting rather than after it, with every set
+        flagged. A live session that opened with ten minutes on the bike gets it typed where
+        it belongs; a session started without one can still say so afterwards. */}
+    {!A.entries.some(e => e.warm) && <Button variant="ghost" className="dim" size="sm" icon="stretch"
+      onClick={() => exercisePicker((ex, done) => { done(); update(s => {
+        s.active.entries.unshift(warmEntry(s, { ...defaultConfig(ex.id), id: ex.id }))
+        s.active.cur = 0
+      }) })}>{t('Add a warm-up')}</Button>}
     <div style={{ height: 10 }} />
     {(() => {
       const exDone = A.entries.filter(e => e.sets.length && e.sets.every(s => s.done)).length

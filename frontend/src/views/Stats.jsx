@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { EXIDX, exName } from '../lib/exercises.js'
-import { lastBW, streakWeeks, setLabel, modeOf, effortOf, setTop } from '../lib/history.js'
+import { lastBW, streakWeeks, setLabel, modeOf, effortOf, setTop, exEntryOf } from '../lib/history.js'
 import { fmtNum, fmtDate, fmtVol, todayISO, weekKey, fmtNum2 } from '../lib/format.js'
 import { t } from '../lib/i18n.js'
 import { bwSheet, goalSheet, calendarSheet, workoutDetailSheet, WorkoutRow, bwDeltaColor, nutriSheet, nutriGoalSheet, sleepSheet, tdeeSheet } from '../sheets.jsx'
@@ -476,7 +476,7 @@ export default function Stats() {
   // switched exercise drops its old points instead of mixing seconds into a weight chart.
   const curMode = curEx ? (() => {
     for (let i = S.workouts.length - 1; i >= 0; i--) {
-      const en = S.workouts[i].entries.find(e => e.id === curEx)
+      const en = exEntryOf(S.workouts[i], curEx)
       if (en) return modeOf({ ...(en.target || {}), id: curEx })
     }
     return modeOf({ id: curEx })
@@ -488,7 +488,7 @@ export default function Stats() {
   let exPts = [], exList = [], exBest = 0
   if (curEx) {
     S.workouts.forEach(w => {
-      const en = w.entries.find(e => e.id === curEx)
+      const en = exEntryOf(w, curEx)
       if (en) { const mx = Math.max(0, ...en.sets.filter(s => s.done).map(metric), curCardio || curTimed ? 0 : (en.topW || 0)); if (mx > 0) { exPts.push({ t: whenOf(w), y: mx, d: w.d, sets: en.sets.filter(s => s.done), target: en.target }); if (mx > exBest) exBest = mx } }
     })
     exList = exPts.slice(-5).reverse()

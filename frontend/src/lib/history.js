@@ -185,9 +185,43 @@ export const setReps = s => segsOf(s).reduce((n, x) => n + x.r, 0)
 export const hasDrops = s => dropsOf(s).length > 0
 export const isWarm = s => !!(s && s.warm)
 
+/**
+ * A warm-up, as an ordinary entry whose every set is flagged.
+ *
+ * Nothing downstream counts a flagged set — not the volume, not a record, not the "last time"
+ * the progression engine reads — so what you warmed up with is on the record without
+ * pretending to be training. That is the whole mechanism; there is no second kind of entry
+ * and no second code path, which is why a warm-up cannot drift out of step with the rest.
+ * The flag rides on the entry too, so a screen can say so without re-deriving it.
+ */
+export const warmEntry = (S, cfg) => ({
+  id: cfg.id, target: { ...cfg }, warm: true,
+  sets: buildSets(S, cfg).map(s => ({ ...s, warm: true }))
+})
+
+
+/**
+ * One workout's record of one exercise, however many entries it took.
+ *
+ * A session can hold the same movement twice, and since a warm-up became an entry of its own
+ * that is the common case: warm up on the bench, then bench. Every reader here used to take
+ * the *first* matching entry, which is the warm-up — an entry with no working sets in it — and
+ * so reported the exercise as untrained. That silently dropped the session out of the "last
+ * time" line, the 1RM series, the strength chart and, worst, the progression engine, which
+ * would have gone on prescribing the same weight for as long as the warm-up was logged first.
+ *
+ * Read as one entry: the sets of all of them, and the target of whichever actually trained.
+ */
+export function exEntryOf(w, exId) {
+  const es = ((w && w.entries) || []).filter(e => e && e.id === exId)
+  if (es.length < 2) return es[0] || null
+  const work = es.find(e => (e.sets || []).some(isWorking)) || es[0]
+  return { ...work, sets: es.flatMap(e => e.sets || []) }
+}
+
 export function lastEntryFor(S, exId) {
   for (let i = S.workouts.length - 1; i >= 0; i--) {
-    const en = S.workouts[i].entries.find(e => e.id === exId)
+    const en = exEntryOf(S.workouts[i], exId)
     // `target` is what the session prescribed; finished workouts carry it so labels and the
     // progression engine can read a session back the way it was logged. Older workouts have
     // none — modeOf() falls back to the body part for them, which is what they were.

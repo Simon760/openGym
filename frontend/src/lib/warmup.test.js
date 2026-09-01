@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { isWorking, isWarm, workoutVolume, setsDone, setsDoneActive, lastEntryFor, bestWeightFor,
-  segsOf, setVol, setTop, setTopReps, setReps, hasDrops, setLabel } from './history.js'
+  segsOf, setVol, setTop, setTopReps, setReps, hasDrops, setLabel, warmEntry, exEntryOf } from './history.js'
 import { loadOfWorkouts } from './muscles.js'
+import { sessionsFor } from './progression.js'
+import { best1RM } from './onerm.js'
 import { EXDB } from './exercises.js'
 
 const id = EXDB[0].id
@@ -69,6 +71,64 @@ describe('a session typed up afterwards', () => {
     expect(logged.end).toBeUndefined()
     expect(workoutVolume(logged)).toBe(500)
     expect(setsDone(logged)).toBe(1)
+  })
+})
+
+// He asked for the warm-up to be picked when the session is logged, ahead of the lifting,
+// rather than toggled set by set once the lifting screen is already up. It is the same flag
+// underneath — which is the point: an entry the app builds this way cannot count for anything
+// a hand-flagged set would not.
+describe('a warm-up filed as its own exercise', () => {
+  const st = { unit: 'kg', exWeights: {}, workouts: [] }
+
+  it('flags every set it builds, and says so on the entry', () => {
+    const e = warmEntry(st, { id, sets: 3, reps: 12, weight: 20 })
+    expect(e.warm).toBe(true)
+    expect(e.sets).toHaveLength(3)
+    expect(e.sets.every(isWarm)).toBe(true)
+    expect(e.sets.some(isWorking)).toBe(false)
+    expect(e.id).toBe(id)
+  })
+
+  it('counts for nothing once the session is on the record', () => {
+    const warm = warmEntry(st, { id, sets: 2, reps: 15, weight: 20 })
+    const w = { d: '2025-09-01', entries: [warm, { id, sets: [{ w: 100, r: 5, done: true }] }] }
+    // every warm set ticked off, and still none of it lands anywhere
+    warm.sets.forEach(s => { s.done = true })
+    expect(workoutVolume(w)).toBe(500)
+    expect(bestWeightFor({ workouts: [w] }, id)).toBe(100)
+    expect(setsDone(w)).toBe(1)
+    // and the warm-up must not hide the working sets from anything that reads the session
+    expect(lastEntryFor({ workouts: [w] }, id).sets.every(isWorking)).toBe(true)
+    expect(lastEntryFor({ workouts: [w] }, id).sets).toHaveLength(1)
+  })
+
+  it('does not hide the working sets behind it', () => {
+    // Warm up on the bench, then bench: the same id twice in one session. Every reader used
+    // to take the first match — the warm-up — and call the exercise untrained, which stalled
+    // the progression engine for as long as the warm-up was logged first.
+    const warm = warmEntry(st, { id, sets: 2, reps: 12, weight: 20 })
+    warm.sets.forEach(s => { s.done = true })
+    const w = { d: '2025-09-01', entries: [warm, { id, target: { sets: 3, reps: 5 }, sets: [
+      { w: 100, r: 5, done: true }, { w: 100, r: 5, done: true }, { w: 100, r: 5, done: true }] }] }
+    const en = exEntryOf(w, id)
+    expect(en.sets).toHaveLength(5)                     // all of them, warm-up included
+    expect(en.sets.filter(isWorking)).toHaveLength(3)   // but only three are training
+    expect(en.target).toEqual({ sets: 3, reps: 5 })     // the target of the half that trained
+    expect(sessionsFor({ workouts: [w] }, id)).toHaveLength(1)
+    expect(sessionsFor({ workouts: [w] }, id)[0].weight).toBe(100)
+    expect(best1RM({ workouts: [w] }, id).w).toBe(100)
+    expect(lastEntryFor({ workouts: [w] }, id).sets).toHaveLength(3)
+  })
+
+  it('is a whole exercise of warm-ups, not a session of them', () => {
+    // the guard that matters: a session whose only entry is the warm-up has no training in it
+    const warm = warmEntry(st, { id, sets: 3, reps: 10, weight: 20 })
+    warm.sets.forEach(s => { s.done = true })
+    const w = { d: '2025-09-01', entries: [warm] }
+    expect(workoutVolume(w)).toBe(0)
+    expect(setsDone(w)).toBe(0)
+    expect(bestWeightFor({ workouts: [w] }, id)).toBe(0)
   })
 })
 

@@ -1067,4 +1067,8 @@ export default {
   '≈ {0} tomorrow, on the one day counted from your weigh-in': '≈ {0} demain, sur le jour compté depuis ta pesée',
   '≈ {0} today, on the one day counted from your weigh-in': '≈ {0} aujourd\'hui, sur le jour compté depuis ta pesée',
   'Deficit over one day': 'Déficit sur un jour',
+  'Warm-up': 'Échauffement',
+  'Add a warm-up': 'Ajouter un échauffement',
+  'optional · logged first, counted in nothing': 'optionnel · noté en premier, compté dans rien',
+  '{0} sets · tap to remove': '{0} séries · touche pour enlever',
 }

@@ -3,7 +3,7 @@ import { useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
 import { EXDB, EXIDX, BODYPARTS, isCardio, isBodyweightEq, allExercises, equipmentOf, exName, exNameEn, exSearchText, exMatches } from './lib/exercises.js'
 import { fmtDate, fmtNum, fmtNum2, fmtKg, fmtVol, fmtDur, durPart, todayISO, isoOf, uid, exCount, DAYN, MONTHS_LONG, ACCENTS } from './lib/format.js'
-import { lastEntryFor, bestWeightFor, buildSets, effectiveRoutineId, effectiveRoutine, weekDays, swapDays, workoutVolume, setsDone, setsDoneActive, lastBW, supersetUnits, unitOf, setLabel, defaultConfig, cleanupSg, modeOf, effortOf, isBw, isPerSide, sideReps, isWorking, setTop } from './lib/history.js'
+import { lastEntryFor, bestWeightFor, buildSets, effectiveRoutineId, effectiveRoutine, weekDays, swapDays, workoutVolume, setsDone, setsDoneActive, lastBW, supersetUnits, unitOf, setLabel, defaultConfig, warmEntry, cleanupSg, modeOf, effortOf, isBw, isPerSide, sideReps, isWorking, setTop } from './lib/history.js'
 import { beep, vibrate } from './lib/sound.js'
 import { t, instrFor, getLang, INSTR_LANGS } from './lib/i18n.js'
 import { nav } from './lib/nav.js'
@@ -965,7 +965,9 @@ function ExercisePicker({ onPick, close }) {
         <div className="thumb thumb-x"><Icon name="sparkles" /></div>
         <div className="grow"><div className="tt">{t('Create your own exercise')}</div><div className="ss">{t('name + body part, no animation')}</div></div><Icon name="plus" className="chev" />
       </div>}
-      {f.slice(0, shown).map(e => <div key={e.id} className="item" onClick={() => onPick(e)}>
+      {/* `close` goes with it: most callers open a config sheet on top and dismiss this one
+          themselves, but a caller that is done the moment you tap a row needs a way to say so. */}
+      {f.slice(0, shown).map(e => <div key={e.id} className="item" onClick={() => onPick(e, close)}>
         <Thumb ex={e} /><div className="grow"><div className="tt exn">{exName(e)}</div><div className="ss capitalize">{t(e.tg || e.bp)} · {t(e.eq)}{exNameEn(e) && <span className="nocap dim"> · {exNameEn(e)}</span>}</div></div>
         {usage[e.id] && <span className="tag acc"><Icon name="starFill" /></span>}<Icon name="plus" className="chev" />
       </div>)}
@@ -2143,6 +2145,7 @@ export function WorkoutRow({ w, onClick }) {
 export function startFlow(routineId) {
   beginWorkout(routineId)
 }
+
 /**
  * Start a session, live or typed up afterwards.
  *
@@ -2150,8 +2153,11 @@ export function startFlow(routineId) {
  * whatever day it was rather than today. Everything else — the set rows, the prescriptions,
  * the supersets, the finish summary — is the same screen, because a second entry UI would be
  * a second place for every future fix to be forgotten.
+ *
+ * `opts.warm` is a config for the movement the session opened with. It goes in front of the
+ * routine, because that is the order it happened in and the order you will type it in.
  */
-export function beginWorkout(routineId, bw, { log = false, d = todayISO() } = {}) {
+export function beginWorkout(routineId, bw, { log = false, d = todayISO(), warm = null } = {}) {
   const st = S()
   const r = routineId ? st.routines.find(x => x.id === routineId) : null
   // The prescription is applied as the session is built, so you walk up to the bar with the
@@ -2161,6 +2167,9 @@ export function beginWorkout(routineId, bw, { log = false, d = todayISO() } = {}
     const plan = nextPrescription(st, cfg, r)
     return { id: cfg.id, sg: cfg.sg, target: { ...cfg }, plan, sets: applyPrescription(buildSets(st, cfg), plan) }
   })
+  // No prescription on a warm-up: the progression engine reads working sets, and telling you
+  // to add 2.5 kg to the bar you warmed up on is the advice it exists to avoid.
+  if (warm && warm.id) entries.unshift(warmEntry(st, warm))
   update(s => {
     // The weight the session is remembered against: the last one recorded, since nothing is
     // asked for at the door any more. The summary shows it and nothing computes from it.
@@ -2246,12 +2255,13 @@ export const workoutCompleteSheet = () => ui().openSheet(close => <WorkoutComple
 function LogPastSheet({ close }) {
   const st = useStore(s => s.S)
   const [d, setD] = useState(todayISO())
+  const [warm, setWarm] = useState(null)
   const days = Array.from({ length: 8 }, (_, i) => isoOf(new Date(Date.now() - i * 86400000)))
   const taken = new Set((st.workouts || []).map(w => w.d))
   const planned = effectiveRoutine(st, d)
   const others = (st.routines || []).filter(r => !planned || r.id !== planned.id)
 
-  const go = id => { close(); beginWorkout(id, undefined, { log: true, d }) }
+  const go = id => { close(); beginWorkout(id, undefined, { log: true, d, warm }) }
 
   return <>
     <h3>{t('Log a session you already did')}</h3>
@@ -2267,6 +2277,24 @@ function LogPastSheet({ close }) {
     {taken.has(d) && <div className="small" style={{ color: 'var(--yellow)', margin: '8px 2px 0', lineHeight: 1.45 }}>
       {t('You already logged a session that day. This adds a second one.')}
     </div>}
+    {/* Before the routine, because that is the order the session happened in: you warm up,
+        then you lift. Picked here rather than hunted for once the lifting screen is already
+        in front of you. */}
+    <h4 className="sec">{t('Warm-up')}</h4>
+    <div className="list">
+      {warm ? <div className="item" onClick={() => setWarm(null)}>
+        <span className="lrow-i" style={{ background: 'var(--yellow)' }}><Icon name="stretch" /></span>
+        <div className="grow"><div className="tt">{exName(EXIDX[warm.id]) || warm.id}</div>
+          <div className="ss">{t('{0} sets · tap to remove', warm.sets || 1)}</div></div>
+        <Icon name="xmark" className="chev" />
+      </div> : <div className="item" onClick={() =>
+        exercisePicker((ex, done) => { setWarm({ ...defaultConfig(ex.id), id: ex.id }); done() })}>
+        <span className="lrow-i" style={{ background: 'var(--surface-3)' }}><Icon name="stretch" /></span>
+        <div className="grow"><div className="tt">{t('Add a warm-up')}</div>
+          <div className="ss">{t('optional · logged first, counted in nothing')}</div></div>
+        <Icon name="chevronRight" className="chev" />
+      </div>}
+    </div>
     <h4 className="sec">{t('Which routine')}</h4>
     <div className="list">
       {planned && <div className="item" onClick={() => go(planned.id)}>

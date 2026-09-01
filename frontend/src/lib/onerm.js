@@ -10,7 +10,7 @@
 // which is exactly why REP_CAP exists.
 
 import { whenOf } from './body.js'
-import { isWorking, segsOf } from './history.js'
+import { isWorking, segsOf, exEntryOf } from './history.js'
 
 // Above this many reps an estimate says more about work capacity than about maximal strength,
 // and the formulas disagree by double digits. Refusing to guess beats printing a fantasy.
@@ -63,7 +63,7 @@ export function bestSetOf(entry, formula = DEFAULT_FORMULA) {
 export function e1rmSeries(S, exId, formula = DEFAULT_FORMULA) {
   const pts = []
   ;(S.workouts || []).forEach(w => {
-    const entry = w.entries.find(e => e.id === exId)
+    const entry = exEntryOf(w, exId)
     if (!entry) return
     const best = bestSetOf(entry, formula)
     if (best) pts.push({ t: whenOf(w), d: w.d, y: best.est, w: best.w, r: best.r })

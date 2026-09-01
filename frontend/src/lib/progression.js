@@ -16,7 +16,7 @@
 //   · fewer sets than prescribed                       → miss
 // So a session that fell apart can never advance the load as though it had succeeded.
 
-import { modeOf, repStep, isWorking, setTop, setTopReps } from './history.js'
+import { modeOf, repStep, isWorking, setTop, setTopReps, exEntryOf } from './history.js'
 import { EXIDX } from './exercises.js'
 
 export const POLICIES = ['off', 'linear', 'greyskull', 'double', 'time']
@@ -131,7 +131,7 @@ export function readSession(entry, fallback) {
 export function sessionsFor(S, exId, fallback) {
   const out = []
   ;(S.workouts || []).forEach(w => {
-    const entry = w.entries.find(e => e.id === exId)
+    const entry = exEntryOf(w, exId)
     if (entry && entry.sets.some(isWorking)) out.push({ d: w.d, ...readSession(entry, fallback) })
   })
   return out

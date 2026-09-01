@@ -1092,4 +1092,8 @@ export default {
   '≈ {0} tomorrow, on the one day counted from your weigh-in': '≈ {0} tomorrow, on the one day counted from your weigh-in',
   '≈ {0} today, on the one day counted from your weigh-in': '≈ {0} today, on the one day counted from your weigh-in',
   'Deficit over one day': 'Deficit over one day',
+  'Warm-up': 'Warm-up',
+  'Add a warm-up': 'Add a warm-up',
+  'optional · logged first, counted in nothing': 'optional · logged first, counted in nothing',
+  '{0} sets · tap to remove': '{0} sets · tap to remove',
 }
