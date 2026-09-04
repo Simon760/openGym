@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
 import { exOr, exName } from '../lib/exercises.js'
-import { effectiveRoutine, lastEntryFor, bestWeightFor, buildSets, defaultConfig, warmEntry, setsDoneActive, supersetUnits, unitOf, setLabel, modeOf, isBw, isPerSide, sideReps, repStep, EFFORT, effortOf, stepEffort, capEffort } from '../lib/history.js'
+import { effectiveRoutine, lastEntryFor, bestWeightFor, buildSets, defaultConfig, warmEntry, swapEntry, setBodyweight, setsDoneActive, supersetUnits, unitOf, setLabel, modeOf, isBw, isPerSide, sideReps, repStep, EFFORT, effortOf, stepEffort, capEffort } from '../lib/history.js'
 import { fmtNum, fmtDate, todayISO, exCount, DAYN } from '../lib/format.js'
 import { beep, vibrate } from '../lib/sound.js'
 import { t } from '../lib/i18n.js'
@@ -59,7 +59,7 @@ function Elapsed({ start }) {
 }
 
 /* ---------- one exercise block (reps: weight×reps · time: a held duration · cardio: duration+speed) ---------- */
-function ExerciseBlock({ entryIdx, compact, onToggle, onField, onAddSet, onRemoveSet, onStartTimed, onWarm, onDrop, onDropField }) {
+function ExerciseBlock({ entryIdx, compact, onToggle, onField, onAddSet, onRemoveSet, onStartTimed, onWarm, onDrop, onDropField, onSwap, onBodyweight }) {
   const S = useStore(s => s.S)
   const working = useUI(s => s.work)
   const entry = S.active.entries[entryIdx]
@@ -134,7 +134,12 @@ function ExerciseBlock({ entryIdx, compact, onToggle, onField, onAddSet, onRemov
     <Media ex={ex} key={entry.id} compact={compact} minimizable />
     <div className="row between" style={{ marginBottom: 6 }}>
       <div style={{ fontSize: compact ? 17 : 20, fontWeight: 600, letterSpacing: '-.02em', textTransform: 'none', lineHeight: 1.2 }}>{exName(ex)}</div>
-      <button className="iconbtn" aria-label={t('Details')} onClick={() => exerciseDetailSheet(ex)}><Icon name="info" /></button>
+      <div className="row" style={{ gap: 2, flex: 'none' }}>
+        {/* Next to the name, because that is the thing being changed, and because the moment
+            you need it you are standing in front of an occupied machine. */}
+        <button className="iconbtn" aria-label={t('Swap this exercise')} onClick={onSwap}><Icon name="shuffle" /></button>
+        <button className="iconbtn" aria-label={t('Details')} onClick={() => exerciseDetailSheet(ex)}><Icon name="info" /></button>
+      </div>
     </div>
     <div className="row" style={{ gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
       {entry.warm && <span className="tag" style={{ color: 'var(--yellow)' }}><Icon name="stretch" />{t('Warm-up')}</span>}
@@ -143,7 +148,14 @@ function ExerciseBlock({ entryIdx, compact, onToggle, onField, onAddSet, onRemov
           without the rep count having to mean two different things (issue #31). */}
       {!cardio && !timed && isPerSide(cfg) && <span className="tag acc nocap"><Icon name="shuffle" />{t('{0} per side', fmtNum(sideReps(entry.sets.find(s => !s.done)?.r ?? entry.sets[0]?.r)))}</span>}
       {(ex.tg || ex.bp) && <span className="tag">{t(ex.tg || ex.bp)}</span>}
-      {ex.eq && <span className="tag">{t(ex.eq)}</span>}
+      {/* The equipment tag doubles as the switch, because "which equipment" is exactly the
+          question being answered: no plates today, just me. Tapping it drops the weight
+          column and the load on every set still owed. Not offered on cardio, which has no
+          load column to drop. */}
+      {!cardio ? <button className={'tag' + (bw ? ' acc nocap' : '')} style={{ cursor: 'pointer' }}
+        aria-pressed={bw} onClick={onBodyweight}>
+        <Icon name={bw ? 'check' : 'dumbbell'} />{bw ? t('Bodyweight') : t(ex.eq || 'Bodyweight')}
+      </button> : ex.eq && <span className="tag">{t(ex.eq)}</span>}
       {best > 0 && <span className="tag nocap">{t('Best:')} {fmtNum(best)} {S.unit}</span>}
     </div>
     {last && <div className="small dim" style={{ marginBottom: 4 }}>{t('Last time')} ({fmtDate(last.d)}): {last.sets.map(s => setLabel(entry.id, s, last.target)).join(', ')}</div>}
@@ -246,6 +258,25 @@ function ActiveWorkout() {
     if (!s.drops.length) delete s.drops
   })
   const setDropField = (idx, i, k, f, v) => mutEntry(idx, e => { e.sets[i].drops[k][f] = v })
+  // The machine is taken. Pick another and carry on where you were — see swapEntry for what
+  // happens to sets you had already logged on the one you are leaving.
+  const swapEx = idx => exercisePicker((ex, done) => {
+    done()
+    update(s => {
+      const r = swapEntry(s, s.active.entries, idx, ex.id)
+      s.active.entries = r.entries
+      s.active.cur = r.cur
+    })
+    useUI.getState().toast(t('Swapped for {0}', exName(ex)))
+  })
+  const toggleBw = idx => update(s => {
+    const e = s.active.entries[idx]
+    const on = !isBw({ ...(e.target || {}), id: e.id })
+    const r = setBodyweight(s.active.entries, idx, on)
+    s.active.entries = r.entries
+    s.active.cur = r.cur
+    useUI.getState().toast(on ? t('Bodyweight — no load asked for') : t('Load asked for again'))
+  })
 
   // A timed set is held, not typed. The work timer records what was actually held — an early
   // finish logs 0:38 of a 0:45 target rather than crediting the full prescription — and then
@@ -336,11 +367,11 @@ function ActiveWorkout() {
           {unit.map((idx, k) => <div key={idx} className="ss-ex">
             {k > 0 && <div className="ss-amp">+</div>}
             <ExerciseBlock entryIdx={idx} compact
-              onToggle={i => toggle(idx, i)} onField={(i, f, v) => setField(idx, i, f, v)} onAddSet={() => addSet(idx)} onRemoveSet={() => removeSet(idx)} onStartTimed={i => startTimed(idx, i)} onWarm={i => setWarm(idx, i)} onDrop={(i, k, add) => setDrop(idx, i, k, add)} onDropField={(i, k, f, v) => setDropField(idx, i, k, f, v)} />
+              onToggle={i => toggle(idx, i)} onField={(i, f, v) => setField(idx, i, f, v)} onAddSet={() => addSet(idx)} onRemoveSet={() => removeSet(idx)} onStartTimed={i => startTimed(idx, i)} onWarm={i => setWarm(idx, i)} onDrop={(i, k, add) => setDrop(idx, i, k, add)} onDropField={(i, k, f, v) => setDropField(idx, i, k, f, v)} onSwap={() => swapEx(idx)} onBodyweight={() => toggleBw(idx)} />
           </div>)}
         </div>
       ) : (
-        <ExerciseBlock entryIdx={cur} onToggle={i => toggle(cur, i)} onField={(i, f, v) => setField(cur, i, f, v)} onAddSet={() => addSet(cur)} onRemoveSet={() => removeSet(cur)} onStartTimed={i => startTimed(cur, i)} onWarm={i => setWarm(cur, i)} onDrop={(i, k, add) => setDrop(cur, i, k, add)} onDropField={(i, k, f, v) => setDropField(cur, i, k, f, v)} />
+        <ExerciseBlock entryIdx={cur} onToggle={i => toggle(cur, i)} onField={(i, f, v) => setField(cur, i, f, v)} onAddSet={() => addSet(cur)} onRemoveSet={() => removeSet(cur)} onStartTimed={i => startTimed(cur, i)} onWarm={i => setWarm(cur, i)} onDrop={(i, k, add) => setDrop(cur, i, k, add)} onDropField={(i, k, f, v) => setDropField(cur, i, k, f, v)} onSwap={() => swapEx(cur)} onBodyweight={() => toggleBw(cur)} />
       )}
     </> : <div className="empty"><div className="ico"><Icon name="shuffle" /></div>{t('Freestyle workout — add your first exercise.')}</div>}
 

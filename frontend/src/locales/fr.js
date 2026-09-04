@@ -1071,4 +1071,8 @@ export default {
   'Add a warm-up': 'Ajouter un échauffement',
   'optional · logged first, counted in nothing': 'optionnel · noté en premier, compté dans rien',
   '{0} sets · tap to remove': '{0} séries · touche pour enlever',
+  'Swap this exercise': 'Changer cet exercice',
+  'Swapped for {0}': 'Remplacé par {0}',
+  'Bodyweight — no load asked for': 'Poids du corps — plus de charge demandée',
+  'Load asked for again': 'La charge est redemandée',
 }

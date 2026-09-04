@@ -1096,4 +1096,8 @@ export default {
   'Add a warm-up': 'Add a warm-up',
   'optional · logged first, counted in nothing': 'optional · logged first, counted in nothing',
   '{0} sets · tap to remove': '{0} sets · tap to remove',
+  'Swap this exercise': 'Swap this exercise',
+  'Swapped for {0}': 'Swapped for {0}',
+  'Bodyweight — no load asked for': 'Bodyweight — no load asked for',
+  'Load asked for again': 'Load asked for again',
 }

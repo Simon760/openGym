@@ -199,6 +199,72 @@ export const warmEntry = (S, cfg) => ({
   sets: buildSets(S, cfg).map(s => ({ ...s, warm: true }))
 })
 
+/**
+ * Trade the exercise at `idx` for another, in the middle of a session.
+ *
+ * The machine is taken, or you looked at it and changed your mind. Sets already logged belong
+ * to the movement that actually did them, so they are never rewritten: the old entry keeps its
+ * finished sets and the replacement takes the ones still owed, in the slot straight after.
+ * Swapping before you have started — the ordinary case — leaves nothing behind and the entry
+ * is simply replaced. A warm-up swaps for a warm-up, flag and all.
+ *
+ * Returns { entries, cur } so the caller can follow the exercise you are now standing at,
+ * which is not always `idx` once a partial entry has been left in front of it.
+ */
+export function swapEntry(S, entries, idx, newId, cfg) {
+  const list = entries || []
+  const old = list[idx]
+  if (!old || !newId) return { entries: list, cur: idx }
+  return changeMidWay(list, idx, owed => {
+    const c = { ...(cfg || defaultConfig(newId)), id: newId, sets: owed }
+    return {
+      id: newId, target: { ...c }, ...(old.warm ? { warm: true } : {}),
+      sets: buildSets(S, c).map(s => (old.warm ? { ...s, warm: true } : s))
+    }
+  })
+}
+
+/**
+ * Say mid-exercise that this one carries no load after all — the bar is taken, or it was
+ * always going to be a set of push-ups. isBw then drops the weight column, so the weight goes
+ * with it on every set still owed.
+ *
+ * Turning it on after logging a loaded set splits rather than rewrites, for the same reason
+ * the swap does: two sets of pull-ups with a belt and two without are two different things,
+ * and one entry cannot show both when the column exists for one half and not the other.
+ * exEntryOf reads the pair back as one exercise, so nothing downstream sees a seam.
+ */
+export function setBodyweight(entries, idx, on) {
+  const list = entries || []
+  const e = list[idx]
+  if (!e) return { entries: list, cur: idx }
+  const flip = sets => ({ ...e, target: { ...(e.target || {}), bodyweight: !!on }, sets })
+  const loadedAndDone = on && (e.sets || []).some(s => s && s.done && s.w > 0)
+  if (!loadedAndDone) {
+    return {
+      entries: list.map((x, i) => (i !== idx ? x
+        : flip(on ? (e.sets || []).map(s => ({ ...s, w: 0 })) : (e.sets || [])))),
+      cur: idx
+    }
+  }
+  return changeMidWay(list, idx, owed => flip(Array.from({ length: owed }, (_, i) =>
+    ({ ...((e.sets || []).filter(s => !s.done)[i] || {}), w: 0, done: false }))))
+}
+
+/**
+ * The shape both of those share: whatever was already logged stays exactly as it was logged,
+ * and the change takes only the sets still owed, in the slot right after. With nothing logged
+ * yet — the ordinary case — there is no split and the entry is simply replaced.
+ * Returns { entries, cur } so the caller can follow the exercise you are now standing at.
+ */
+function changeMidWay(list, idx, make) {
+  const old = list[idx]
+  const done = (old.sets || []).filter(s => s.done)
+  const fresh = make(Math.max(1, (old.sets || []).length - done.length))
+  if (!done.length) return { entries: list.map((e, i) => (i === idx ? fresh : e)), cur: idx }
+  return { entries: [...list.slice(0, idx), { ...old, sets: done }, fresh, ...list.slice(idx + 1)], cur: idx + 1 }
+}
+
 
 /**
  * One workout's record of one exercise, however many entries it took.
