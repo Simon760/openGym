@@ -1,26 +1,28 @@
 import { useEffect, useRef } from 'react'
 import { useUI } from '../store/useUI.js'
+import { onControl, dragBy } from '../lib/sheetdrag.js'
 
 // One bottom sheet (or centered dialog) with swipe-to-dismiss.
 function Sheet({ sheet }) {
   const { closeSheet } = useUI()
   const ref = useRef(null)
-  const drag = useRef({ startY: null, delta: 0 })
+  const drag = useRef({ startY: null, delta: 0, on: false })
 
   const onTouchStart = e => {
     const el = ref.current
-    // a gesture that begins on a slider (or opted-out control) belongs to that control,
-    // not to the sheet's swipe-to-dismiss — so it keeps working while you drag
-    if (e.target.closest && e.target.closest('input[type=range], [data-nodrag]')) {
-      drag.current = { startY: null, delta: 0 }
+    if (onControl(e.target)) {
+      drag.current = { startY: null, delta: 0, on: false }
       return
     }
-    drag.current = { startY: el.scrollTop <= 0 ? e.touches[0].clientY : null, delta: 0 }
+    drag.current = { startY: el.scrollTop <= 0 ? e.touches[0].clientY : null, delta: 0, on: false }
   }
   const onTouchMove = e => {
     const el = ref.current, d = drag.current
     if (d.startY === null) return
-    d.delta = e.touches[0].clientY - d.startY
+    const by = dragBy(e.touches[0].clientY - d.startY, d.on)
+    if (by === null) return          // a tap: preventDefault here would cancel it
+    d.on = true
+    d.delta = by
     if (d.delta > 0 && el.scrollTop <= 0) {
       e.preventDefault()
       el.style.transition = 'none'
@@ -34,6 +36,7 @@ function Sheet({ sheet }) {
     if (d.delta > 90 && !sheet.locked) { el.style.transform = 'translateY(110%)'; setTimeout(() => closeSheet(sheet.id), 180) }
     else el.style.transform = ''
     d.startY = null
+    d.on = false
   }
 
   // non-passive touchmove so preventDefault works (bottom sheets only; centered dialogs have no ref)

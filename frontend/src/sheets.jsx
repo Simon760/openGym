@@ -370,9 +370,10 @@ function NutriSheet({ close, iso = todayISO() }) {
         the day actually spent, so the app stops reporting a deliberate refeed as an overshoot.
         It touches nothing else: the deficit is still expenditure minus intake, and the day
         still counts in the projection exactly as it did. */}
-    <div style={{ height: 10 }} />
     {/* A div, not a button: the switch inside is the control, and a button inside a button is
-        invalid markup the browser is free to take apart — which is exactly what it did. */}
+        invalid markup the browser is free to take apart — which is exactly what it did.
+        No spacer above it either: .today-row carries its own top margin, and this sheet is
+        the one place on the phone where every spare pixel is a pixel less scrolling. */}
     <div className="today-row wrap" style={{ cursor: 'default' }}>
       <div className="row" style={{ gap: 9, minWidth: 0 }}>
         <span className="lrow-i" style={{ background: refeed ? 'var(--yellow)' : 'var(--surface-3)' }}>
