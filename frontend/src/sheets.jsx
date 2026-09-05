@@ -23,7 +23,7 @@ import { dailyDigest, trainingDigest } from './lib/digest.js'
 import { estimate1RM, best1RM, is1RMRecord, REP_CAP } from './lib/onerm.js'
 import { nextPrescription, applyPrescription, policyFor, defaultIncrement, POLICIES_FOR, POLICY_NAME, POLICY_DESC, MAX_BW_SETS } from './lib/progression.js'
 import { MOBILE, shareExport, shareText, canShareText } from './lib/mobile.js'
-import { entryFor, hasMacros, kcalFromMacros, derivedMismatch, remainingOf, putEntry, MACROS, MACRO_NAME } from './lib/nutrition.js'
+import { entryFor, hasMacros, kcalFromMacros, derivedMismatch, remainingOf, putEntry, isRefeed, goalFor, MACROS, MACRO_NAME } from './lib/nutrition.js'
 import { validBodyFat, composition, sleepFor, putSleep, validSleep, sleepHours, hoursBetween, validTime, BF_MIN, BF_MAX, SLEEP_MIN, SLEEP_MAX } from './lib/body.js'
 import { parseHealth, applyHealth, parseHealthCSV, applyHealthDays, shortcutRecipe, shortcutLink, historySpec } from './lib/health.js'
 import { suppOn, suppName, tookOn, setTook, suppStreak, suppRate } from './lib/supp.js'
@@ -312,6 +312,11 @@ function NutriSheet({ close, iso = todayISO() }) {
     return { kcal: e?.kcal || 0, p: e?.p || 0, c: e?.c || 0, f: e?.f || 0 }
   })
   const set = (k, n) => setV(o => ({ ...o, [k]: n || 0 }))
+  const [refeed, setRefeed] = useState(() => isRefeed(entryFor(st, iso)))
+  // The day's own expenditure, which is what "at maintenance" means for this particular day —
+  // it already contains the training and the walking. Read live so the target follows the
+  // session you logged an hour ago rather than a flat figure from the settings.
+  const dayOut = (dayBalance(st, iso, st.tdee) || {}).out || 0
   // Asked here because logging the day's calories already happens every evening, and a
   // reminder hung off a moment that already exists is the only kind that survives a fortnight.
   const [took, setTookState] = useState(() => tookOn(st, iso))
@@ -320,10 +325,11 @@ function NutriSheet({ close, iso = todayISO() }) {
   const rate = suppRate(st, 30)
   const derived = kcalFromMacros(v)
   const mismatch = derivedMismatch(v)
-  const left = remainingOf(v, st.nutriGoal)
+  const dayGoal = goalFor(st.nutriGoal, { refeed }, dayOut)
+  const left = remainingOf(v, dayGoal)
   const save = () => {
     update(s => {
-      s.nutrition = putEntry(s.nutrition, { d: iso, ...v })
+      s.nutrition = putEntry(s.nutrition, { d: iso, ...v, refeed })
       // Saved even when nothing else on this sheet was: a day whose only event was the
       // tablet is still a day the streak should count.
       if (asking && took != null) setTook(s, iso, took)
@@ -355,9 +361,34 @@ function NutriSheet({ close, iso = todayISO() }) {
     {mismatch != null && <div className="small dim" style={{ marginTop: 8 }}>
       {t('Your macros add up to {0} kcal.', mismatch)}
     </div>}
-    {left && <div className="small" style={{ marginTop: 8, color: left.kcal < 0 ? 'var(--orange)' : 'var(--label-2)' }}>
+    {left && left.kcal != null && <div className="small" style={{ marginTop: 8, color: left.kcal < 0 ? 'var(--orange)' : 'var(--label-2)' }}>
       {left.kcal < 0 ? t('{0} kcal over target', fmtNum(-left.kcal)) : t('{0} kcal left today', fmtNum(left.kcal))}
+      {refeed && <span className="dim"> · {t('against maintenance')}</span>}
     </div>}
+
+    {/* Some days are eaten at maintenance on purpose. This moves the day's target up to what
+        the day actually spent, so the app stops reporting a deliberate refeed as an overshoot.
+        It touches nothing else: the deficit is still expenditure minus intake, and the day
+        still counts in the projection exactly as it did. */}
+    <div style={{ height: 10 }} />
+    {/* A div, not a button: the switch inside is the control, and a button inside a button is
+        invalid markup the browser is free to take apart — which is exactly what it did. */}
+    <div className="today-row wrap" style={{ cursor: 'default' }}>
+      <div className="row" style={{ gap: 9, minWidth: 0 }}>
+        <span className="lrow-i" style={{ background: refeed ? 'var(--yellow)' : 'var(--surface-3)' }}>
+          <Icon name={refeed ? 'checkCircle' : 'bolt'} />
+        </span>
+        <div style={{ minWidth: 0 }}>
+          <div className="lbl2">{t('Maintenance day')}</div>
+          <div className="ttl" style={{ fontSize: 15 }}>
+            {refeed
+              ? (dayOut ? t('target {0} kcal — the day’s own spend', fmtNum(dayOut)) : t('no target today'))
+              : t('recharge · counted the same, judged against maintenance')}
+          </div>
+        </div>
+      </div>
+      <Switch checked={refeed} onChange={v => setRefeed(v)} />
+    </div>
 
     {/* One question, and a streak so the answer is worth giving. Creatine works by
         saturation: a dose missed on Tuesday is not made up on Wednesday, it just lowers the

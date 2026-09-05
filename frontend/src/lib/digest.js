@@ -18,7 +18,7 @@ import { EXIDX } from './exercises.js'
 import { setLabel, modeOf, effectiveRoutineId, workoutVolume } from './history.js'
 import { readSession, nextPrescription, policyFor } from './progression.js'
 import { effortSummary, displayScale, scaleName, toScale } from './effort.js'
-import { entryFor, MACROS, MACRO_NAME } from './nutrition.js'
+import { entryFor, goalFor, isRefeed, MACROS, MACRO_NAME } from './nutrition.js'
 import { sleepFor, sleepHours } from './body.js'
 import { healthFor } from './health.js'
 import { dayBalance, sportKcal, trimOf } from './energy.js'
@@ -156,13 +156,20 @@ export function dailyDigest(S, iso = todayISO(), now = Date.now()) {
     out.push(t('Active energy') + ' ' + t('not measured'))
   }
 
+  // Computed here rather than at the Balance line below, because the intake line needs the
+  // day's own expenditure to say what a maintenance day was aiming at.
+  const bal = dayBalance(S, iso)
   const e = entryFor(S, iso)
   if (e && (e.kcal || hasAnyMacro(e))) {
     const bits = [fmtNum(e.kcal || 0) + ' kcal']
     // Carbs, protein, fat — the order a food log is read back in.
     DIGEST_MACROS.forEach(m => { if (e[m]) bits.push(t(MACRO_NAME[m]) + ' ' + fmtNum(e[m]) + ' g') })
-    const goal = S.nutriGoal && S.nutriGoal.kcal
+    // A day eaten at maintenance on purpose is judged against maintenance, and says so —
+    // otherwise the coach reads a deliberate refeed as a day that got away.
+    const dayGoal = goalFor(S.nutriGoal, e, (bal || {}).out)
+    const goal = dayGoal && dayGoal.kcal
     if (goal) bits.push(t('target {0}', fmtNum(goal)) + ' (' + sign((e.kcal || 0) - goal) + ')')
+    if (isRefeed(e)) bits.push('(' + t('maintenance day') + ')')
     out.push(t('Intake') + ' ' + bits.join(' · '))
   } else {
     out.push(t('Intake') + ' ' + t('nothing logged'))
@@ -176,7 +183,6 @@ export function dailyDigest(S, iso = todayISO(), now = Date.now()) {
   // Spelled out rather than handed over as a total: the reader has to be able to see which
   // of the three numbers moved. The middle term is the day against the plan, not the day's
   // training — maintenance already budgets for the planned session.
-  const bal = dayBalance(S, iso)
   if (bal && bal.deficit != null) {
     out.push(t('Balance') + ' ' + fmtNum(bal.tdee) + ' ' + t('maintenance')
       + ' ' + sign(bal.delta) + ' ' + t('sport vs plan')

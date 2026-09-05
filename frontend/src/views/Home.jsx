@@ -5,7 +5,7 @@ import { effectiveRoutine, effectiveRoutineId, streakWeeks, lastBW, setsDoneActi
 import { fmtNum, fmtDate, todayISO, isoOf, weekKey, DAYS, fmtKg } from '../lib/format.js'
 import { t, dateLocale } from '../lib/i18n.js'
 import { bwSheet, goalSheet, dayOverrideSheet, workoutDetailSheet, calendarSheet, startFlow, loadStarterPlan, bwDeltaColor, nutriSheet, nutriGoalSheet, digestSheet, openPendingProgram, discardPendingProgram, sleepSheet, tdeeSheet, watchSheet, projectionSheet } from '../sheets.jsx'
-import { entryFor, kcalFromMacros, macroSplit, remainingOf, MACROS, MACRO_NAME, MACRO_COLOR } from '../lib/nutrition.js'
+import { entryFor, kcalFromMacros, macroSplit, remainingOf, goalFor, isRefeed, MACROS, MACRO_NAME, MACRO_COLOR } from '../lib/nutrition.js'
 import { composition, sleepFor, lastSleep, sleepHours, whenOf, sinceStart, bwAsOf } from '../lib/body.js'
 import { dayBalance, projectedWeight, KCAL_PER_KG_FAT } from '../lib/energy.js'
 import { weekFor } from '../lib/blocks.js'
@@ -63,7 +63,10 @@ export default function Home() {
   const daySleep = sleepFor(S, iso)
   const lastNight = daySleep || (isToday ? lastSleep(S) : null)
   const todayNutri = entryFor(S, iso)
-  const nutriLeft = remainingOf(todayNutri, S.nutriGoal)
+  // On a maintenance day the target is the day's own spend, not the standing cut figure —
+  // see lib/nutrition.js. Nothing else about the day changes.
+  const dayGoal = goalFor(S.nutriGoal, todayNutri, (dayBalance(S, iso) || {}).out)
+  const nutriLeft = remainingOf(todayNutri, dayGoal)
   // Null unless there is both a maintenance figure and calories logged today — a balance
   // is a subtraction, and half of one is not worth a line on the card.
   const bal = todayNutri ? dayBalance(S, iso) : null
@@ -289,8 +292,8 @@ export default function Home() {
       <div className="row between" style={{ marginBottom: 6 }}>
         <h2 style={{ margin: 0 }}>{t('Nutrition')}</h2>
         <div className="row" style={{ gap: 8 }}>
-          <Button size="sm" icon="target" style={S.nutriGoal ? { color: 'var(--yellow)' } : undefined} onClick={nutriGoalSheet}>
-            {S.nutriGoal?.kcal ? fmtNum(S.nutriGoal.kcal) : t('Goal')}
+          <Button size="sm" icon="target" style={dayGoal ? { color: 'var(--yellow)' } : undefined} onClick={nutriGoalSheet}>
+            {dayGoal?.kcal ? fmtNum(dayGoal.kcal) : t('Goal')}
           </Button>
           <Button size="sm" icon="plus" onClick={() => nutriSheet(iso)}>{t('Log')}</Button>
         </div>

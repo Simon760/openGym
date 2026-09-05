@@ -1075,4 +1075,10 @@ export default {
   'Swapped for {0}': 'Remplacé par {0}',
   'Bodyweight — no load asked for': 'Poids du corps — plus de charge demandée',
   'Load asked for again': 'La charge est redemandée',
+  'Maintenance day': 'Journée à maintien',
+  'recharge · counted the same, judged against maintenance': 'recharge · compté pareil, jugé sur le maintien',
+  'target {0} kcal — the day’s own spend': 'objectif {0} kcal — la dépense du jour',
+  'no target today': 'pas d\'objectif aujourd\'hui',
+  'against maintenance': 'sur le maintien',
+  'maintenance day': 'journée à maintien',
 }

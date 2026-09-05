@@ -70,6 +70,37 @@ export function macroSplit(e) {
 }
 
 /**
+ * A day eaten at maintenance on purpose — a refeed, to put the glycogen and the batteries back.
+ *
+ * It changes no arithmetic anywhere. The deficit is the day's expenditure minus what was
+ * eaten, whatever the day was for, and lib/energy.js never reads this flag. All it moves is
+ * the day's calorie *target*, so an evening spent deliberately at maintenance stops being
+ * reported as hundreds over a cut target it was never being held to that day.
+ */
+export const isRefeed = e => !!(e && e.refeed)
+
+/**
+ * The calorie target for one day: the standing goal, or maintenance on a refeed.
+ *
+ * `maintenance` is the day's own expenditure — the figure that makes the deficit exactly
+ * zero, which is the whole point of the day. It is passed in rather than worked out here,
+ * because working it out is lib/energy.js's job and that module already reads this one.
+ *
+ * With no maintenance figure to raise it to, the calorie target is dropped rather than left
+ * standing: the day then has no ceiling anyone is holding you to, and reporting it as over
+ * one is exactly what the flag exists to stop. The macro targets are untouched either way —
+ * a refeed says something about calories, not about how much protein you owe.
+ */
+export function goalFor(goal, entry, maintenance) {
+  if (!isRefeed(entry)) return goal || null
+  const m = Math.round(num(maintenance))
+  if (!goal) return m ? { kcal: m } : null
+  const { kcal, ...rest } = goal
+  if (m) return { ...rest, kcal: m }
+  return Object.keys(rest).length ? rest : null
+}
+
+/**
  * What is left of the day's targets. Negative means over — returned as-is rather than
  * clamped, because "300 over" is the number that changes what you eat tonight and
  * clamping it to zero would hide exactly the day worth seeing.
@@ -131,7 +162,10 @@ export function putEntry(list, entry) {
   const kept = {}
   for (const k of ['kcal', ...MACROS]) { if (num(entry[k])) kept[k] = num(entry[k]) }
   if (!Object.keys(kept).length) return rest.sort(byDate)
-  return [...rest, { d: entry.d, ...kept, t: entry.t || Date.now() }].sort(byDate)
+  // The refeed flag rides along, but only when it is true and only when there is a day left
+  // to carry it: a flag on an entry with no numbers in it would be a day that does not exist.
+  const flag = entry.refeed ? { refeed: true } : {}
+  return [...rest, { d: entry.d, ...kept, ...flag, t: entry.t || Date.now() }].sort(byDate)
 }
 
 const byDate = (a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : 0)

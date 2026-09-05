@@ -1100,4 +1100,10 @@ export default {
   'Swapped for {0}': 'Swapped for {0}',
   'Bodyweight — no load asked for': 'Bodyweight — no load asked for',
   'Load asked for again': 'Load asked for again',
+  'Maintenance day': 'Maintenance day',
+  'recharge · counted the same, judged against maintenance': 'recharge · counted the same, judged against maintenance',
+  'target {0} kcal — the day’s own spend': 'target {0} kcal — the day’s own spend',
+  'no target today': 'no target today',
+  'against maintenance': 'against maintenance',
+  'maintenance day': 'maintenance day',
 }
