@@ -1089,4 +1089,6 @@ export default {
   '{0} — already done': '{0} — déjà faite',
   'Log {0}': 'Noter {0}',
   'Log a freestyle session': 'Noter une séance libre',
+  'This was done earlier — drop the clock': 'C\'était fait avant — enlever le chrono',
+  'Clock off — you’ll be asked for the duration at the end': 'Chrono coupé — la durée sera demandée à la fin',
 }

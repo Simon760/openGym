@@ -1097,4 +1097,6 @@ export default {
   '{0} — already done': '{0} — already done',
   'Log {0}': 'Log {0}',
   'Log a freestyle session': 'Log a freestyle session',
+  'This was done earlier — drop the clock': 'This was done earlier — drop the clock',
+  'Clock off — you’ll be asked for the duration at the end': 'Clock off — you’ll be asked for the duration at the end',
 }

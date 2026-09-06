@@ -408,6 +408,16 @@ function ActiveWorkout() {
         s.active.entries.unshift(warmEntry(s, { ...defaultConfig(ex.id), id: ex.id }))
         s.active.cur = 0
       }) })}>{t('Add a warm-up')}</Button>}
+    {/* The choice between training and writing training up used to be made once, at the door,
+        and never again — so pressing Start on a session you had already done left you with a
+        clock counting your typing and no way back, since the screen that offers the other
+        door is the one an active session replaces. */}
+    {!A.log && <><div style={{ height: 8 }} />
+      <Button variant="ghost" className="dim" size="sm" icon="history" onClick={() => update(s => {
+        s.active.log = true
+        stopRest()
+        useUI.getState().toast(t('Clock off — you’ll be asked for the duration at the end'))
+      })}>{t('This was done earlier — drop the clock')}</Button></>}
     <div style={{ height: 10 }} />
     {(() => {
       const exDone = A.entries.filter(e => e.sets.length && e.sets.every(s => s.done)).length
