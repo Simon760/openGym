@@ -30,20 +30,28 @@ function StartChooser() {
         <div><div className="big">{todayR.name}</div><div className="muted small">{exCount(todayR.ex.length)}</div></div>
         <span className="lrow-i" style={{ width: 38, height: 38, borderRadius: 9, fontSize: 22 }}><Icon name={glyphOf(todayR.emoji)} /></span>
       </div>
+      {/* Every way of starting a session is also a way of writing one up, because a session
+          you did without the app in your hand is still that session — the planned one, out of
+          the programme, not a freestyle stand-in for it. The choice sits beside each start
+          rather than in one entry of its own at the bottom, which is where it kept being
+          looked for and not found. */}
       <Button variant="primary" icon="play" onClick={() => startFlow(todayR.id)}>{t('Start {0}', todayR.name)}</Button>
+      <div style={{ height: 8 }} />
+      <Button icon="history" onClick={() => logPastSheet(todayR.id)}>{t('Already did it — write it up')}</Button>
     </div>}
     {others.length > 0 && <><h4 className="sec">{t('Other routines')}</h4>
       <div className="list">{others.map(r => <div key={r.id} className="item" onClick={() => startFlow(r.id)}>
         <span className="lrow-i"><Icon name={glyphOf(r.emoji)} /></span>
         <div className="grow"><div className="tt">{r.name}</div><div className="ss">{exCount(r.ex.length)}</div></div>
+        <button className="iconbtn" aria-label={t('Already did it — write it up')}
+          onClick={e => { e.stopPropagation(); logPastSheet(r.id) }}><Icon name="history" /></button>
         <span className="tag acc">{t('Start')}</span></div>)}</div></>}
     <div style={{ height: 14 }} />
     <Button icon="shuffle" onClick={() => startFlow(null)}>{t('Freestyle workout (pick as you go)')}</Button>
     <div style={{ height: 8 }} />
-    {/* Training that already happened. Sitting here rather than in a menu because "I trained
-        and forgot to open the app" is a thing that happens on the way home, and this is the
-        screen you land on when you finally do. */}
-    <Button variant="ghost" icon="history" onClick={logPastSheet}>{t('Log a session you already did')}</Button>
+    {/* And the one that answers none of the above: a day other than today, or a session that
+        was not in the programme at all. */}
+    <Button variant="ghost" icon="history" onClick={() => logPastSheet()}>{t('Log another day’s session')}</Button>
     {!S.routines.length && <><div style={{ height: 10 }} /><Button variant="primary" onClick={() => nav('/plan')}>{t('Build a plan first')}</Button></>}
   </div>
 }

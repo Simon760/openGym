@@ -1109,4 +1109,9 @@ export default {
   'This machine shows a speed': 'This machine shows a speed',
   'A treadmill or a run. Distance makes way for it — given the minutes, the two say the same thing.': 'A treadmill or a run. Distance makes way for it — given the minutes, the two say the same thing.',
   'A bike, a rower, a stepmill. Effort is logged instead: it is what tells twenty easy minutes from twenty hard ones.': 'A bike, a rower, a stepmill. Effort is logged instead: it is what tells twenty easy minutes from twenty hard ones.',
+  'Already did it — write it up': 'Already did it — write it up',
+  'Log another day’s session': 'Log another day’s session',
+  '{0} — already done': '{0} — already done',
+  'Log {0}': 'Log {0}',
+  'Log a freestyle session': 'Log a freestyle session',
 }

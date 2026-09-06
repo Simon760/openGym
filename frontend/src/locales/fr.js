@@ -1084,4 +1084,9 @@ export default {
   'This machine shows a speed': 'Cette machine affiche une vitesse',
   'A treadmill or a run. Distance makes way for it — given the minutes, the two say the same thing.': 'Un tapis ou une course. La distance lui laisse la place — à durée donnée, les deux disent la même chose.',
   'A bike, a rower, a stepmill. Effort is logged instead: it is what tells twenty easy minutes from twenty hard ones.': 'Un vélo, un rameur, un stepper. C\'est l\'effort qui est noté à la place : c\'est lui qui distingue vingt minutes faciles de vingt minutes dures.',
+  'Already did it — write it up': 'Déjà faite — la noter',
+  'Log another day’s session': 'Noter une séance d\'un autre jour',
+  '{0} — already done': '{0} — déjà faite',
+  'Log {0}': 'Noter {0}',
+  'Log a freestyle session': 'Noter une séance libre',
 }

@@ -2300,10 +2300,14 @@ export const workoutCompleteSheet = () => ui().openSheet(close => <WorkoutComple
  * workout, and offering "today" among the choices matters: a session finished an hour ago and
  * never opened in the app is the commonest case of all.
  */
-function LogPastSheet({ close }) {
+function LogPastSheet({ close, routineId }) {
   const st = useStore(s => s.S)
   const [d, setD] = useState(todayISO())
   const [warm, setWarm] = useState(null)
+  // Opened from a routine's own button: which session it was is already answered, so the
+  // sheet asks only what is still open — which day, and whether it opened with a warm-up.
+  const only = routineId === undefined ? null : (st.routines || []).find(r => r.id === routineId) || null
+  const preset = routineId !== undefined
   const days = Array.from({ length: 8 }, (_, i) => isoOf(new Date(Date.now() - i * 86400000)))
   const taken = new Set((st.workouts || []).map(w => w.d))
   const planned = effectiveRoutine(st, d)
@@ -2312,7 +2316,7 @@ function LogPastSheet({ close }) {
   const go = id => { close(); beginWorkout(id, undefined, { log: true, d, warm }) }
 
   return <>
-    <h3>{t('Log a session you already did')}</h3>
+    <h3>{only ? t('{0} — already done', only.name) : t('Log a session you already did')}</h3>
     <div className="muted small" style={{ marginBottom: 12, lineHeight: 1.45 }}>
       {t('Same screen as a live session, without the clock or the rest timer — you type what you did and finish.')}
     </div>
@@ -2343,6 +2347,12 @@ function LogPastSheet({ close }) {
         <Icon name="chevronRight" className="chev" />
       </div>}
     </div>
+    {preset ? <>
+      <div style={{ height: 12 }} />
+      <Button variant="primary" icon="history" onClick={() => go(routineId)}>
+        {only ? t('Log {0}', only.name) : t('Log a freestyle session')}
+      </Button>
+    </> : <>
     <h4 className="sec">{t('Which routine')}</h4>
     <div className="list">
       {planned && <div className="item" onClick={() => go(planned.id)}>
@@ -2361,11 +2371,14 @@ function LogPastSheet({ close }) {
         <Icon name="chevronRight" className="chev" />
       </div>
     </div>
+    </>}
     <div style={{ height: 12 }} />
     <Button variant="ghost" className="dim" onClick={close}>{t('Cancel')}</Button>
   </>
 }
-export const logPastSheet = () => ui().openSheet(close => <LogPastSheet close={close} />)
+/** `routineId` preselects the session — pass null for freestyle, omit to be asked. */
+export const logPastSheet = routineId =>
+  ui().openSheet(close => <LogPastSheet close={close} {...(routineId !== undefined ? { routineId } : {})} />)
 
 function FinishSummary({ w, prs, e1prs = [], close }) {
   const st = useStore(s => s.S)
