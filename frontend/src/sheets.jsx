@@ -1064,7 +1064,10 @@ function ExConfig({ ex, existing, onSave, onDelete, close, routine }) {
     // rather than carrying a flag nothing downstream can read.
     const flags = {}
     if (bw !== isBodyweightEq(ex.id)) flags.bodyweight = bw
-    if (cardio) onSave({ sets, min: Math.max(1, Math.round(c.min) || 20), speed: Math.max(0, c.speed || 8) })
+    // The speed is written only for a machine that shows one; see isPaced. A stored 0 would
+    // print as "0 km/h" everywhere the set is read back.
+    if (cardio) onSave({ sets, min: Math.max(1, Math.round(c.min) || 20),
+      ...(c.paced ? { paced: true, speed: Math.max(0, c.speed || 8) } : {}) })
     else if (mode === 'time') onSave({ sets, mode: 'time', sec: Math.max(1, Math.round(c.sec) || 45), weight: Math.max(0, c.weight || 0), ...flags, ...prog })
     else {
       // A unilateral target is stored even: the split has to divide, and a typed 15 would
@@ -1091,11 +1094,24 @@ function ExConfig({ ex, existing, onSave, onDelete, close, routine }) {
       <Segmented className="seg-range" value={mode} onChange={setMode}
         options={[{ value: 'reps', label: t('Reps') }, { value: 'time', label: t('Time') }]} />
     </div>}
+    {/* A treadmill and a run show a speed; a bike, a rower, a stepmill and a set of burpees
+        do not — they show watts, or RPM, or nothing. Asked for only where there is one to
+        read, because a made-up 8 km/h is not a small error, it is a meaningless number that
+        then gets printed back as if it were measured. */}
+    {cardio && <>
+      <Row title={t('This machine shows a speed')}>
+        <Switch checked={!!c.paced} onChange={v => setC(x => ({ ...x, paced: v }))} />
+      </Row>
+      <div className="small dim" style={{ margin: '2px 2px 14px', lineHeight: 1.45 }}>
+        {c.paced ? t('A treadmill or a run. Distance makes way for it — given the minutes, the two say the same thing.')
+          : t('A bike, a rower, a stepmill. Effort is logged instead: it is what tells twenty easy minutes from twenty hard ones.')}
+      </div>
+    </>}
     <div className="row cfgrow" style={{ marginBottom: mode === 'time' ? 8 : 18 }}>
       {cardio ? <>
         <Stepper label={t('Intervals')} value={c.sets} step={1} decimal={false} onChange={v => setC(x => ({ ...x, sets: v }))} />
         <Stepper label={t('Minutes')} value={c.min} step={1} decimal={false} onChange={v => setC(x => ({ ...x, min: v }))} />
-        <Stepper label={t('Speed (km/h)')} value={c.speed} step={0.5} onChange={v => setC(x => ({ ...x, speed: v }))} />
+        {c.paced && <Stepper label={t('Speed (km/h)')} value={c.speed} step={0.5} onChange={v => setC(x => ({ ...x, speed: v }))} />}
       </> : mode === 'time' ? <>
         <Stepper label={t('Sets')} value={c.sets} step={1} decimal={false} onChange={v => setC(x => ({ ...x, sets: v }))} />
         <Stepper label={t('Seconds')} value={c.sec} step={5} decimal={false} onChange={v => setC(x => ({ ...x, sec: v }))} />

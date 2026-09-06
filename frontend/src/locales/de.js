@@ -1106,4 +1106,7 @@ export default {
   'no target today': 'no target today',
   'against maintenance': 'against maintenance',
   'maintenance day': 'maintenance day',
+  'This machine shows a speed': 'This machine shows a speed',
+  'A treadmill or a run. Distance makes way for it — given the minutes, the two say the same thing.': 'A treadmill or a run. Distance makes way for it — given the minutes, the two say the same thing.',
+  'A bike, a rower, a stepmill. Effort is logged instead: it is what tells twenty easy minutes from twenty hard ones.': 'A bike, a rower, a stepmill. Effort is logged instead: it is what tells twenty easy minutes from twenty hard ones.',
 }

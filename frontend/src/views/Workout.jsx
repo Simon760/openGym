@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
 import { exOr, exName } from '../lib/exercises.js'
-import { effectiveRoutine, lastEntryFor, bestWeightFor, buildSets, defaultConfig, warmEntry, swapEntry, setBodyweight, setsDoneActive, supersetUnits, unitOf, setLabel, modeOf, isBw, isPerSide, sideReps, repStep, EFFORT, effortOf, stepEffort, capEffort } from '../lib/history.js'
+import { effectiveRoutine, lastEntryFor, bestWeightFor, buildSets, defaultConfig, warmEntry, swapEntry, setBodyweight, setsDoneActive, supersetUnits, unitOf, setLabel, modeOf, isBw, isPaced, cardioEffort, isPerSide, sideReps, repStep, EFFORT, effortOf, stepEffort, capEffort } from '../lib/history.js'
 import { fmtNum, fmtDate, todayISO, exCount, DAYN } from '../lib/format.js'
 import { beep, vibrate } from '../lib/sound.js'
 import { t } from '../lib/i18n.js'
@@ -84,22 +84,26 @@ function ExerciseBlock({ entryIdx, compact, onToggle, onField, onAddSet, onRemov
   // The reps column is the total in every mode, unilateral included — the stepper walks in
   // twos there so the number you land on is one you can actually split evenly.
   const repCol = { f: 'r', step: repStep(cfg), dec: false, hd: t('Reps') }
+  // Effort — RIR or RPE, whichever the profile logs. Opt-in for lifting, where the weight on
+  // the bar already says most of it; on cardio it is the default, because there it is the only
+  // measure of intensity left (see cardioEffort). `opt` because an unlogged effort is not the
+  // same as 0 — RIR 0 says the set went to failure.
+  const kind = cardio ? cardioEffort(S) : effortOf(S)
+  const eff = EFFORT[kind]
+  const effCol = eff ? { ...eff, eff: kind, dec: true, opt: true, hd: t(eff.hd) } : null
+  const paced = cardio && isPaced(cfg)
   const col1 = cardio ? { f: 'min', step: 1, dec: false, hd: t('Duration (min)') }
     : timed ? { f: 'sec', step: 5, dec: false, hd: t('Seconds') }
       : (bw && !added) ? repCol : loadCol
-  const col2 = cardio ? { f: 'speed', step: 0.5, dec: true, hd: t('Speed (km/h)') }
+  // Cardio has four things it could ask for and three columns to ask in. Given the duration,
+  // a speed and a distance say the same thing — so exactly one of them is shown, the one the
+  // machine in front of you is actually displaying — and effort keeps the last slot either
+  // way, because on a bike it is what tells twenty easy minutes from twenty hard ones.
+  const col2 = cardio ? (paced ? { f: 'speed', step: 0.5, dec: true, hd: t('Speed (km/h)') } : effCol)
     : timed ? ((bw && !added) ? null : loadCol)
       : (bw && !added) ? null : repCol
-  // Effort (RIR or RPE, whichever the profile logs) only makes sense for weighted rep sets,
-  // not cardio/timed holds, and is opt-in since it adds a third stepper to every row. `opt`
-  // because an unlogged effort is not the same as 0 — RIR 0 says the set went to failure.
-  const kind = effortOf(S)
-  const eff = EFFORT[kind]
-  // Cardio has no effort column to compete for the third slot, so distance takes it —
-  // optional, because a treadmill interval has a duration and a speed and no distance
-  // worth typing, while an outdoor run is the opposite.
-  const col3 = cardio ? { f: 'km', step: 0.5, dec: true, opt: true, hd: t('Distance (km)') }
-    : mode === 'reps' && eff ? { ...eff, eff: kind, dec: true, opt: true, hd: t(eff.hd) } : null
+  const col3 = cardio ? (paced ? effCol : { f: 'km', step: 0.5, dec: true, opt: true, hd: t('Distance (km)') })
+    : mode === 'reps' && eff ? effCol : null
   // Does a set here carry a weight at all? True for an ordinary lift, and for bodyweight work
   // once there is something on the belt; false for a plain pull-up, where col1 is the reps and
   // there is no second column. Only such a set can carry a second load.

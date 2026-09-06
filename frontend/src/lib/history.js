@@ -33,6 +33,33 @@ export const isTimed = cfg => modeOf(cfg) === 'time'
 // Both are absent on every plan, workout and backup written before they existed, and absent
 // reads as false, so nothing needs migrating.
 export const isBw = cfg => (cfg && cfg.bodyweight != null ? !!cfg.bodyweight : isBodyweightEq(cfg && cfg.id))
+
+/**
+ * Does this cardio exercise have a speed to read off?
+ *
+ * Four of the catalogue's twenty-nine do — a run, a treadmill. The rest are a bike, a stepmill,
+ * an elliptical, a rope, or a set of burpees: machines showing watts or RPM, or no machine at
+ * all. Asking every one of them for km/h put a figure on screen that nothing was displaying,
+ * and 8 km/h on an assault bike is not a small error, it is a meaningless one. Off unless the
+ * exercise says otherwise, the same way the bodyweight flag works.
+ */
+export const isPaced = cfg => !!(cfg && cfg.paced)
+
+/**
+ * The effort scale a cardio set is rated on.
+ *
+ * Effort is opt-in for lifting, where the weight on the bar already says most of it. On a
+ * machine with no speed it is the only intensity there is: without it a set carries a duration
+ * and nothing else, and twenty easy minutes weigh exactly what twenty hard ones do. So cardio
+ * defaults to RPE — the scale that means something on a bike, where "reps in reserve" does
+ * not — while a profile that picked a scale keeps it, and one that explicitly turned effort
+ * off keeps that too.
+ */
+export const cardioEffort = S => {
+  const chosen = S && S.effort
+  if (chosen === 'none') return 'none'
+  return EFFORT[chosen] ? chosen : 'rpe'
+}
 export const isPerSide = cfg => !!(cfg && cfg.side)
 // What one side did, for display only. Half of an odd total is shown as it falls (8.5) rather
 // than rounded away: it means the sides were not even, which is worth seeing.
@@ -97,7 +124,12 @@ export function setLabel(id, s, cfg) {
   const mode = modeOf(c)
   // Distance only when it was logged: a treadmill set often has none, and " · 0 km"
   // would claim a run that did not move.
-  if (mode === 'cardio') return `${s.min || 0} min @ ${fmtNum(s.speed || 0)} km/h` + (s.km > 0 ? ` · ${fmtNum(s.km)} km` : '')
+  // Minutes always; a speed only where one was displayed, a distance only where it was
+  // logged, and the effort last — on an unpaced machine that rating is the whole story.
+  if (mode === 'cardio') return `${s.min || 0} min`
+    + (isPaced(c) && s.speed > 0 ? ` @ ${fmtNum(s.speed)} km/h` : '')
+    + (s.km > 0 ? ` · ${fmtNum(s.km)} km` : '')
+    + effortTail(s)
   if (mode === 'time') return fmtSec(s.sec) + (s.w > 0 ? ` · ${fmtNum(s.w)}` : '')
   // Bodyweight reads as what you did — "12", or "+10 × 12" once there is a belt involved —
   // rather than "0×12", which says a set was performed with no weight and means nothing.
@@ -115,7 +147,7 @@ export function setLabel(id, s, cfg) {
 // Default config for a freshly added exercise.
 export function defaultConfig(id, mode) {
   const m = mode || modeOf({ id })
-  if (m === 'cardio') return { sets: 1, min: 20, speed: 8 }
+  if (m === 'cardio') return { sets: 1, min: 20 }
   // Written only when it is true, so a barbell config is byte-for-byte what it was before
   // the flag existed and a plan file gains nothing it does not need.
   const bw = isBodyweightEq(id) ? { bodyweight: true } : {}
@@ -364,7 +396,10 @@ export function buildSets(S, cfg) {
   if (mode === 'cardio') {
     for (let i = 0; i < n; i++) {
       const prev = prevAt(i)
-      sets.push({ min: prev ? prev.min : (cfg.min || 20), speed: prev ? prev.speed : (cfg.speed || 8), done: false })
+      // No speed field at all unless the exercise reports one, rather than a 0 that reads as
+      // "stood still" everywhere it is printed.
+      const sp = isPaced(cfg) ? { speed: prev && prev.speed > 0 ? prev.speed : (cfg.speed || 8) } : {}
+      sets.push({ min: prev ? prev.min : (cfg.min || 20), ...sp, done: false })
     }
     return sets
   }

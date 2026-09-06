@@ -7,7 +7,7 @@
 // map can actually draw, via ALIAS below. Anything genuinely undrawable (hands,
 // ankles, "cardiovascular system") maps to null and is dropped rather than guessed at.
 
-import { EXIDX } from './exercises.js'
+import { EXIDX, isCardio } from './exercises.js'
 import { isWorking } from './history.js'
 
 // The muscles a map can shade, in head-to-toe order — also the order of any list
@@ -157,6 +157,28 @@ export function loadOf(items) {
 }
 
 /**
+ * How many minutes of cardio are worth one set on this map.
+ *
+ * A cardio set is not a set. It is a block of minutes, and counting it as one made twenty
+ * minutes on the bike weigh exactly what thirty seconds of jump rope weighs — the map said
+ * "one set of legs" for both. Five minutes is the working time of a hard set of ten once its
+ * rest is counted, which is the unit everything else here is measured in.
+ *
+ * Intensity is deliberately not applied here. The map answers "where did the work go", and
+ * how hard it was belongs to the recovery model, which already scales every set by its
+ * rating — cardio sets included, now that they carry one (see cardioEffort).
+ */
+export const CARDIO_MIN_PER_SET = 5
+
+/** What one logged set is worth, in sets. Lifting: itself. Cardio: its minutes. */
+export const setWorth = (id, s) =>
+  (isCardio(id) ? Math.max(0, (s && s.min) || 0) / CARDIO_MIN_PER_SET : 1)
+
+const worthOf = (id, sets, pick) => (sets || [])
+  .filter(s => isWorking(s) && (!pick || pick(s)))
+  .reduce((n, s) => n + setWorth(id, s), 0)
+
+/**
  * Load for finished workouts (only sets actually ticked off count). `pick` narrows that
  * further — the map can then answer "where did the *hard* sets go", which is a different
  * question from where the sets went: a muscle can lead on volume and still never be trained
@@ -164,15 +186,18 @@ export function loadOf(items) {
  */
 export const loadOfWorkouts = (workouts, pick) =>
   loadOf((workouts || []).flatMap(w =>
-    (w.entries || []).map(e => ({ id: e.id, sets: (e.sets || []).filter(s => isWorking(s) && (!pick || pick(s))).length }))))
+    (w.entries || []).map(e => ({ id: e.id, sets: worthOf(e.id, e.sets, pick) }))))
 
 /** Load a routine *would* produce, from its planned set counts. */
 export const loadOfRoutine = routine =>
-  loadOf((routine?.ex || []).map(c => ({ id: c.id, sets: c.sets || 1 })))
+  loadOf((routine?.ex || []).map(c => ({
+    id: c.id,
+    sets: isCardio(c.id) ? ((c.sets || 1) * (c.min || 0)) / CARDIO_MIN_PER_SET : (c.sets || 1)
+  })))
 
 /** Load for a workout still in progress — the sets ticked so far. */
 export const loadOfActive = active =>
-  loadOf((active?.entries || []).map(e => ({ id: e.id, sets: (e.sets || []).filter(isWorking).length })))
+  loadOf((active?.entries || []).map(e => ({ id: e.id, sets: worthOf(e.id, e.sets) })))
 
 /**
  * Shade buckets 0–4 per muscle, relative to the hardest-worked muscle in the same

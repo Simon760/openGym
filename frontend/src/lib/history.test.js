@@ -57,14 +57,16 @@ describe('fmtSec', () => {
 describe('setLabel', () => {
   it('describes each mode in its own terms', () => {
     expect(setLabel(LIFT, { w: 60, r: 10 })).toBe('60×10')
-    expect(setLabel(CARDIO, { min: 20, speed: 9 })).toBe('20 min @ 9 km/h')
+    // A speed only where a machine displays one — see isPaced. A bike shows the minutes alone.
+    expect(setLabel(CARDIO, { min: 20, speed: 9 })).toBe('20 min')
+    expect(setLabel(CARDIO, { min: 20, speed: 9 }, { id: CARDIO, paced: true })).toBe('20 min @ 9 km/h')
     expect(setLabel(LIFT, { sec: 45, w: 0 }, { mode: 'time' })).toBe('0:45')
     expect(setLabel(LIFT, { sec: 90, w: 20 }, { mode: 'time' })).toBe('1:30 · 20')
   })
 
   it('reads a legacy set with no config exactly as before', () => {
     expect(setLabel(LIFT, { w: 0, r: 0 })).toBe('0×0')
-    expect(setLabel(CARDIO, {})).toBe('0 min @ 0 km/h')
+    expect(setLabel(CARDIO, {})).toBe('0 min')
   })
 
   it('appends RIR when present, including a valid 0', () => {
@@ -244,10 +246,13 @@ describe('logging effort across a session', () => {
     expect(setLabel(LIFT, old)).toBe('60×10 (RIR 2)')
   })
 
-  it('never attaches effort to a mode that has no place for it', () => {
-    // cardio and timed sets have no third stepper, and their labels ignore the field even
-    // if an import or an old file put one there
-    expect(setLabel(CARDIO, { min: 20, speed: 9, rpe: 8 })).toBe('20 min @ 9 km/h')
+  it('rates a cardio set, since without it the set is a duration and nothing else', () => {
+    // Once the speed came off an unpaced machine, effort became the only thing separating
+    // twenty easy minutes from twenty hard ones — so a cardio label carries it.
+    expect(setLabel(CARDIO, { min: 20, rpe: 8 })).toBe('20 min (RPE 8)')
+    expect(setLabel(CARDIO, { min: 20, speed: 9, rpe: 8 }, { id: CARDIO, paced: true }))
+      .toBe('20 min @ 9 km/h (RPE 8)')
+    // a timed hold still has no place for one
     expect(setLabel(LIFT, { sec: 45, rir: 2 }, { id: LIFT, mode: 'time' })).toBe('0:45')
   })
 })
@@ -255,7 +260,7 @@ describe('logging effort across a session', () => {
 describe('defaultConfig', () => {
   it('gives each mode a sensible starting point', () => {
     expect(defaultConfig(LIFT)).toEqual({ sets: 3, reps: 10, weight: 0, mode: 'reps' })
-    expect(defaultConfig(CARDIO)).toEqual({ sets: 1, min: 20, speed: 8 })
+    expect(defaultConfig(CARDIO)).toEqual({ sets: 1, min: 20 })
     expect(defaultConfig(LIFT, 'time')).toEqual({ sets: 3, sec: 45, weight: 0, mode: 'time' })
   })
   it('seeds the bodyweight flag from the catalogue, and only when it is true', () => {
@@ -347,8 +352,11 @@ describe('buildSets', () => {
       .toEqual([{ sec: 60, w: 20, done: false }, { sec: 60, w: 20, done: false }])
   })
 
-  it('builds cardio sets unchanged', () => {
+  it('builds cardio sets with a speed only where one is displayed', () => {
+    // A 0 or a made-up 8 would be printed straight back as if it had been measured.
     expect(buildSets(emptyS, { id: CARDIO, sets: 1, min: 25, speed: 9 }))
+      .toEqual([{ min: 25, done: false }])
+    expect(buildSets(emptyS, { id: CARDIO, sets: 1, min: 25, speed: 9, paced: true }))
       .toEqual([{ min: 25, speed: 9, done: false }])
   })
 

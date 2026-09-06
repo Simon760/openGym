@@ -1081,4 +1081,7 @@ export default {
   'no target today': 'pas d\'objectif aujourd\'hui',
   'against maintenance': 'sur le maintien',
   'maintenance day': 'journée à maintien',
+  'This machine shows a speed': 'Cette machine affiche une vitesse',
+  'A treadmill or a run. Distance makes way for it — given the minutes, the two say the same thing.': 'Un tapis ou une course. La distance lui laisse la place — à durée donnée, les deux disent la même chose.',
+  'A bike, a rower, a stepmill. Effort is logged instead: it is what tells twenty easy minutes from twenty hard ones.': 'Un vélo, un rameur, un stepper. C\'est l\'effort qui est noté à la place : c\'est lui qui distingue vingt minutes faciles de vingt minutes dures.',
 }
