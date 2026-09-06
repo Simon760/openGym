@@ -39,6 +39,26 @@ describe('the exercises this app adds to the catalogue', () => {
     })
   })
 
+  it('gives the fan bike a name the floor exercise was squatting on', () => {
+    const bike = EXIDX.x002
+    expect(bike.bp).toBe('cardio')                 // logged as minutes, not weight × reps
+    expect(exMatches(bike, 'assault')).toBe(true)
+    expect(exMatches(bike, 'bike')).toBe(true)
+    // it answers to all four of its names, whoever made the one in your gym
+    expect(exMatches(bike, 'air bike')).toBe(true)
+    expect(exMatches(bike, 'fan bike')).toBe(true)
+    expect(exMatches(bike, 'airdyne')).toBe(true)
+    expect(exMatches(bike, 'echo bike')).toBe(true)
+    // upstream's "air bike" is bicycle crunches — a waist exercise — so a search for the
+    // machine used to land on the floor
+    expect(EXIDX['0003'].bp).toBe('waist')
+    // arms and legs both drive it, so it must not draw as a leg-only machine
+    const m = musclesOf(bike)
+    expect(Object.keys(m).length).toBeGreaterThan(3)
+    expect(m.deltoids).toBeGreaterThan(0)
+    expect(m.quadriceps).toBeGreaterThan(0)
+  })
+
   it('shows its French name and is found by either language', () => {
     const sq = EXIDX.x001
     expect(exName(sq)).toBe('squeeze press haltères')

@@ -36,5 +36,29 @@ export const EX_EXTRA = [
       "Marque une pause, puis repousse vers le haut en continuant de serrer les haltères l'un contre l'autre sur toute la remontée.",
       "Répète le nombre de répétitions souhaité."
     ]
+  },
+  {
+    // Upstream has no fan bike at all, and the one thing it calls "air bike" (0003) is the
+    // floor exercise — bicycle crunches — so searching for one led straight to abs.
+    id: 'x002',
+    n: 'assault bike',
+    fr: 'assault bike',
+    bp: 'cardio',
+    eq: 'stationary bike',
+    tg: 'cardiovascular system',
+    mg: 'quadriceps',
+    // Arms and legs both drive it, which is the whole point of the machine and the reason
+    // it reads so much higher than a spin bike for the same minutes.
+    sm: ['quadriceps', 'hamstrings', 'glutes', 'shoulders', 'back', 'core'],
+    // The machine goes by four names depending on who made it, and exMatches searches this
+    // field — so it is found by whichever one you happen to call it.
+    desc: 'Aussi appelé air bike, fan bike, Airdyne ou Echo bike.',
+    st: [
+      "Règle la selle pour que ta jambe soit presque tendue en bas du pédalage.",
+      "Assieds-toi, pieds sur les pédales, mains sur les poignées.",
+      "Pousse et tire les poignées en même temps que tu pédales : les bras travaillent autant que les jambes.",
+      "Garde le dos droit et le regard devant, sans t'écrouler sur le guidon.",
+      "Tiens l'allure prévue, puis relâche progressivement plutôt que de t'arrêter net."
+    ]
   }
 ]

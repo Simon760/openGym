@@ -2357,23 +2357,39 @@ function FinishSummary({ w, prs, e1prs = [], close }) {
   // number nobody remembers, and the deficit for the day goes without it — which is the one
   // figure a training session actually moves.
   const [kcal, setKcal] = useState(() => (w.watch && w.watch.kcal) || 0)
+  // A session typed up afterwards was never timed, so the duration is asked for rather than
+  // measured. Live sessions keep the clock they ran on and are not asked.
+  const timed = !!(w.end && w.start)
+  const [mins, setMins] = useState(() => (timed ? Math.round((w.end - w.start) / 60000) : 0))
   const [saved, setSaved] = useState(false)
   const warm = (w.entries || []).reduce((n, e) => n + (e.sets || []).filter(x => x.warm && x.done).length, 0)
   const saveKcal = () => {
     update(s => {
       const t = (s.workouts || []).find(x => x.id === w.id)
-      if (t) t.watch = { ...(t.watch || {}), kcal: Math.round(kcal) }
+      if (!t) return
+      if (kcal > 0) t.watch = { ...(t.watch || {}), kcal: Math.round(kcal) }
+      // Written as a start and an end, not as a bare number of minutes, so everything that
+      // already reads a duration — the summary, the history, the digest — reads this one too
+      // with no idea it was typed. The anchor is the same 18:00 the rest of the app falls
+      // back to for a workout with no clock (see whenOf, and recovery.js's startOf).
+      if (!timed && mins > 0) {
+        t.start = new Date(w.d + 'T18:00:00').getTime()
+        t.end = t.start + Math.round(mins) * 60000
+      }
     })
-    setSaved(true); toast(t('{0} kcal saved on this session', fmtNum(Math.round(kcal))))
+    setSaved(true)
+    toast(kcal > 0 ? t('{0} kcal saved on this session', fmtNum(Math.round(kcal))) : t('Saved'))
   }
   return <div style={{ textAlign: 'center', padding: '8px 0' }}>
     <div style={{ fontSize: 44, display: 'flex', justifyContent: 'center', color: 'var(--acc)' }}><Icon name="trophy" /></div>
     <h3 style={{ margin: '8px 0' }}>{t('Workout complete!')}</h3>
     <div className="tiles" style={{ textAlign: 'left' }}>
-      {/* A session typed up afterwards has no duration, and `end - start` on two absent
-          fields printed "NaN min". Its day is the useful thing there instead. */}
-      <div className="tile"><div className="l">{w.end && w.start ? t('Duration') : t('Day')}</div>
-        <div className="v" style={{ fontSize: '1.1rem' }}>{w.end && w.start ? fmtDur(w.end - w.start) : fmtDate(w.d, true)}</div></div>
+      {/* A session typed up afterwards has no duration until you give it one below — and
+          `end - start` on two absent fields printed "NaN min". Its day is the useful thing
+          in the tile until then. */}
+      <div className="tile"><div className="l">{timed ? t('Duration') : mins > 0 ? t('Duration') : t('Day')}</div>
+        <div className="v" style={{ fontSize: '1.1rem' }}>
+          {timed ? fmtDur(w.end - w.start) : mins > 0 ? fmtDur(mins * 60000) : fmtDate(w.d, true)}</div></div>
       <div className="tile"><div className="l">{t('Volume')}</div><div className="v" style={{ fontSize: '1.1rem' }}>{fmtVol(w.vol, st.unit)}</div></div>
       <div className="tile"><div className="l">{t('Sets')}</div><div className="v" style={{ fontSize: '1.1rem' }}>{setsDone(w)}</div></div>
       <div className="tile"><div className="l">{t('PRs')}</div><div className="v" style={{ fontSize: 20 }}>{prs.length || '—'}</div></div>
@@ -2390,12 +2406,16 @@ function FinishSummary({ w, prs, e1prs = [], close }) {
 
     <h4 className="sec" style={{ textAlign: 'left' }}>{t('What did your watch say?')}</h4>
     <div style={{ textAlign: 'left' }}>
+      {/* Only for a session that was not timed: a live one already knows, and offering to
+          overwrite a measured duration with a typed one is an invitation to a worse number. */}
+      {!timed && <Stepper label={t('Duration (min)')} unit="min" value={mins} step={5} decimal={false}
+        onChange={n => { setMins(n || 0); setSaved(false) }} />}
       <Stepper label={t('Session energy')} unit="kcal" value={kcal} step={10} decimal={false}
         onChange={n => { setKcal(n || 0); setSaved(false) }} />
       <div className="dim small" style={{ margin: '6px 2px 10px', lineHeight: 1.45 }}>
         {t('Read it off the watch now — asked tomorrow it is a number nobody remembers, and the day’s deficit goes without it. The usual discount is applied when it is counted.')}
       </div>
-      {kcal > 0 && !saved && <Button size="sm" icon="check" onClick={saveKcal}>{t('Save it on this session')}</Button>}
+      {(kcal > 0 || (!timed && mins > 0)) && !saved && <Button size="sm" icon="check" onClick={saveKcal}>{t('Save it on this session')}</Button>}
       {saved && <div className="small accent row" style={{ gap: 5 }}><Icon name="checkCircle" style={{ fontSize: 13 }} />{t('Saved')}</div>}
     </div>
 
