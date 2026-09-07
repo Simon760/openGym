@@ -60,5 +60,29 @@ export const EX_EXTRA = [
       "Garde le dos droit et le regard devant, sans t'écrouler sur le guidon.",
       "Tiens l'allure prévue, puis relâche progressivement plutôt que de t'arrêter net."
     ]
+  },
+  {
+    // A sport, not a gym movement, and the catalogue has none of those. Filed as cardio so it
+    // is logged the way it is actually done — a duration and how hard it was — rather than in
+    // sets and reps that a match does not have.
+    id: 'x003',
+    n: 'padel',
+    fr: 'padel',
+    bp: 'cardio',
+    eq: 'body weight',
+    tg: 'cardiovascular system',
+    mg: 'quadriceps',
+    // A racket sport is legs and rotation before it is arms: the lunges and the changes of
+    // direction do most of the work, the trunk turns on every shot, and the shoulder and
+    // forearm carry the racket. Spread wide on purpose — that is what the sport does.
+    sm: ['quadriceps', 'hamstrings', 'glutes', 'calves', 'core', 'obliques', 'shoulders', 'forearms'],
+    desc: 'Aussi écrit paddle. Noté en durée et en effort, comme le reste du cardio.',
+    st: [
+      "Échauffe les épaules et les chevilles avant le premier échange : les appuis partent froid sinon.",
+      "Compte le temps de jeu effectif, pas le temps passé au club.",
+      "Note l'effort ressenti sur l'échelle RPE — un match tranquille et un match disputé n'ont pas le même coût.",
+      "Si ta montre a compté la séance, saisis ses kcal au récap : elles priment sur toute estimation.",
+      "Les kilomètres sont facultatifs — laisse le champ vide si rien ne les a mesurés."
+    ]
   }
 ]

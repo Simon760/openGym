@@ -59,6 +59,19 @@ describe('the exercises this app adds to the catalogue', () => {
     expect(m.quadriceps).toBeGreaterThan(0)
   })
 
+  it('files a sport as a duration, since a match has no sets in it', () => {
+    const padel = EXIDX.x003
+    expect(padel.bp).toBe('cardio')
+    expect(exMatches(padel, 'padel')).toBe(true)
+    expect(exMatches(padel, 'paddle')).toBe(true)      // however you spell it
+    // legs and rotation before arms — a racket sport is not a shoulder exercise
+    const m = musclesOf(padel)
+    expect(m.quadriceps).toBeGreaterThan(0)
+    expect(m.obliques).toBeGreaterThan(0)
+    expect(m.deltoids).toBeGreaterThan(0)
+    expect(Object.keys(m).length).toBeGreaterThan(5)
+  })
+
   it('shows its French name and is found by either language', () => {
     const sq = EXIDX.x001
     expect(exName(sq)).toBe('squeeze press haltères')
