@@ -76,6 +76,8 @@ export const EX_EXTRA = [
     // direction do most of the work, the trunk turns on every shot, and the shoulder and
     // forearm carry the racket. Spread wide on purpose — that is what the sport does.
     sm: ['quadriceps', 'hamstrings', 'glutes', 'calves', 'core', 'obliques', 'shoulders', 'forearms'],
+    // A match, not a count of matches: one block of minutes, and no Add set under it.
+    once: true,
     desc: 'Aussi écrit paddle. Noté en durée et en effort, comme le reste du cardio.',
     st: [
       "Échauffe les épaules et les chevilles avant le premier échange : les appuis partent froid sinon.",

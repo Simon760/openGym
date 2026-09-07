@@ -1,6 +1,6 @@
 // Pure helpers over the state object S (ported 1:1 from the vanilla app).
 import { todayISO, isoOf, weekKey, fmtNum } from './format.js'
-import { isCardio, isBodyweightEq } from './exercises.js'
+import { isCardio, isBodyweightEq, isOnceEx } from './exercises.js'
 import { t } from './i18n.js'
 import { weekFor } from './blocks.js'
 
@@ -44,6 +44,9 @@ export const isBw = cfg => (cfg && cfg.bodyweight != null ? !!cfg.bodyweight : i
  * exercise says otherwise, the same way the bodyweight flag works.
  */
 export const isPaced = cfg => !!(cfg && cfg.paced)
+
+/** One block, never a count of them — see isOnceEx. Overridable per config, like isBw. */
+export const isOnce = cfg => (cfg && cfg.once != null ? !!cfg.once : isOnceEx(cfg && cfg.id))
 
 /**
  * The effort scale a cardio set is rated on.
@@ -387,7 +390,7 @@ export function effectiveRoutine(S, iso) {
 }
 export function buildSets(S, cfg) {
   const last = lastEntryFor(S, cfg.id)
-  const n = Math.max(1, cfg.sets || 1)
+  const n = isOnce(cfg) ? 1 : Math.max(1, cfg.sets || 1)
   const mode = modeOf(cfg)
   const sets = []
   // Last time's set at the same position, falling back to its final set when the plan grew.

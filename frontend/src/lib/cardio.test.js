@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { isPaced, cardioEffort, setLabel, buildSets, defaultConfig } from './history.js'
+import { isPaced, isOnce, cardioEffort, setLabel, buildSets, defaultConfig } from './history.js'
 import { loadOfWorkouts, loadOfRoutine, loadOfActive, setWorth, CARDIO_MIN_PER_SET } from './muscles.js'
 import { EXIDX } from './exercises.js'
 import { sessionLoad } from './recovery.js'
@@ -39,6 +39,34 @@ describe('a cardio machine with no speed on it', () => {
     const hard = sessionLoad(w(9)).intensity
     const easy = sessionLoad(w(5)).intensity
     expect(hard).toBeGreaterThan(easy)
+  })
+})
+
+// "Mais log pas en série. C'est un jeu donc c'est one time."
+describe('an activity that happens once rather than in sets', () => {
+  const PADEL = 'x003'
+
+  it('is one block however many sets the config asks for', () => {
+    expect(isOnce({ id: PADEL })).toBe(true)
+    expect(buildSets(emptyS, { id: PADEL, sets: 4, min: 60 })).toEqual([{ min: 60, done: false }])
+    expect(buildSets(emptyS, { id: PADEL, min: 60 })).toHaveLength(1)
+  })
+
+  it('leaves the bike its intervals, which are real', () => {
+    // five threes with a rest between them is five sets and reads as five
+    expect(isOnce({ id: BIKE })).toBe(false)
+    expect(buildSets(emptyS, { id: BIKE, sets: 5, min: 3 })).toHaveLength(5)
+  })
+
+  it('can be overridden per config, like every other flag here', () => {
+    expect(isOnce({ id: PADEL, once: false })).toBe(false)
+    expect(isOnce({ id: BIKE, once: true })).toBe(true)
+    expect(buildSets(emptyS, { id: BIKE, once: true, sets: 5, min: 3 })).toHaveLength(1)
+  })
+
+  it('still weighs its minutes on the map, one block or not', () => {
+    const load = loadOfWorkouts([{ entries: [{ id: PADEL, sets: [{ min: 60, done: true }] }] }])
+    expect(load.quadriceps).toBeCloseTo(0.4 * 60 / CARDIO_MIN_PER_SET, 5)
   })
 })
 

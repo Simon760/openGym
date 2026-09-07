@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
 import { exOr, exName } from '../lib/exercises.js'
-import { effectiveRoutine, lastEntryFor, bestWeightFor, buildSets, defaultConfig, warmEntry, swapEntry, setBodyweight, setsDoneActive, supersetUnits, unitOf, setLabel, modeOf, isBw, isPaced, cardioEffort, isPerSide, sideReps, repStep, EFFORT, effortOf, stepEffort, capEffort } from '../lib/history.js'
+import { effectiveRoutine, lastEntryFor, bestWeightFor, buildSets, defaultConfig, warmEntry, swapEntry, setBodyweight, setsDoneActive, supersetUnits, unitOf, setLabel, modeOf, isBw, isPaced, isOnce, cardioEffort, isPerSide, sideReps, repStep, EFFORT, effortOf, stepEffort, capEffort } from '../lib/history.js'
 import { fmtNum, fmtDate, todayISO, exCount, DAYN } from '../lib/format.js'
 import { beep, vibrate } from '../lib/sound.js'
 import { t } from '../lib/i18n.js'
@@ -100,6 +100,8 @@ function ExerciseBlock({ entryIdx, compact, onToggle, onField, onAddSet, onRemov
   const eff = EFFORT[kind]
   const effCol = eff ? { ...eff, eff: kind, dec: true, opt: true, hd: t(eff.hd) } : null
   const paced = cardio && isPaced(cfg)
+  // A game is one block of minutes, not a count of them (see isOnceEx).
+  const once = isOnce(cfg)
   const col1 = cardio ? { f: 'min', step: 1, dec: false, hd: t('Duration (min)') }
     : timed ? { f: 'sec', step: 5, dec: false, hd: t('Seconds') }
       : (bw && !added) ? repCol : loadCol
@@ -185,10 +187,14 @@ function ExerciseBlock({ entryIdx, compact, onToggle, onField, onAddSet, onRemov
             set and counted in none of the figures — not volume, not a record, and above all
             not as "last time" for the progression engine, which would walk the programme
             backwards off a bar-only set faster than any bug could. */}
-        <button className="n" style={{ background: 'none', border: 0, padding: 0, font: 'inherit',
-          color: s.warm ? 'var(--yellow)' : 'inherit', cursor: 'pointer' }}
-          aria-label={s.warm ? t('Warm-up — tap for a working set') : t('Tap to mark as a warm-up')}
-          onClick={() => onWarm(i)}>{s.warm ? t('W') : i + 1}</button>
+        {/* A one-off has no number to give: "1" out of one says nothing, and the warm-up
+            toggle under it would offer to make the match itself a warm-up. The cell stays so
+            the columns line up with every other row in the app. */}
+        {once ? <span className="n" style={{ background: 'none' }} aria-hidden="true" />
+          : <button className="n" style={{ background: 'none', border: 0, padding: 0, font: 'inherit',
+            color: s.warm ? 'var(--yellow)' : 'inherit', cursor: 'pointer' }}
+            aria-label={s.warm ? t('Warm-up — tap for a working set') : t('Tap to mark as a warm-up')}
+            onClick={() => onWarm(i)}>{s.warm ? t('W') : i + 1}</button>}
         {cell(s, i, col1, 'w')}
         {col2 && cell(s, i, col2, 'r')}
         {col3 && cell(s, i, col3, 'eff')}
@@ -220,11 +226,13 @@ function ExerciseBlock({ entryIdx, compact, onToggle, onField, onAddSet, onRemov
         </button>
       </div>] : [])
       ])}
-      <div style={{ height: 8 }} />
-      <div className="row">
-        <Button size="sm" icon="minus" disabled={entry.sets.length <= 1} onClick={onRemoveSet}>{t('Remove set')}</Button>
-        <Button size="sm" icon="plus" onClick={onAddSet}>{t('Add set')}</Button>
-      </div>
+      {!once && <>
+        <div style={{ height: 8 }} />
+        <div className="row">
+          <Button size="sm" icon="minus" disabled={entry.sets.length <= 1} onClick={onRemoveSet}>{t('Remove set')}</Button>
+          <Button size="sm" icon="plus" onClick={onAddSet}>{t('Add set')}</Button>
+        </div>
+      </>}
     </div>
   </>
 }
@@ -359,6 +367,7 @@ function ActiveWorkout() {
     }
   }, [])
 
+  const allOnce = A.entries.length > 0 && A.entries.every(e => isOnce({ ...(e.target || {}), id: e.id }))
   return <div className="narrow">
     <div className="hdr">
       <button className="iconbtn" aria-label={t('Discard')} onClick={() => confirmSheet({ title: t('Discard workout?'), message: t('The sets you logged in this session will be lost.'), confirmText: t('Discard'), danger: true, onConfirm: () => { update(s => { s.active = null }); stopRest(); nav('/home') } })}><Icon name="xmark" /></button>
@@ -366,7 +375,11 @@ function ActiveWorkout() {
         {/* A session typed up afterwards has no clock to show and nothing to time: showing one
             would count from the moment you sat down to enter it, which is not a duration of
             anything. The date takes its place, since it is the thing that is not today. */}
-        <div className="sub">{A.log ? fmtDate(A.d, true) : <Elapsed start={A.start} />} · {t('{0} sets', done + '/' + total)}</div></div>
+        {/* A session made only of one-off activities has no sets to count: "0/1 séries" for
+            a game of padel is the sentence that made it read as sets in the first place. The
+            finish line below still carries the progress, in exercises. */}
+        <div className="sub">{A.log ? fmtDate(A.d, true) : <Elapsed start={A.start} />}
+          {!allOnce && <> · {t('{0} sets', done + '/' + total)}</>}</div></div>
       <button className="iconbtn" style={{ color: 'var(--acc)' }} aria-label={t('Finish')} onClick={finishWorkout}><Icon name="check" /></button>
     </div>
     <div className="wprog"><i style={{ width: (total ? done / total * 100 : 0) + '%' }} /></div>

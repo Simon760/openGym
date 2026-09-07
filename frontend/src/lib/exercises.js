@@ -119,6 +119,15 @@ export const gifSrc = ex => embedded(ex.gif) || GIF_BASE + ex.gif
 // Cardio exercises log time + speed instead of weight × reps.
 export const isCardio = idOrEx => (typeof idOrEx === 'string' ? EXIDX[idOrEx] : idOrEx)?.bp === 'cardio'
 
+/**
+ * An activity that happens once, not in sets.
+ *
+ * A match is a match. The bike genuinely has intervals — five threes with a rest between them
+ * is five sets and reads as five — but a game of padel logged as "1 set of padel" is asking a
+ * question with only one possible answer, and putting Add set under it offers a second match.
+ */
+export const isOnceEx = idOrEx => !!(typeof idOrEx === 'string' ? EXIDX[idOrEx] : idOrEx)?.once
+
 // Exercises the dataset already knows carry no external load (issue #32) — a quarter of the
 // catalogue. This seeds the `bw` flag on a fresh config so a push-up never asks for a weight
 // nobody was going to enter. It is only the default: the flag lives on the config, so a dip
