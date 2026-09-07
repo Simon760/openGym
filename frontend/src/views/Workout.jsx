@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
 import { exOr, exName } from '../lib/exercises.js'
-import { effectiveRoutine, lastEntryFor, bestWeightFor, buildSets, defaultConfig, warmEntry, swapEntry, setBodyweight, setsDoneActive, supersetUnits, unitOf, setLabel, modeOf, isBw, isPaced, isOnce, cardioEffort, isPerSide, sideReps, repStep, EFFORT, effortOf, stepEffort, capEffort } from '../lib/history.js'
+import { effectiveRoutine, lastEntryFor, bestWeightFor, buildSets, defaultConfig, warmEntry, swapEntry, setBodyweight, setsDoneActive, supersetUnits, unitOf, setLabel, modeOf, isBw, readoutOf, isOnce, cardioEffort, isPerSide, sideReps, repStep, EFFORT, effortOf, stepEffort, capEffort } from '../lib/history.js'
 import { fmtNum, fmtDate, todayISO, exCount, DAYN } from '../lib/format.js'
 import { beep, vibrate } from '../lib/sound.js'
 import { t } from '../lib/i18n.js'
@@ -99,20 +99,20 @@ function ExerciseBlock({ entryIdx, compact, onToggle, onField, onAddSet, onRemov
   const kind = cardio ? cardioEffort(S) : effortOf(S)
   const eff = EFFORT[kind]
   const effCol = eff ? { ...eff, eff: kind, dec: true, opt: true, hd: t(eff.hd) } : null
-  const paced = cardio && isPaced(cfg)
+  const readout = cardio ? readoutOf(cfg) : 'none'
   // A game is one block of minutes, not a count of them (see isOnceEx).
   const once = isOnce(cfg)
   const col1 = cardio ? { f: 'min', step: 1, dec: false, hd: t('Duration (min)') }
     : timed ? { f: 'sec', step: 5, dec: false, hd: t('Seconds') }
       : (bw && !added) ? repCol : loadCol
-  // Cardio has four things it could ask for and three columns to ask in. Given the duration,
-  // a speed and a distance say the same thing — so exactly one of them is shown, the one the
-  // machine in front of you is actually displaying — and effort keeps the last slot either
-  // way, because on a bike it is what tells twenty easy minutes from twenty hard ones.
-  const col2 = cardio ? (paced ? { f: 'speed', step: 0.5, dec: true, hd: t('Speed (km/h)') } : effCol)
+  // Duration and effort always; then whichever one thing the machine displays, if it displays
+  // anything at all (see readoutOf). A game of padel has neither a speed nor a distance, and
+  // an empty column asking for one is how a made-up figure gets into the log.
+  const col2 = cardio ? (readout === 'speed' ? { f: 'speed', step: 0.5, dec: true, hd: t('Speed (km/h)') } : effCol)
     : timed ? ((bw && !added) ? null : loadCol)
       : (bw && !added) ? null : repCol
-  const col3 = cardio ? (paced ? effCol : { f: 'km', step: 0.5, dec: true, opt: true, hd: t('Distance (km)') })
+  const col3 = cardio ? (readout === 'speed' ? effCol
+    : readout === 'dist' ? { f: 'km', step: 0.5, dec: true, opt: true, hd: t('Distance (km)') } : null)
     : mode === 'reps' && eff ? effCol : null
   // Does a set here carry a weight at all? True for an ordinary lift, and for bodyweight work
   // once there is something on the belt; false for a plain pull-up, where col1 is the reps and

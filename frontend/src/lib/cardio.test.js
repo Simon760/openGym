@@ -1,21 +1,37 @@
 import { describe, it, expect } from 'vitest'
-import { isPaced, isOnce, cardioEffort, setLabel, buildSets, defaultConfig } from './history.js'
+import { isPaced, hasDist, readoutOf, isOnce, cardioEffort, setLabel, buildSets, defaultConfig } from './history.js'
 import { loadOfWorkouts, loadOfRoutine, loadOfActive, setWorth, CARDIO_MIN_PER_SET } from './muscles.js'
 import { EXIDX } from './exercises.js'
 import { sessionLoad } from './recovery.js'
 
-const BIKE = 'x002'            // assault bike — a machine with no speed to read
+const BIKE = 'x002'            // assault bike — a console that counts metres, not km/h
+const PADEL = 'x003'           // a court, with no console on it at all
 const RUN = '0685'             // a run — one of the four that does have one
 const emptyS = { exWeights: {}, workouts: [] }
 
 // "Y'a pas de vitesse de notée. Donc faut retirer, mais comment mesurer l'effort pour
 // estimer l'impact musculaire ?" — the removal, and the two things that replace it.
 describe('a cardio machine with no speed on it', () => {
-  it('is asked for no speed unless the exercise says it shows one', () => {
-    expect(isPaced({ id: BIKE })).toBe(false)
-    expect(isPaced({ id: RUN })).toBe(false)          // off until you say so, for both
-    expect(isPaced({ id: RUN, paced: true })).toBe(true)
+  it('asks for whichever one thing the machine displays, or for neither', () => {
+    // One question, not two: given the duration a speed and a distance are the same fact
+    // from either end, so a console shows you one of them — and plenty show neither.
+    expect(readoutOf({ id: RUN })).toBe('none')            // nothing until you say so
+    expect(readoutOf({ id: RUN, readout: 'speed' })).toBe('speed')
+    expect(readoutOf({ id: BIKE })).toBe('dist')           // a fan bike counts metres
+    expect(readoutOf({ id: PADEL })).toBe('none')          // a padel court has no console
+    expect(isPaced({ id: RUN, readout: 'speed' })).toBe(true)
+    expect(hasDist({ id: BIKE })).toBe(true)
     expect(defaultConfig(BIKE)).toEqual({ sets: 1, min: 20 })
+  })
+
+  it('still reads the flag it replaced, so nothing already logged changes', () => {
+    expect(readoutOf({ id: RUN, paced: true })).toBe('speed')
+    expect(isPaced({ id: RUN, paced: true })).toBe(true)
+  })
+
+  it('prints no kilometres for a game that never counted any', () => {
+    expect(setLabel(PADEL, { min: 60, km: 4, rpe: 8 })).toBe('60 min (RPE 8)')
+    expect(setLabel(BIKE, { min: 20, km: 7 })).toBe('20 min · 7 km')
   })
 
   it('stores no speed field at all, rather than a made-up one', () => {
@@ -44,7 +60,6 @@ describe('a cardio machine with no speed on it', () => {
 
 // "Mais log pas en série. C'est un jeu donc c'est one time."
 describe('an activity that happens once rather than in sets', () => {
-  const PADEL = 'x003'
 
   it('is one block however many sets the config asks for', () => {
     expect(isOnce({ id: PADEL })).toBe(true)

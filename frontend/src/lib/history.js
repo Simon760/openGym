@@ -1,6 +1,6 @@
 // Pure helpers over the state object S (ported 1:1 from the vanilla app).
 import { todayISO, isoOf, weekKey, fmtNum } from './format.js'
-import { isCardio, isBodyweightEq, isOnceEx } from './exercises.js'
+import { isCardio, isBodyweightEq, isOnceEx, readoutEx } from './exercises.js'
 import { t } from './i18n.js'
 import { weekFor } from './blocks.js'
 
@@ -35,15 +35,30 @@ export const isTimed = cfg => modeOf(cfg) === 'time'
 export const isBw = cfg => (cfg && cfg.bodyweight != null ? !!cfg.bodyweight : isBodyweightEq(cfg && cfg.id))
 
 /**
- * Does this cardio exercise have a speed to read off?
+ * What this cardio exercise displays, besides the time.
  *
- * Four of the catalogue's twenty-nine do — a run, a treadmill. The rest are a bike, a stepmill,
- * an elliptical, a rope, or a set of burpees: machines showing watts or RPM, or no machine at
- * all. Asking every one of them for km/h put a figure on screen that nothing was displaying,
- * and 8 km/h on an assault bike is not a small error, it is a meaningless one. Off unless the
- * exercise says otherwise, the same way the bodyweight flag works.
+ * One question, not two, because a speed and a distance are the same fact seen from either
+ * end once you know the duration — so a machine shows you one of them and there is no reason
+ * to ask for both. Three answers:
+ *   'speed' — km/h on the console: a treadmill, a run
+ *   'dist'  — metres or kilometres: a rower, an erg, a fan bike
+ *   'none'  — neither: a game of padel, a set of burpees, a rope
+ *
+ * `none` is the default, and it is the honest one: of the catalogue's twenty-nine cardio
+ * entries, twenty are movements with no console at all. Asking them anyway put a figure on
+ * screen that nothing was displaying — 8 km/h on an assault bike, kilometres on a padel court
+ * — and a made-up number is worse than a missing one, because it is printed straight back as
+ * though something had measured it.
  */
-export const isPaced = cfg => !!(cfg && cfg.paced)
+const READOUTS = ['speed', 'dist', 'none']
+export const readoutOf = cfg => {
+  if (READOUTS.includes(cfg && cfg.readout)) return cfg.readout
+  if (cfg && cfg.paced) return 'speed'                 // the flag this replaced
+  const ex = readoutEx(cfg && cfg.id)                  // what the catalogue says, if anything
+  return READOUTS.includes(ex) ? ex : 'none'
+}
+export const isPaced = cfg => readoutOf(cfg) === 'speed'
+export const hasDist = cfg => readoutOf(cfg) === 'dist'
 
 /** One block, never a count of them — see isOnceEx. Overridable per config, like isBw. */
 export const isOnce = cfg => (cfg && cfg.once != null ? !!cfg.once : isOnceEx(cfg && cfg.id))
@@ -131,7 +146,7 @@ export function setLabel(id, s, cfg) {
   // logged, and the effort last — on an unpaced machine that rating is the whole story.
   if (mode === 'cardio') return `${s.min || 0} min`
     + (isPaced(c) && s.speed > 0 ? ` @ ${fmtNum(s.speed)} km/h` : '')
-    + (s.km > 0 ? ` · ${fmtNum(s.km)} km` : '')
+    + (hasDist(c) && s.km > 0 ? ` · ${fmtNum(s.km)} km` : '')
     + effortTail(s)
   if (mode === 'time') return fmtSec(s.sec) + (s.w > 0 ? ` · ${fmtNum(s.w)}` : '')
   // Bodyweight reads as what you did — "12", or "+10 × 12" once there is a belt involved —

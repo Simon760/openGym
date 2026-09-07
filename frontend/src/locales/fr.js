@@ -1091,4 +1091,11 @@ export default {
   'Log a freestyle session': 'Noter une séance libre',
   'This was done earlier — drop the clock': 'C\'était fait avant — enlever le chrono',
   'Clock off — you’ll be asked for the duration at the end': 'Chrono coupé — la durée sera demandée à la fin',
+  'What does it display?': 'Qu\'est-ce qu\'elle affiche ?',
+  'Nothing': 'Rien',
+  'Speed': 'Vitesse',
+  'Distance': 'Distance',
+  'A treadmill or a run — km/h on the console.': 'Un tapis ou une course — des km/h sur la console.',
+  'A rower, an erg, a fan bike — metres or kilometres.': 'Un rameur, un ergo, un vélo à air — des mètres ou des kilomètres.',
+  'A game, a rope, a set of burpees. Duration and effort are the whole log, and effort is what tells twenty easy minutes from twenty hard ones.': 'Un jeu, une corde, des burpees. La durée et l\'effort suffisent, et c\'est l\'effort qui distingue vingt minutes faciles de vingt minutes dures.',
 }

@@ -3,7 +3,7 @@ import { useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
 import { EXDB, EXIDX, BODYPARTS, isCardio, isBodyweightEq, allExercises, equipmentOf, exName, exNameEn, exSearchText, exMatches } from './lib/exercises.js'
 import { fmtDate, fmtNum, fmtNum2, fmtKg, fmtVol, fmtDur, durPart, todayISO, isoOf, uid, exCount, DAYN, MONTHS_LONG, ACCENTS } from './lib/format.js'
-import { lastEntryFor, bestWeightFor, buildSets, effectiveRoutineId, effectiveRoutine, weekDays, swapDays, workoutVolume, setsDone, setsDoneActive, lastBW, supersetUnits, unitOf, setLabel, defaultConfig, warmEntry, cleanupSg, modeOf, effortOf, isBw, isOnce, isPerSide, sideReps, isWorking, setTop } from './lib/history.js'
+import { lastEntryFor, bestWeightFor, buildSets, effectiveRoutineId, effectiveRoutine, weekDays, swapDays, workoutVolume, setsDone, setsDoneActive, lastBW, supersetUnits, unitOf, setLabel, defaultConfig, warmEntry, cleanupSg, modeOf, effortOf, isBw, isOnce, readoutOf, isPerSide, sideReps, isWorking, setTop } from './lib/history.js'
 import { beep, vibrate } from './lib/sound.js'
 import { t, instrFor, getLang, INSTR_LANGS } from './lib/i18n.js'
 import { nav } from './lib/nav.js'
@@ -1064,10 +1064,12 @@ function ExConfig({ ex, existing, onSave, onDelete, close, routine }) {
     // rather than carrying a flag nothing downstream can read.
     const flags = {}
     if (bw !== isBodyweightEq(ex.id)) flags.bodyweight = bw
-    // The speed is written only for a machine that shows one; see isPaced. A stored 0 would
-    // print as "0 km/h" everywhere the set is read back.
+    // What the machine displays, and the speed only when it displays one — see readoutOf.
+    // A stored 0 would print as "0 km/h" everywhere the set is read back.
+    const readout = readoutOf({ ...c, id: ex.id })
     if (cardio) onSave({ sets: isOnce({ ...c, id: ex.id }) ? 1 : sets, min: Math.max(1, Math.round(c.min) || 20),
-      ...(c.paced ? { paced: true, speed: Math.max(0, c.speed || 8) } : {}) })
+      ...(readout === 'none' ? {} : { readout }),
+      ...(readout === 'speed' ? { speed: Math.max(0, c.speed || 8) } : {}) })
     else if (mode === 'time') onSave({ sets, mode: 'time', sec: Math.max(1, Math.round(c.sec) || 45), weight: Math.max(0, c.weight || 0), ...flags, ...prog })
     else {
       // A unilateral target is stored even: the split has to divide, and a typed 15 would
@@ -1094,17 +1096,19 @@ function ExConfig({ ex, existing, onSave, onDelete, close, routine }) {
       <Segmented className="seg-range" value={mode} onChange={setMode}
         options={[{ value: 'reps', label: t('Reps') }, { value: 'time', label: t('Time') }]} />
     </div>}
-    {/* A treadmill and a run show a speed; a bike, a rower, a stepmill and a set of burpees
-        do not — they show watts, or RPM, or nothing. Asked for only where there is one to
-        read, because a made-up 8 km/h is not a small error, it is a meaningless number that
-        then gets printed back as if it were measured. */}
+    {/* One question, not two: given the duration a speed and a distance are the same fact
+        from either end, so a machine shows you one of them. And plenty show neither — a game
+        of padel has no console at all, and an empty column asking for kilometres is how a
+        made-up figure gets into the log. */}
     {cardio && <>
-      <Row title={t('This machine shows a speed')}>
-        <Switch checked={!!c.paced} onChange={v => setC(x => ({ ...x, paced: v }))} />
-      </Row>
-      <div className="small dim" style={{ margin: '2px 2px 14px', lineHeight: 1.45 }}>
-        {c.paced ? t('A treadmill or a run. Distance makes way for it — given the minutes, the two say the same thing.')
-          : t('A bike, a rower, a stepmill. Effort is logged instead: it is what tells twenty easy minutes from twenty hard ones.')}
+      <div className="sect-b small muted" style={{ marginBottom: 6 }}>{t('What does it display?')}</div>
+      <Segmented className="seg-range" value={readoutOf({ ...c, id: ex.id })}
+        onChange={v => setC(x => ({ ...x, readout: v, paced: undefined }))}
+        options={[{ value: 'none', label: t('Nothing') }, { value: 'speed', label: t('Speed') }, { value: 'dist', label: t('Distance') }]} />
+      <div className="small dim" style={{ margin: '6px 2px 14px', lineHeight: 1.45 }}>
+        {readoutOf({ ...c, id: ex.id }) === 'speed' ? t('A treadmill or a run — km/h on the console.')
+          : readoutOf({ ...c, id: ex.id }) === 'dist' ? t('A rower, an erg, a fan bike — metres or kilometres.')
+            : t('A game, a rope, a set of burpees. Duration and effort are the whole log, and effort is what tells twenty easy minutes from twenty hard ones.')}
       </div>
     </>}
     <div className="row cfgrow" style={{ marginBottom: mode === 'time' ? 8 : 18 }}>
@@ -1112,7 +1116,7 @@ function ExConfig({ ex, existing, onSave, onDelete, close, routine }) {
         {/* A match has no interval count to give — see isOnceEx. */}
         {!isOnce({ ...c, id: ex.id }) && <Stepper label={t('Intervals')} value={c.sets} step={1} decimal={false} onChange={v => setC(x => ({ ...x, sets: v }))} />}
         <Stepper label={t('Minutes')} value={c.min} step={1} decimal={false} onChange={v => setC(x => ({ ...x, min: v }))} />
-        {c.paced && <Stepper label={t('Speed (km/h)')} value={c.speed} step={0.5} onChange={v => setC(x => ({ ...x, speed: v }))} />}
+        {readoutOf({ ...c, id: ex.id }) === 'speed' && <Stepper label={t('Speed (km/h)')} value={c.speed} step={0.5} onChange={v => setC(x => ({ ...x, speed: v }))} />}
       </> : mode === 'time' ? <>
         <Stepper label={t('Sets')} value={c.sets} step={1} decimal={false} onChange={v => setC(x => ({ ...x, sets: v }))} />
         <Stepper label={t('Seconds')} value={c.sec} step={5} decimal={false} onChange={v => setC(x => ({ ...x, sec: v }))} />

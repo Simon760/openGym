@@ -1099,4 +1099,11 @@ export default {
   'Log a freestyle session': 'Log a freestyle session',
   'This was done earlier — drop the clock': 'This was done earlier — drop the clock',
   'Clock off — you’ll be asked for the duration at the end': 'Clock off — you’ll be asked for the duration at the end',
+  'What does it display?': 'What does it display?',
+  'Nothing': 'Nothing',
+  'Speed': 'Speed',
+  'Distance': 'Distance',
+  'A treadmill or a run — km/h on the console.': 'A treadmill or a run — km/h on the console.',
+  'A rower, an erg, a fan bike — metres or kilometres.': 'A rower, an erg, a fan bike — metres or kilometres.',
+  'A game, a rope, a set of burpees. Duration and effort are the whole log, and effort is what tells twenty easy minutes from twenty hard ones.': 'A game, a rope, a set of burpees. Duration and effort are the whole log, and effort is what tells twenty easy minutes from twenty hard ones.',
 }

@@ -128,6 +128,9 @@ export const isCardio = idOrEx => (typeof idOrEx === 'string' ? EXIDX[idOrEx] : 
  */
 export const isOnceEx = idOrEx => !!(typeof idOrEx === 'string' ? EXIDX[idOrEx] : idOrEx)?.once
 
+/** What the catalogue says this exercise's console displays, if it says anything. */
+export const readoutEx = idOrEx => (typeof idOrEx === 'string' ? EXIDX[idOrEx] : idOrEx)?.readout || null
+
 // Exercises the dataset already knows carry no external load (issue #32) — a quarter of the
 // catalogue. This seeds the `bw` flag on a fresh config so a push-up never asks for a weight
 // nobody was going to enter. It is only the default: the flag lives on the config, so a dip

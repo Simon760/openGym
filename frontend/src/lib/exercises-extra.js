@@ -50,6 +50,8 @@ export const EX_EXTRA = [
     // Arms and legs both drive it, which is the whole point of the machine and the reason
     // it reads so much higher than a spin bike for the same minutes.
     sm: ['quadriceps', 'hamstrings', 'glutes', 'shoulders', 'back', 'core'],
+    // Its console shows metres, not km/h — see readoutOf.
+    readout: 'dist',
     // The machine goes by four names depending on who made it, and exMatches searches this
     // field — so it is found by whichever one you happen to call it.
     desc: 'Aussi appelé air bike, fan bike, Airdyne ou Echo bike.',
