@@ -4,7 +4,7 @@ import { useStore } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
 import { exOr, exName } from '../lib/exercises.js'
 import { effectiveRoutine, lastEntryFor, bestWeightFor, buildSets, defaultConfig, warmEntry, swapEntry, setBodyweight, setsDoneActive, supersetUnits, unitOf, setLabel, modeOf, isBw, readoutOf, isOnce, cardioEffort, isPerSide, sideReps, repStep, EFFORT, effortOf, stepEffort, capEffort } from '../lib/history.js'
-import { fmtNum, fmtDate, todayISO, exCount, DAYN } from '../lib/format.js'
+import { fmtNum, fmtDate, todayISO, exCount, uid, DAYN } from '../lib/format.js'
 import { beep, vibrate } from '../lib/sound.js'
 import { t } from '../lib/i18n.js'
 import { api } from '../lib/api.js'
@@ -13,15 +13,24 @@ import { startFlow, logPastSheet, exercisePicker, exConfigSheet, exerciseDetailS
 import Icon from '../components/Icon.jsx'
 import { Button, Check, NumberField } from '../components/ui.jsx'
 import { nextPrescription, applyPrescription } from '../lib/progression.js'
-import { glyphOf } from '../lib/glyphs.js'
+import { glyphOf, DEFAULT_GLYPH } from '../lib/glyphs.js'
 
 /* ---------- start chooser (no active workout) ---------- */
 function StartChooser() {
   const nav = useNavigate()
   const S = useStore(s => s.S)
+  const update = useStore(s => s.update)
   const todayR = effectiveRoutine(S, todayISO())
   const todayOvr = S.dayPlan[todayISO()] !== undefined
   const others = S.routines.filter(r => r !== todayR)
+  const doneToday = (S.workouts || []).filter(w => w.d === todayISO())
+  // Named for the day it belongs to, so a week of second sessions does not become a list of
+  // "New routine" with nothing to tell them apart. Renamed like any other in the editor.
+  const newSession = () => {
+    const r = { id: uid(), name: t('Session {0}', doneToday.length + 1), emoji: DEFAULT_GLYPH, ex: [] }
+    update(s => { s.routines.push(r) })
+    nav('/plan/r/' + r.id)
+  }
   return <div className="narrow">
     <div className="hdr"><div><h1>{t('Start workout')}</h1><div className="sub">{t(DAYN[new Date().getDay()])} — {todayR ? t('today is {0}', todayR.name) : t('rest day, but no one’s stopping you')}</div></div></div>
     {todayR && <div className="card" style={{ borderColor: 'var(--acc)' }}>
@@ -46,7 +55,19 @@ function StartChooser() {
         <button className="iconbtn" aria-label={t('Already did it — write it up')}
           onClick={e => { e.stopPropagation(); logPastSheet(r.id) }}><Icon name="history" /></button>
         <span className="tag acc">{t('Start')}</span></div>)}</div></>}
-    <div style={{ height: 14 }} />
+    {/* A second session of the day, whose content does not exist yet. Not "already done" and
+        not freestyle: it becomes a routine, kept, so the next time you train twice you start
+        it instead of building it again. Shown once the day already has one behind it, which
+        is when "second" means anything. */}
+    {doneToday.length > 0 && <><h4 className="sec">{t('Second session today')}</h4>
+      <div className="muted small" style={{ margin: '0 2px 8px', lineHeight: 1.45 }}>
+        {t('{0} already logged today. Build the next one — it is saved as a routine you can start again.',
+          doneToday.map(w => w.name).join(' · '))}
+      </div>
+      <Button icon="plus" onClick={newSession}>{t('Build a session and start it')}</Button>
+      <div style={{ height: 14 }} />
+    </>}
+    {!doneToday.length && <div style={{ height: 14 }} />}
     <Button icon="shuffle" onClick={() => startFlow(null)}>{t('Freestyle workout (pick as you go)')}</Button>
     <div style={{ height: 8 }} />
     {/* And the one that answers none of the above: a day other than today, or a session that

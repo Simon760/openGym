@@ -1123,4 +1123,9 @@ export default {
   'A treadmill or a run — km/h on the console.': 'A treadmill or a run — km/h on the console.',
   'A rower, an erg, a fan bike — metres or kilometres.': 'A rower, an erg, a fan bike — metres or kilometres.',
   'A game, a rope, a set of burpees. Duration and effort are the whole log, and effort is what tells twenty easy minutes from twenty hard ones.': 'A game, a rope, a set of burpees. Duration and effort are the whole log, and effort is what tells twenty easy minutes from twenty hard ones.',
+  '{0} sessions that day': '{0} sessions that day',
+  'Second session today': 'Second session today',
+  '{0} already logged today. Build the next one — it is saved as a routine you can start again.': '{0} already logged today. Build the next one — it is saved as a routine you can start again.',
+  'Build a session and start it': 'Build a session and start it',
+  'Session {0}': 'Session {0}',
 }

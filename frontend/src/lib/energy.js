@@ -314,8 +314,10 @@ export function sportKcal(S, iso, trim = WATCH_TRIM, tdee = S && S.tdee, now = D
   })
 
   // The session's figure is already only the session: nothing is budgeted twice inside it.
-  const w = (S.workouts || []).find(x => x.d === iso && num(x.watch && x.watch.kcal) != null)
-  if (w) return cut(w.watch.kcal, 'session')
+  // Every session of the day, not the first — two workouts in a day is two workouts, and
+  // taking whichever came first quietly dropped the other one out of the deficit.
+  const logged = (S.workouts || []).filter(x => x.d === iso && num(x.watch && x.watch.kcal) != null)
+  if (logged.length) return cut(logged.reduce((n, x) => n + num(x.watch.kcal), 0), 'session')
 
   const hd = healthFor(S, iso)
   // The same figure, filed against the day because no session was logged to carry it. Still

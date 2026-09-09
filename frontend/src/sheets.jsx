@@ -2130,6 +2130,16 @@ function WorkoutDetail({ w, close }) {
 }
 export const workoutDetailSheet = w => ui().openSheet(close => <WorkoutDetail w={w} close={close} />)
 
+/** A day that trained more than once: pick which session to open. */
+export const dayWorkoutsSheet = ws => ui().openSheet(close => <>
+  <h3>{t('{0} sessions that day', ws.length)}</h3>
+  <div className="list">
+    {ws.map(w => <WorkoutRow key={w.id} w={w} onClick={() => { close(); workoutDetailSheet(w) }} />)}
+  </div>
+  <div style={{ height: 12 }} />
+  <Button variant="ghost" className="dim" onClick={close}>{t('Close')}</Button>
+</>)
+
 /* ============================ calendar ============================ */
 function Calendar({ start, close }) {
   const st = useStore(s => s.S)

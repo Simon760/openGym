@@ -763,3 +763,35 @@ describe('counting the day you are standing in', () => {
     }
   })
 })
+
+// Two sessions in one day — a planned one and a second added on top. The day's expenditure
+// is both of them; reading only the first is a few hundred kcal missing from the deficit.
+describe('a day that trained twice', () => {
+  const P = { bmr: 1723, neat: 270, other: 80, sport: 230, stepBase: 9000 }
+  const twice = S({
+    tdee: P, watchTrim: 0,
+    nutrition: [{ d: day(0), kcal: 2000 }],
+    workouts: [
+      { id: 'a', d: day(0), name: 'Zone 2', watch: { kcal: 300 } },
+      { id: 'b', d: day(0), name: 'Push', watch: { kcal: 450 } }
+    ]
+  })
+  const NOW = Date.UTC(2026, 0, 1, 21)
+
+  it('spends both of them', () => {
+    expect(sportKcal(twice, day(0), 0, P)).toMatchObject({ kcal: 750, source: 'session' })
+  })
+
+  it('carries both into the day’s balance and the projection', () => {
+    const one = S({ ...twice, workouts: [twice.workouts[0]] })
+    const b2 = dayBalance(twice, day(0), P, undefined, NOW)
+    const b1 = dayBalance(one, day(0), P, undefined, NOW)
+    expect(b2.deficit - b1.deficit).toBe(450)      // exactly the session that was being dropped
+    expect(b2.sport).toBe(750)
+  })
+
+  it('is unbothered by a session that carries no figure', () => {
+    const partial = S({ ...twice, workouts: [twice.workouts[0], { id: 'b', d: day(0), name: 'Push' }] })
+    expect(sportKcal(partial, day(0), 0, P).kcal).toBe(300)
+  })
+})

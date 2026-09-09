@@ -4,7 +4,7 @@ import { useStore } from '../store/useStore.js'
 import { effectiveRoutine, effectiveRoutineId, streakWeeks, lastBW, setsDoneActive } from '../lib/history.js'
 import { fmtNum, fmtDate, todayISO, isoOf, weekKey, DAYS, fmtKg } from '../lib/format.js'
 import { t, dateLocale } from '../lib/i18n.js'
-import { bwSheet, goalSheet, dayOverrideSheet, workoutDetailSheet, calendarSheet, startFlow, loadStarterPlan, bwDeltaColor, nutriSheet, nutriGoalSheet, digestSheet, openPendingProgram, discardPendingProgram, sleepSheet, tdeeSheet, watchSheet, projectionSheet } from '../sheets.jsx'
+import { bwSheet, goalSheet, dayOverrideSheet, workoutDetailSheet, dayWorkoutsSheet, calendarSheet, startFlow, loadStarterPlan, bwDeltaColor, nutriSheet, nutriGoalSheet, digestSheet, openPendingProgram, discardPendingProgram, sleepSheet, tdeeSheet, watchSheet, projectionSheet } from '../sheets.jsx'
 import { entryFor, kcalFromMacros, macroSplit, remainingOf, goalFor, isRefeed, MACROS, MACRO_NAME, MACRO_COLOR } from '../lib/nutrition.js'
 import { composition, sleepFor, lastSleep, sleepHours, whenOf, sinceStart, bwAsOf } from '../lib/body.js'
 import { dayBalance, projectedWeight, KCAL_PER_KG_FAT } from '../lib/energy.js'
@@ -32,7 +32,10 @@ export default function Home() {
   const selDate = new Date(sel + 'T12:00:00')
   const routine = effectiveRoutine(S, iso)
   const todayOvr = S.dayPlan[iso] !== undefined
-  const dayW = (S.workouts || []).find(x => x.d === iso)
+  // Plural on purpose: a day can hold a second session, and reading only the first made the
+  // other one invisible from here even though it was in the history all along.
+  const dayWs = (S.workouts || []).filter(x => x.d === iso)
+  const dayW = dayWs[0] || null
   // The weight as that day could have known it: its own reading, or the last one before it.
   const bw = bwAsOf(S, iso)
   const bwIdx = bw ? S.bodyweight.findIndex(b => b.d === bw.d) : -1
@@ -76,13 +79,15 @@ export default function Home() {
   // What the watch gave that day, as one line. Absent figures stay absent rather than
   // reading as zero — a day nobody measured is not a day of no movement.
   const watchLine = (() => {
-    const w = (S.workouts || []).find(x => x.d === iso && x.watch)
+    const ws = dayWs.filter(x => x.watch)
     const h = (S.health || []).find(x => x.d === iso)
     const bits = []
     // The session's figures, wherever they ended up: on the workout when one was logged,
-    // on the day itself when the training happened without one.
-    const kcal = (w && w.watch.kcal) ?? (h && h.sport)
-    const min = (w && w.watch.minutes) ?? (h && h.sportMin)
+    // on the day itself when the training happened without one. Summed across the day's
+    // sessions, because a day that trained twice spent both.
+    const sum = f => (ws.some(x => x.watch[f] != null) ? ws.reduce((n, x) => n + (x.watch[f] || 0), 0) : null)
+    const kcal = sum('kcal') ?? (h && h.sport)
+    const min = sum('minutes') ?? (h && h.sportMin)
     if (kcal) bits.push(fmtNum(kcal) + ' kcal')
     if (min) bits.push(fmtNum(min) + ' min')
     if (h && h.kcal) bits.push(t('{0} kcal active', fmtNum(h.kcal)))
@@ -94,6 +99,7 @@ export default function Home() {
     // Today: start what is planned. Any other day: it is history, so the row leads to what was
   // done, or to changing what was planned for a day still ahead.
   const onToday = () => {
+    if (dayWs.length > 1) return dayWorkoutsSheet(dayWs)
     if (dayW) return workoutDetailSheet(dayW)
     if (!isToday) return dayOverrideSheet(iso)
     if (S.active) return nav('/workout')
@@ -128,7 +134,7 @@ export default function Home() {
           </span>
           <div style={{ minWidth: 0 }}>
             <div className="lbl2">{isToday ? t('Today') : fmtDate(iso, true)}</div>
-            <div className="ttl">{dayW ? dayW.name
+            <div className="ttl">{dayW ? dayWs.map(w => w.name).join(' · ')
               : isToday && S.active ? t('{0} — in progress', S.active.name)
               : routine ? routine.name : t('Rest day')}{todayOvr && routine ? ' · ' + t('rescheduled') : ''}</div>
           </div>
