@@ -1104,4 +1104,7 @@ export default {
   '{0} sessions today': '{0} séances aujourd\'hui',
   'Add a session': 'Ajouter une séance',
   'Build copied': 'Build copié',
+  '{0} set logged in this session will be lost.': 'La série notée dans cette séance sera perdue.',
+  '{0} sets logged in this session will be lost.': 'Les {0} séries notées dans cette séance seront perdues.',
+  'Leave it': 'Abandonner',
 }

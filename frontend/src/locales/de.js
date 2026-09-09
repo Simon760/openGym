@@ -1129,4 +1129,7 @@ export default {
   '{0} sessions today': '{0} sessions today',
   'Add a session': 'Add a session',
   'Build copied': 'Build copied',
+  '{0} set logged in this session will be lost.': '{0} set logged in this session will be lost.',
+  '{0} sets logged in this session will be lost.': '{0} sets logged in this session will be lost.',
+  'Leave it': 'Leave it',
 }

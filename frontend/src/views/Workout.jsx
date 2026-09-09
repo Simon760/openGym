@@ -464,12 +464,21 @@ function ActiveWorkout() {
     {/* The way out of a session you started by mistake. An active workout replaces the
         screen that offers the others — the tab even renames itself Resume — so pressing Start
         on the wrong one left the app looping back into it with no visible way to choose
-        again, short of discarding it and knowing that was the trick. Offered only while
-        nothing has been ticked, which is the only moment there is nothing to lose. */}
-    {done === 0 && <><div style={{ height: 8 }} />
-      <Button variant="ghost" className="dim" size="sm" icon="shuffle" onClick={() => {
-        update(s => { s.active = null }); stopRest(); nav('/workout')
-      }}>{t('Choose a different workout')}</Button></>}
+        again, short of discarding it and knowing that was the trick.
+        Always offered, never only while the session is empty: the moment a set is ticked is
+        exactly when someone is most sure they picked the wrong session, and a hidden exit is
+        the thing that made this cost three exchanges. What is at stake is said out loud
+        instead, and only when there is something at stake. */}
+    <div style={{ height: 8 }} />
+    <Button variant="ghost" className="dim" size="sm" icon="shuffle" onClick={() => {
+      const leave = () => { update(s => { s.active = null }); stopRest(); nav('/workout') }
+      if (!done) return leave()
+      confirmSheet({
+        title: t('Choose a different workout'),
+        message: t(done === 1 ? '{0} set logged in this session will be lost.' : '{0} sets logged in this session will be lost.', done),
+        confirmText: t('Leave it'), danger: true, onConfirm: leave
+      })
+    }}>{t('Choose a different workout')}</Button>
     {!A.log && <><div style={{ height: 8 }} />
       <Button variant="ghost" className="dim" size="sm" icon="history" onClick={() => update(s => {
         s.active.log = true

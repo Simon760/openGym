@@ -36,6 +36,9 @@ export default function Home() {
   // other one invisible from here even though it was in the history all along.
   const dayWs = (S.workouts || []).filter(x => x.d === iso)
   const dayW = dayWs[0] || null
+  // A workout open right now. It hides every other screen behind it — the Start tab renames
+  // itself Resume and shows this instead — so it has to be the first thing this row says.
+  const running = isToday && !!S.active
   // The weight as that day could have known it: its own reading, or the last one before it.
   const bw = bwAsOf(S, iso)
   const bwIdx = bw ? S.bodyweight.findIndex(b => b.d === bw.d) : -1
@@ -129,14 +132,18 @@ export default function Home() {
       <div className="week">{strip}</div>
       <div className="today-row" onClick={onToday}>
         <div className="row" style={{ gap: 9, minWidth: 0 }}>
-          <span className="lrow-i" style={{ background: dayW ? 'var(--acc)' : isToday && S.active ? 'var(--orange)' : routine ? 'var(--acc)' : 'var(--surface-3)' }}>
-            <Icon name={dayW ? 'checkCircle' : isToday && S.active ? 'timer' : routine ? glyphOf(routine.emoji) : 'moon'} />
+          {/* A session still running wins over one already finished. Both can be true at
+              once — finish the morning's, start another — and the tick alone said "done"
+              while a workout was open, which is the state that captures the Start tab and
+              leaves everything else looking like it changed nothing. */}
+          <span className="lrow-i" style={{ background: running ? 'var(--orange)' : dayW ? 'var(--acc)' : routine ? 'var(--acc)' : 'var(--surface-3)' }}>
+            <Icon name={running ? 'timer' : dayW ? 'checkCircle' : routine ? glyphOf(routine.emoji) : 'moon'} />
           </span>
           <div style={{ minWidth: 0 }}>
             <div className="lbl2">{isToday ? t('Today') : fmtDate(iso, true)}</div>
-            <div className="ttl">{dayW ? dayWs.map(w => w.name).join(' · ')
-              : isToday && S.active ? t('{0} — in progress', S.active.name)
-              : routine ? routine.name : t('Rest day')}{todayOvr && routine ? ' · ' + t('rescheduled') : ''}</div>
+            <div className="ttl">{running ? t('{0} — in progress', S.active.name)
+              : dayW ? dayWs.map(w => w.name).join(' · ')
+                : routine ? routine.name : t('Rest day')}{todayOvr && routine ? ' · ' + t('rescheduled') : ''}</div>
           </div>
         </div>
         <div className="row" style={{ gap: 8, flex: 'none' }}>
