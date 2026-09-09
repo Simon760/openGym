@@ -863,6 +863,9 @@ h4.sec{
 
 /* --- stat tiles --- */
 .tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+/* Three figures read as three, not as two and an orphan on a row of its own. */
+.tiles.three{grid-template-columns:repeat(3,1fr);gap:8px}
+.tiles.three .tile{padding:11px 10px}
 .tile{background:var(--surface);border-radius:var(--r-card);padding:14px}
 .tile .l{
   color:var(--label-2);font-size:13px;font-weight:400;letter-spacing:-.004em;

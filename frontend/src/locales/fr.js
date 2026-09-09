@@ -1099,8 +1099,8 @@ export default {
   'A rower, an erg, a fan bike — metres or kilometres.': 'Un rameur, un ergo, un vélo à air — des mètres ou des kilomètres.',
   'A game, a rope, a set of burpees. Duration and effort are the whole log, and effort is what tells twenty easy minutes from twenty hard ones.': 'Un jeu, une corde, des burpees. La durée et l\'effort suffisent, et c\'est l\'effort qui distingue vingt minutes faciles de vingt minutes dures.',
   '{0} sessions that day': '{0} séances ce jour-là',
-  'Second session today': 'Deuxième séance aujourd\'hui',
-  '{0} already logged today. Build the next one — it is saved as a routine you can start again.': '{0} déjà notée aujourd\'hui. Construis la suivante — elle est enregistrée comme routine que tu pourras relancer.',
-  'Build a session and start it': 'Construire une séance et la démarrer',
   'Session {0}': 'Séance {0}',
+  'Done today': 'Fait aujourd\'hui',
+  '{0} sessions today': '{0} séances aujourd\'hui',
+  'Add a session': 'Ajouter une séance',
 }

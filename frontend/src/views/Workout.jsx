@@ -4,12 +4,12 @@ import { useStore } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
 import { exOr, exName } from '../lib/exercises.js'
 import { effectiveRoutine, lastEntryFor, bestWeightFor, buildSets, defaultConfig, warmEntry, swapEntry, setBodyweight, setsDoneActive, supersetUnits, unitOf, setLabel, modeOf, isBw, readoutOf, isOnce, cardioEffort, isPerSide, sideReps, repStep, EFFORT, effortOf, stepEffort, capEffort } from '../lib/history.js'
-import { fmtNum, fmtDate, todayISO, exCount, uid, DAYN } from '../lib/format.js'
+import { fmtNum, fmtDate, fmtDur, fmtVol, todayISO, exCount, uid, DAYN } from '../lib/format.js'
 import { beep, vibrate } from '../lib/sound.js'
 import { t } from '../lib/i18n.js'
 import { api } from '../lib/api.js'
 import Media from '../components/Media.jsx'
-import { startFlow, logPastSheet, exercisePicker, exConfigSheet, exerciseDetailSheet, topWeightSheet, finishWorkout, workoutCompleteSheet, confirmSheet } from '../sheets.jsx'
+import { startFlow, logPastSheet, exercisePicker, exConfigSheet, exerciseDetailSheet, topWeightSheet, finishWorkout, workoutCompleteSheet, confirmSheet, workoutDetailSheet, dayWorkoutsSheet } from '../sheets.jsx'
 import Icon from '../components/Icon.jsx'
 import { Button, Check, NumberField } from '../components/ui.jsx'
 import { nextPrescription, applyPrescription } from '../lib/progression.js'
@@ -24,6 +24,13 @@ function StartChooser() {
   const todayOvr = S.dayPlan[todayISO()] !== undefined
   const others = S.routines.filter(r => r !== todayR)
   const doneToday = (S.workouts || []).filter(w => w.d === todayISO())
+  // Summed over the day, and each figure absent rather than zero when nothing carried it —
+  // a session typed up without a duration has none, and "0 min" would claim it did.
+  const recap = doneToday.reduce((a, w) => ({
+    ms: a.ms + (w.end && w.start ? w.end - w.start : 0),
+    kcal: a.kcal + ((w.watch && w.watch.kcal) || 0),
+    vol: a.vol + (w.vol || 0)
+  }), { ms: 0, kcal: 0, vol: 0 })
   // Named for the day it belongs to, so a week of second sessions does not become a list of
   // "New routine" with nothing to tell them apart. Renamed like any other in the editor.
   const newSession = () => {
@@ -33,7 +40,29 @@ function StartChooser() {
   }
   return <div className="narrow">
     <div className="hdr"><div><h1>{t('Start workout')}</h1><div className="sub">{t(DAYN[new Date().getDay()])} — {todayR ? t('today is {0}', todayR.name) : t('rest day, but no one’s stopping you')}</div></div></div>
-    {todayR && <div className="card" style={{ borderColor: 'var(--acc)' }}>
+    {/* Once the day is logged, offering to start it again is noise: what you came for is
+        what it came to. The recap takes the card, and the only thing left to decide sits
+        under it. Before that, the card is the two ways of doing it. */}
+    {doneToday.length > 0 ? <>
+      <div className="card" onClick={() => (doneToday.length > 1 ? dayWorkoutsSheet(doneToday) : workoutDetailSheet(doneToday[0]))}
+        style={{ borderColor: 'var(--acc)', cursor: 'pointer' }}>
+        <div className="row between" style={{ marginBottom: 12 }}>
+          <div><div className="big">{doneToday.map(w => w.name).join(' · ')}</div>
+            <div className="muted small">{t(doneToday.length === 1 ? 'Done today' : '{0} sessions today', doneToday.length)}</div></div>
+          <span className="lrow-i" style={{ width: 38, height: 38, borderRadius: 9, fontSize: 22, background: 'var(--acc)' }}><Icon name="checkCircle" /></span>
+        </div>
+        <div className="tiles three" style={{ textAlign: 'left', marginBottom: 0 }}>
+          <div className="tile"><div className="l">{t('Duration')}</div>
+            <div className="v" style={{ fontSize: '1.1rem' }}>{recap.ms ? fmtDur(recap.ms) : '—'}</div></div>
+          <div className="tile"><div className="l">{t('Energy')}</div>
+            <div className="v" style={{ fontSize: '1.1rem' }}>{recap.kcal ? fmtNum(recap.kcal) + ' kcal' : '—'}</div></div>
+          <div className="tile"><div className="l">{t('Volume')}</div>
+            <div className="v" style={{ fontSize: '1.1rem' }}>{fmtVol(recap.vol, S.unit)}</div></div>
+        </div>
+      </div>
+      <Button icon="plus" onClick={newSession}>{t('Add a session')}</Button>
+      <div style={{ height: 6 }} />
+    </> : todayR && <div className="card" style={{ borderColor: 'var(--acc)' }}>
       <h2 className="accent">{t("Today's plan")}{todayOvr ? ' · ' + t('rescheduled') : ''}</h2>
       <div className="row between" style={{ marginBottom: 12 }}>
         <div><div className="big">{todayR.name}</div><div className="muted small">{exCount(todayR.ex.length)}</div></div>
@@ -41,9 +70,7 @@ function StartChooser() {
       </div>
       {/* Every way of starting a session is also a way of writing one up, because a session
           you did without the app in your hand is still that session — the planned one, out of
-          the programme, not a freestyle stand-in for it. The choice sits beside each start
-          rather than in one entry of its own at the bottom, which is where it kept being
-          looked for and not found. */}
+          the programme, not a freestyle stand-in for it. */}
       <Button variant="primary" icon="play" onClick={() => startFlow(todayR.id)}>{t('Start {0}', todayR.name)}</Button>
       <div style={{ height: 8 }} />
       <Button icon="history" onClick={() => logPastSheet(todayR.id)}>{t('Already did it — write it up')}</Button>
@@ -55,19 +82,7 @@ function StartChooser() {
         <button className="iconbtn" aria-label={t('Already did it — write it up')}
           onClick={e => { e.stopPropagation(); logPastSheet(r.id) }}><Icon name="history" /></button>
         <span className="tag acc">{t('Start')}</span></div>)}</div></>}
-    {/* A second session of the day, whose content does not exist yet. Not "already done" and
-        not freestyle: it becomes a routine, kept, so the next time you train twice you start
-        it instead of building it again. Shown once the day already has one behind it, which
-        is when "second" means anything. */}
-    {doneToday.length > 0 && <><h4 className="sec">{t('Second session today')}</h4>
-      <div className="muted small" style={{ margin: '0 2px 8px', lineHeight: 1.45 }}>
-        {t('{0} already logged today. Build the next one — it is saved as a routine you can start again.',
-          doneToday.map(w => w.name).join(' · '))}
-      </div>
-      <Button icon="plus" onClick={newSession}>{t('Build a session and start it')}</Button>
-      <div style={{ height: 14 }} />
-    </>}
-    {!doneToday.length && <div style={{ height: 14 }} />}
+    <div style={{ height: 14 }} />
     <Button icon="shuffle" onClick={() => startFlow(null)}>{t('Freestyle workout (pick as you go)')}</Button>
     <div style={{ height: 8 }} />
     {/* And the one that answers none of the above: a day other than today, or a session that
