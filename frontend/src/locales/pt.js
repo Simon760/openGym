@@ -1111,4 +1111,5 @@ export default {
   'Done today': 'Done today',
   '{0} sessions today': '{0} sessions today',
   'Add a session': 'Add a session',
+  'Build copied': 'Build copied',
 }

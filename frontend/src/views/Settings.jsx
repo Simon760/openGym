@@ -16,6 +16,9 @@ import { loadStarterPlan, confirmSheet, importFromApp, healthImportSheet } from 
 import Icon from '../components/Icon.jsx'
 import { Section, Row, SelectRow, Switch, Segmented, Button, TextField } from '../components/ui.jsx'
 import { APP_NAME, FILE_PREFIX, UPSTREAM, UPSTREAM_REPO } from '../lib/brand.js'
+
+/* Stamped in by vite.config.js; a bare `vitest` run has no define, so it falls back. */
+const BUILD = typeof __BUILD__ !== 'undefined' ? __BUILD__ : { v: '?', sha: 'dev', at: '' }
 import { suppOn } from '../lib/supp.js'
 import { countsToday } from '../lib/energy.js'
 
@@ -239,7 +242,13 @@ export default function Settings() {
 
     <div className="dim small" style={{ textAlign: 'center', marginTop: 4, lineHeight: 1.6 }}>
       {APP_NAME} · {t('free & open source (AGPL v3)')}<br />
-      {t('a fork of')} <a href={UPSTREAM_REPO} target="_blank" rel="noopener">{UPSTREAM}</a> · exercise data: hasaneyldrm/exercises-dataset (CC)
+      {t('a fork of')} <a href={UPSTREAM_REPO} target="_blank" rel="noopener">{UPSTREAM}</a> · exercise data: hasaneyldrm/exercises-dataset (CC)<br />
+      {/* Which build is actually on this phone. Tap to copy — the one thing a bug report
+          needs and the one thing neither side could see. */}
+      <span style={{ cursor: 'pointer', fontVariantNumeric: 'tabular-nums' }}
+        onClick={() => { navigator.clipboard?.writeText(`v${BUILD.v} · ${BUILD.sha} · ${BUILD.at}`).catch(() => {}); toast(t('Build copied')) }}>
+        v{BUILD.v} · {BUILD.sha} · {BUILD.at}
+      </span>
     </div>
   </div>
 }

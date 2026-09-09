@@ -1103,4 +1103,5 @@ export default {
   'Done today': 'Fait aujourd\'hui',
   '{0} sessions today': '{0} séances aujourd\'hui',
   'Add a session': 'Ajouter une séance',
+  'Build copied': 'Build copié',
 }
