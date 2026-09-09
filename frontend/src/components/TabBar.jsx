@@ -1,7 +1,5 @@
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
-import { effectiveRoutine } from '../lib/history.js'
-import { todayISO } from '../lib/format.js'
 import { t } from '../lib/i18n.js'
 import Icon from './Icon.jsx'
 
@@ -16,7 +14,7 @@ function Tab({ on, nav, icon, to, label }) {
   )
 }
 
-export default function TabBar({ onStart }) {
+export default function TabBar() {
   const nav = useNavigate()
   const loc = useLocation()
   const S = useStore(s => s.S)
@@ -26,13 +24,20 @@ export default function TabBar({ onStart }) {
   const cur = loc.pathname.split('/')[1] || 'home'
   const on = k => cur === k || (cur === 'history' && k === 'stats') || (cur === 'settings' && k === 'home')
 
-  const startWorkout = () => {
-    if (!S.active) {
-      const r = effectiveRoutine(S, todayISO())
-      if (r && r.ex.length) { onStart(r.id); return }
-    }
-    nav('/workout')
-  }
+  /**
+   * The tab goes to the workout screen. That is all it does.
+   *
+   * It used to start today's planned routine outright whenever one existed and nothing was
+   * running — a navigation control that silently created a session. The screen it skipped is
+   * the one holding every other answer: the recap of a day already trained, "already did it",
+   * the other routines, a second session, freestyle. So on any day with a plan, that screen
+   * was unreachable, and each tap on Start built another empty session of the same routine
+   * on top of the last. From the outside that is exactly "it restarts my workout", and no
+   * amount of work on a screen nobody could open was ever going to show up.
+   *
+   * One extra tap on an ordinary day; the primary button is the first thing on that screen.
+   */
+  const startWorkout = () => nav('/workout')
   return (
     <nav id="tabbar">
       <Tab on={on('home')} nav={nav} icon="house" to="/home" label={t('Home')} />

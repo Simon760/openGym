@@ -7,7 +7,6 @@ import { ACCENTS } from './lib/format.js'
 import { setLang, useLang } from './lib/i18n.js'
 import { setNav } from './lib/nav.js'
 import { useWakeLock } from './lib/wakelock.js'
-import { startFlow } from './sheets.jsx'
 import Icon from './components/Icon.jsx'
 import TabBar from './components/TabBar.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
@@ -90,7 +89,7 @@ function Shell() {
           )}
         </ErrorBoundary>
       </div>
-      <TabBar onStart={startFlow} />
+      <TabBar />
       <RestTimer />
       <Modals />
       <Toast />

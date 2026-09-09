@@ -68,6 +68,14 @@ function StartChooser() {
         <div><div className="big">{todayR.name}</div><div className="muted small">{exCount(todayR.ex.length)}</div></div>
         <span className="lrow-i" style={{ width: 38, height: 38, borderRadius: 9, fontSize: 22 }}><Icon name={glyphOf(todayR.emoji)} /></span>
       </div>
+      {/* Said out loud, because the alternative is a screen that looks identical whether the
+          day is untouched or its session was logged an hour ago — and Start, which always
+          builds a new session and checks nothing, then reads as "it restarted my workout".
+          The state was the answer all along; it was just never on screen. */}
+      <div className="small" style={{ color: 'var(--yellow)', margin: '-4px 2px 12px', lineHeight: 1.45 }}>
+        <Icon name="info" style={{ fontSize: 13, marginRight: 5, verticalAlign: '-2px' }} />
+        {t('Nothing logged today yet — Start builds a new session. Use “Already did it” for one you have done.')}
+      </div>
       {/* Every way of starting a session is also a way of writing one up, because a session
           you did without the app in your hand is still that session — the planned one, out of
           the programme, not a freestyle stand-in for it. */}
