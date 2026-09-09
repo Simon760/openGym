@@ -132,18 +132,23 @@ export default function Home() {
       <div className="week">{strip}</div>
       <div className="today-row" onClick={onToday}>
         <div className="row" style={{ gap: 9, minWidth: 0 }}>
-          {/* A session still running wins over one already finished. Both can be true at
-              once — finish the morning's, start another — and the tick alone said "done"
-              while a workout was open, which is the state that captures the Start tab and
-              leaves everything else looking like it changed nothing. */}
-          <span className="lrow-i" style={{ background: running ? 'var(--orange)' : dayW ? 'var(--acc)' : routine ? 'var(--acc)' : 'var(--surface-3)' }}>
+          {/* Three states, three looks, and none of them the same colour as another. A
+              planned session and a finished one both drew on the accent, differing only by
+              the glyph inside — so "Zone 2, still to do" and "Zone 2, done" were the same
+              blue circle with the same name beside it, and neither of us could tell from a
+              description which one was on screen. That cost five exchanges.
+              Running wins over finished: both can be true at once, and an open workout is
+              what captures the Start tab. */}
+          <span className="lrow-i" style={{ background: running ? 'var(--orange)' : dayW ? 'var(--acc)' : 'var(--surface-3)' }}>
             <Icon name={running ? 'timer' : dayW ? 'checkCircle' : routine ? glyphOf(routine.emoji) : 'moon'} />
           </span>
           <div style={{ minWidth: 0 }}>
             <div className="lbl2">{isToday ? t('Today') : fmtDate(iso, true)}</div>
+            {/* And said in words as well as in colour, because a colour can only be compared
+                against another colour you are not currently looking at. */}
             <div className="ttl">{running ? t('{0} — in progress', S.active.name)
-              : dayW ? dayWs.map(w => w.name).join(' · ')
-                : routine ? routine.name : t('Rest day')}{todayOvr && routine ? ' · ' + t('rescheduled') : ''}</div>
+              : dayW ? t('{0} — done', dayWs.map(w => w.name).join(' · '))
+                : routine ? t('{0} — to do', routine.name) : t('Rest day')}{todayOvr && routine ? ' · ' + t('rescheduled') : ''}</div>
           </div>
         </div>
         <div className="row" style={{ gap: 8, flex: 'none' }}>

@@ -1132,4 +1132,6 @@ export default {
   '{0} set logged in this session will be lost.': '{0} set logged in this session will be lost.',
   '{0} sets logged in this session will be lost.': '{0} sets logged in this session will be lost.',
   'Leave it': 'Leave it',
+  '{0} — done': '{0} — done',
+  '{0} — to do': '{0} — to do',
 }
