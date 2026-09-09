@@ -2116,7 +2116,19 @@ function WorkoutDetail({ w, close }) {
   const st = useStore(s => s.S)
   return <>
     <h3>{w.name}</h3>
-    <div className="muted small" style={{ marginBottom: 12 }}>{[fmtDate(w.d, true), ...durPart(w.end - w.start), fmtVol(w.vol, st.unit), ...(w.bw ? [fmtNum(w.bw) + ' ' + st.unit] : [])].join(' · ')}</div>
+    {/* Date, how long, what it cost, how much was moved, how many sets, and the weight it
+        was logged at. The energy was missing and it is the one figure here that moves the
+        day's deficit. Each piece is dropped when nothing recorded it, never shown as zero. */}
+    <div className="muted small" style={{ marginBottom: 12 }}>{[
+      fmtDate(w.d, true),
+      ...durPart(w.end - w.start),
+      ...(w.watch && w.watch.kcal > 0 ? [fmtNum(w.watch.kcal) + ' kcal'] : []),
+      // A cardio session moved no load; "0 kg" beside a bodyweight in the same units is
+      // noise pretending to be a measurement.
+      ...(w.vol > 0 ? [fmtVol(w.vol, st.unit)] : []),
+      t(setsDone(w) === 1 ? '{0} set' : '{0} sets', setsDone(w)),
+      ...(w.bw ? [fmtNum(w.bw) + ' ' + st.unit] : [])
+    ].join(' · ')}</div>
     {w.entries.map((e, i) => {
       const ex = EXIDX[e.id]
       return <div key={i} className="row" style={{ marginBottom: 12, alignItems: 'flex-start' }}>
@@ -2189,7 +2201,9 @@ export function WorkoutRow({ w, onClick }) {
   return <div className="item" onClick={onClick}>
     <span className="lrow-i" style={{ width: 34, height: 34, borderRadius: 8, fontSize: 19 }}><Icon name={glyph} /></span>
     <div className="grow"><div className="tt">{w.name}</div>
-      <div className="ss">{[fmtDate(w.d, true), ...durPart(w.end - w.start), t('{0} sets', setsDone(w)), fmtVol(w.vol, st.unit)].join(' · ')}</div></div>
+      <div className="ss">{[fmtDate(w.d, true), ...durPart(w.end - w.start),
+        t(setsDone(w) === 1 ? '{0} set' : '{0} sets', setsDone(w)),
+        ...(w.vol > 0 ? [fmtVol(w.vol, st.unit)] : [])].join(' · ')}</div></div>
     {w.prs && w.prs.length > 0 && <span className="pr"><Icon name="trophy" />{w.prs.length} PR</span>}
     <Icon name="chevronRight" className="chev" />
   </div>

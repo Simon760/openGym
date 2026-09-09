@@ -521,8 +521,20 @@ export default function Stats() {
       <button className="iconbtn" onClick={() => nav('/history')} aria-label={t('History')}><Icon name="history" /></button></div>
 
     <div className="tiles">
-      <div className="tile"><div className="l"><Icon name="dumbbell" />{t('Workouts')}</div><div className="v">{S.workouts.length}</div></div>
-      <div className="tile"><div className="l"><Icon name="calendar" />{t('This month')}</div><div className="v">{monthW}</div></div>
+      {/* A count of sessions is a way into them: tapping either opens the history, where
+          every one of them has its own recap. A number you cannot follow is a dead end. */}
+      <button className="tile" style={{ font: 'inherit', color: 'inherit', textAlign: 'left', border: 0, cursor: 'pointer' }}
+        disabled={!S.workouts.length} onClick={() => nav('/history')}>
+        <div className="l"><Icon name="dumbbell" />{t('Workouts')}
+          {S.workouts.length > 0 && <Icon name="chevronRight" style={{ fontSize: 11, opacity: .5, marginLeft: 'auto' }} />}</div>
+        <div className="v">{S.workouts.length}</div>
+      </button>
+      <button className="tile" style={{ font: 'inherit', color: 'inherit', textAlign: 'left', border: 0, cursor: 'pointer' }}
+        disabled={!S.workouts.length} onClick={() => nav('/history')}>
+        <div className="l"><Icon name="calendar" />{t('This month')}
+          {S.workouts.length > 0 && <Icon name="chevronRight" style={{ fontSize: 11, opacity: .5, marginLeft: 'auto' }} />}</div>
+        <div className="v">{monthW}</div>
+      </button>
       <div className="tile"><div className="l"><Icon name="flame" />{t('Week streak')}</div><div className="v">{streakWeeks(S)}</div></div>
       <div className="tile"><div className="l"><Icon name="scale" />{t('Weight 30d')}</div><div className="v" style={{ fontSize: 22, color: bwDelta30 === null ? 'inherit' : bwDeltaColor(bwDelta30, (lastBW(S) || {}).w || 0) }}>{bwDelta30 === null ? '—' : (bwDelta30 > 0 ? '+' : '') + fmtNum(bwDelta30) + ' ' + S.unit}</div></div>
     </div>

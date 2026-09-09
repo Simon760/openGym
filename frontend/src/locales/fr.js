@@ -1110,4 +1110,5 @@ export default {
   '{0} — done': '{0} — faite',
   '{0} — to do': '{0} — à faire',
   'Nothing logged today yet — Start builds a new session. Use “Already did it” for one you have done.': 'Aucune séance enregistrée aujourd\'hui — Commencer en crée une neuve. Utilise « Déjà faite » pour une séance que tu as faite.',
+  '{0} set': '{0} série',
 }

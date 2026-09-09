@@ -1135,4 +1135,5 @@ export default {
   '{0} — done': '{0} — done',
   '{0} — to do': '{0} — to do',
   'Nothing logged today yet — Start builds a new session. Use “Already did it” for one you have done.': 'Nothing logged today yet — Start builds a new session. Use “Already did it” for one you have done.',
+  '{0} set': '{0} set',
 }
