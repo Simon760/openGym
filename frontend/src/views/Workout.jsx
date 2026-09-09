@@ -446,6 +446,15 @@ function ActiveWorkout() {
         and never again — so pressing Start on a session you had already done left you with a
         clock counting your typing and no way back, since the screen that offers the other
         door is the one an active session replaces. */}
+    {/* The way out of a session you started by mistake. An active workout replaces the
+        screen that offers the others — the tab even renames itself Resume — so pressing Start
+        on the wrong one left the app looping back into it with no visible way to choose
+        again, short of discarding it and knowing that was the trick. Offered only while
+        nothing has been ticked, which is the only moment there is nothing to lose. */}
+    {done === 0 && <><div style={{ height: 8 }} />
+      <Button variant="ghost" className="dim" size="sm" icon="shuffle" onClick={() => {
+        update(s => { s.active = null }); stopRest(); nav('/workout')
+      }}>{t('Choose a different workout')}</Button></>}
     {!A.log && <><div style={{ height: 8 }} />
       <Button variant="ghost" className="dim" size="sm" icon="history" onClick={() => update(s => {
         s.active.log = true
