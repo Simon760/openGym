@@ -477,6 +477,15 @@ export const durMs = w => (w && w.watch && w.watch.minutes > 0
  * Zero means absent rather than zero, here as everywhere: clearing a field takes the figure
  * off the session instead of recording that it cost nothing.
  */
+/**
+ * Whether a session's duration is something to ask for, or something already measured.
+ *
+ * A live session ran a clock and is not asked — a measured duration is not a default to type
+ * over. One that was typed carries `watch.minutes`, which is the record that it was typed, and
+ * is asked again so it can be corrected.
+ */
+export const asksDuration = w => !!(w && w.watch && w.watch.minutes > 0) || !(w && w.end && w.start)
+
 export function setFigures(w, { kcal = 0, mins = 0, ask = true, keepClock = false } = {}) {
   const watch = { ...(w.watch || {}) }
   if (kcal > 0) watch.kcal = Math.round(kcal)

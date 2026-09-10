@@ -128,6 +128,56 @@ describe('applyHealth', () => {
     expect(S.workouts.map(w => w.watch.kcal)).toEqual([400, 300])
   })
 
+  it('writes a figure for each session the sheet asked about', () => {
+    // A day trained twice is two numbers on the watch. One pair of fields could only ever
+    // take one of them, and the other session stayed empty for good.
+    const S = base({ workouts: [
+      { id: 'w1', d: D, name: 'Zone 2', watch: { kcal: 623 }, entries: [] },
+      { id: 'w2', d: D, name: 'Séance 2', entries: [] }
+    ] })
+    const r = applyHealth(S, { d: D, sessions: [{ id: 'w1', kcal: 623 }, { id: 'w2', kcal: 300 }] })
+    expect(S.workouts.map(w => w.watch.kcal)).toEqual([623, 300])
+    expect(r.wrote.join(' | ')).toContain('Séance 2')
+    // and the day now totals both, which is the whole point
+    expect(S.workouts.reduce((n, w) => n + w.watch.kcal, 0)).toBe(923)
+  })
+
+  it('gives a session with no clock one out of the duration typed for it', () => {
+    const S = base({ workouts: [
+      { id: 'w1', d: D, name: 'Zone 2', entries: [] },
+      { id: 'w2', d: D, name: 'Séance 2', entries: [] }
+    ] })
+    applyHealth(S, { d: D, sessions: [{ id: 'w2', kcal: 300, minutes: 45 }] })
+    expect(S.workouts[1].watch).toEqual({ kcal: 300, minutes: 45 })
+    expect(S.workouts[1].end - S.workouts[1].start).toBe(45 * 60000)
+    expect(S.workouts[0].watch).toBeUndefined()
+  })
+
+  it('leaves a session alone when nothing was typed for it', () => {
+    const S = base({ workouts: [
+      { id: 'w1', d: D, name: 'Zone 2', watch: { kcal: 623 }, entries: [] },
+      { id: 'w2', d: D, name: 'Séance 2', entries: [] }
+    ] })
+    applyHealth(S, { d: D, sessions: [{ id: 'w2', kcal: 300 }] })
+    expect(S.workouts[0].watch).toEqual({ kcal: 623 })
+    expect(S.workouts[1].watch).toEqual({ kcal: 300 })
+  })
+
+  it('ignores a session id that is not there', () => {
+    const S = base({ workouts: [{ id: 'w1', d: D, name: 'Zone 2', entries: [] }] })
+    const r = applyHealth(S, { d: D, sessions: [{ id: 'nope', kcal: 300 }] })
+    expect(S.workouts[0].watch).toBeUndefined()
+    expect(r.wrote).toHaveLength(0)
+  })
+
+  it('keeps a session\u2019s own time of day, moving only its end', () => {
+    const start = new Date(D + 'T09:00:00').getTime()
+    const S = base({ workouts: [{ id: 'w1', d: D, name: 'Zone 2', start, end: start + 3600000, entries: [] }] })
+    applyHealth(S, { d: D, sessions: [{ id: 'w1', minutes: 58 }] })
+    expect(S.workouts[0].start).toBe(start)
+    expect(S.workouts[0].end).toBe(start + 58 * 60000)
+  })
+
   it('still says so when the session details carry no figures at all', () => {
     const S = base()
     const r = applyHealth(S, { d: D, workout: { type: 'HIIT' } })

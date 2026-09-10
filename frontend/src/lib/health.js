@@ -18,7 +18,7 @@ import { extractJSON } from './plan-import.js'
 import { parseCSV, parseWhen, unfence, DELIMS } from './import-csv.js'
 import { putSleep, validSleep, validBodyFat, validTime, SLEEP_MAX } from './body.js'
 import { putEntry, entryFor } from './nutrition.js'
-import { todayISO, fmtDate } from './format.js'
+import { todayISO, fmtDate, fmtNum } from './format.js'
 import { t } from './i18n.js'
 
 export const HEALTH_FMT = 1
@@ -231,6 +231,32 @@ export function applyHealth(S, p) {
     } else {
       report.skipped.push(t('a body-fat reading with no weigh-in that day to attach it to'))
     }
+  }
+
+  // Figures given per session, by name, because the day held more than one and the sheet
+  // asked for each of them. A single pair of fields could only ever describe one session: you
+  // typed the one you had in mind, saved, and the other stayed empty for good — which is the
+  // whole of "the calories don't add up on a day I trained twice".
+  if (Array.isArray(p.sessions) && p.sessions.length) {
+    p.sessions.forEach(s => {
+      const w = (S.workouts || []).find(x => x.id === s.id)
+      if (!w) return
+      const kcal = num(s.kcal), mins = num(s.minutes)
+      if (kcal == null && mins == null) return
+      const watch = { ...(w.watch || {}) }
+      if (kcal != null) watch.kcal = Math.round(kcal)
+      if (mins != null) {
+        watch.minutes = Math.round(mins)
+        // A clock everything that reads one can read, anchored on the session's own start
+        // where it had one. Same rule as setFigures in lib/history.js.
+        const from = w.start || new Date(p.d + 'T18:00:00').getTime()
+        w.start = from
+        w.end = from + Math.round(mins) * 60000
+      }
+      w.watch = watch
+      report.wrote.push([w.name, kcal != null ? fmtNum(Math.round(kcal)) + ' kcal' : null,
+        mins != null ? Math.round(mins) + ' min' : null].filter(Boolean).join(' — '))
+    })
   }
 
   if (p.workout) {

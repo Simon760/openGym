@@ -1111,10 +1111,11 @@ export default {
   '{0} set': '{0} série',
   // A day that held more than one session
   'Day total': 'Total du jour',
-  'Which session are these for?': 'Pour quelle séance ?',
   '{0} kcal of training onto {1}': '{0} kcal d’entraînement sur {1}',
   // A session’s own figures, typed in from its detail
   'This is what the day’s totals add up, and what the deficit is worked out from — a session without it counts for nothing in either.': 'C’est ce que les totaux du jour additionnent, et ce à partir de quoi le déficit est calculé — une séance sans ça ne compte pour rien dans ni l’un ni l’autre.',
   // A session’s figures, written as they are typed
   'Recorded on this session': 'Enregistré sur cette séance',
+  // One block per session on a day trained more than once
+  'Each session': 'Chaque séance',
 }

@@ -84,3 +84,41 @@ describe('hydrate — a state that came back from Firebase', () => {
     expect(hydrate({ routines: [{ id: 'a', ex: [null, 'x', { id: '1' }] }] }).routines[0].ex).toHaveLength(1)
   })
 })
+
+describe('a day trained twice, through Realtime Database', () => {
+  // RTDB stores an array as an object keyed "0","1" and hands it back that way whenever the
+  // keys are not contiguous from zero. The user is signed in, so every figure he types goes
+  // out through that and comes back through this — a session's energy has to survive it.
+  const rtdb = v => (Array.isArray(v)
+    ? Object.fromEntries(v.map((x, i) => [String(i), rtdb(x)]))
+    : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, rtdb(x)])) : v)
+
+  const D = '2026-09-10'
+  const state = {
+    unit: 'kg',
+    workouts: [
+      { id: 'w1', d: D, name: 'Zone 2', vol: 0, watch: { kcal: 623 }, start: 1, end: 2,
+        entries: [{ id: 'x002', sets: [{ min: 58, done: true }] }] },
+      { id: 'w2', d: D, name: 'Séance 2', vol: 600, watch: { kcal: 300, minutes: 45 }, start: 3, end: 4,
+        entries: [{ id: '0289', sets: [{ w: 60, r: 10, done: true }] }] }
+    ]
+  }
+
+  it('keeps both sessions and both energies', () => {
+    const back = hydrate(JSON.parse(JSON.stringify(rtdb(state))))
+    expect(back.workouts).toHaveLength(2)
+    expect(back.workouts.map(w => w.watch.kcal)).toEqual([623, 300])
+    expect(back.workouts[1].watch.minutes).toBe(45)
+  })
+
+  it('keeps the sets inside them', () => {
+    const back = hydrate(JSON.parse(JSON.stringify(rtdb(state))))
+    expect(back.workouts[1].entries[0].sets).toEqual([{ w: 60, r: 10, done: true }])
+  })
+
+  it('still totals the day after the round trip', () => {
+    const back = hydrate(JSON.parse(JSON.stringify(rtdb(state))))
+    const total = back.workouts.filter(w => w.d === D).reduce((n, w) => n + ((w.watch && w.watch.kcal) || 0), 0)
+    expect(total).toBe(923)
+  })
+})

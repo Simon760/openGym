@@ -3,7 +3,7 @@ import { useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
 import { EXDB, EXIDX, BODYPARTS, isCardio, isBodyweightEq, allExercises, equipmentOf, exName, exNameEn, exSearchText, exMatches } from './lib/exercises.js'
 import { fmtDate, fmtNum, fmtNum2, fmtKg, fmtVol, fmtDur, durPart, todayISO, isoOf, uid, exCount, DAYN, MONTHS_LONG, ACCENTS } from './lib/format.js'
-import { lastEntryFor, bestWeightFor, buildSets, effectiveRoutineId, effectiveRoutine, weekDays, swapDays, workoutVolume, durMs, setFigures, setsDone, setsDoneActive, lastBW, supersetUnits, unitOf, setLabel, defaultConfig, warmEntry, cleanupSg, modeOf, effortOf, isBw, isOnce, readoutOf, isPerSide, sideReps, isWorking, setTop } from './lib/history.js'
+import { lastEntryFor, bestWeightFor, buildSets, effectiveRoutineId, effectiveRoutine, weekDays, swapDays, workoutVolume, durMs, setFigures, asksDuration, setsDone, setsDoneActive, lastBW, supersetUnits, unitOf, setLabel, defaultConfig, warmEntry, cleanupSg, modeOf, effortOf, isBw, isOnce, readoutOf, isPerSide, sideReps, isWorking, setTop } from './lib/history.js'
 import { beep, vibrate } from './lib/sound.js'
 import { t, instrFor, getLang, INSTR_LANGS } from './lib/i18n.js'
 import { nav } from './lib/nav.js'
@@ -1379,18 +1379,33 @@ function ManualEntry({ onDone, close, iso = todayISO() }) {
   const st = useStore(s => s.S)
   const [v, setV] = useState({})
   const [note, setNote] = useState('')
-  const [wid, setWid] = useState(null)
   const set = (k, n) => setV(x => ({ ...x, [k]: n }))
-  const any = WATCH_FIELDS.some(f => v[f.k] > 0)
-  // Which session the figures belong to. A day can hold two, and this sheet knows nothing
-  // about which one you just finished — so it asks, but only when there is something to ask
-  // about, and preselects the session the figures would land on anyway.
   const dayWs = (st.workouts || []).filter(w => w.d === iso)
-  const target = watchTarget(dayWs, iso, ['kcal', 'minutes'], wid)
+  // A day can hold more than one session, and one pair of fields can only ever describe one
+  // of them: you typed the session you had in mind, saved, and the other stayed empty for
+  // good. So on a day trained twice this sheet asks per session, by name, prefilled with
+  // what each already carries — and totals them underneath, because the total is the number
+  // the home screen is going to show you.
+  const multi = dayWs.length > 1
+  const [sv, setSv] = useState(() => Object.fromEntries(dayWs.map(w => [w.id, {
+    kcal: (w.watch && w.watch.kcal) || null,
+    min: Math.round(durMs(w) / 60000) || null
+  }])))
+  const setS = (id, k, n) => setSv(x => ({ ...x, [id]: { ...(x[id] || {}), [k]: n } }))
+  const svOf = w => sv[w.id] || {}
+  const sessionTotal = dayWs.reduce((n, w) => n + (svOf(w).kcal || 0), 0)
+  const target = multi ? null : watchTarget(dayWs, iso, ['kcal', 'minutes'])
+  const any = WATCH_FIELDS.some(f => (multi && (f.k === 'sport' || f.k === 'min') ? false : v[f.k] > 0)) ||
+    (multi && dayWs.some(w => svOf(w).kcal > 0 || svOf(w).min > 0))
 
   const save = () => {
     const p = { d: iso }
-    if (v.sport > 0 || v.min > 0) {
+    if (multi) {
+      const sessions = dayWs
+        .map(w => ({ id: w.id, kcal: svOf(w).kcal, minutes: asksDuration(w) ? svOf(w).min : null }))
+        .filter(x => x.kcal > 0 || x.minutes > 0)
+      if (sessions.length) p.sessions = sessions
+    } else if (v.sport > 0 || v.min > 0) {
       p.workout = {}
       if (v.sport > 0) p.workout.kcal = Math.round(v.sport)
       if (v.min > 0) p.workout.minutes = Math.round(v.min)
@@ -1411,21 +1426,28 @@ function ManualEntry({ onDone, close, iso = todayISO() }) {
     <div className="dim small" style={{ margin: '0 2px 6px', lineHeight: 1.45 }}>
       {t('Read them off your watch and type them in. Leave a field empty when you have nothing for it.')}
     </div>
-    {WATCH_FIELDS.map(f => <div key={f.k}>
+    {/* One block per session, named, when the day held more than one. The duration is only
+        asked for where nothing timed the session — a live one already knows, and offering to
+        type over a measurement invites a worse number. */}
+    {multi && <>
+      <h4 className="sec">{t('Each session')}</h4>
+      {dayWs.map(w => <div key={w.id} style={{ marginBottom: 6 }}>
+        <div className="small" style={{ margin: '8px 2px 0', fontWeight: 600 }}>{w.name}</div>
+        <NumRow label={t('Session energy')} unit="kcal" value={svOf(w).kcal ?? null}
+          onChange={n => setS(w.id, 'kcal', n)} />
+        {asksDuration(w) && <NumRow label={t('Session length')} unit="min" value={svOf(w).min ?? null}
+          onChange={n => setS(w.id, 'min', n)} />}
+      </div>)}
+      {/* The number the home screen is about to show, while there is still time to notice it
+          is missing a session. Separated from the day-wide fields below it. */}
+      <div className="row between small" style={{ padding: '9px 2px 12px', borderBottom: '1px solid var(--sep)', marginBottom: 4 }}>
+        <span className="dim">{t('Day total')}</span>
+        <span className="accent" style={{ fontWeight: 600 }}>{fmtNum(sessionTotal)} kcal</span>
+      </div>
+    </>}
+    {WATCH_FIELDS.filter(f => !(multi && (f.k === 'sport' || f.k === 'min'))).map(f => <div key={f.k}>
       <NumRow label={t(f.label)} unit={f.unit} decimal={f.decimal}
         value={v[f.k] ?? null} onChange={n => set(f.k, n)} />
-      {/* Straight under the two session fields, because it is part of the same question.
-          Each chip carries what that session already has, so replacing a figure is a thing
-          you can see yourself about to do. */}
-      {f.k === 'min' && dayWs.length > 1 && <div style={{ margin: '10px 2px 4px' }}>
-        <div className="dim small" style={{ marginBottom: 6 }}>{t('Which session are these for?')}</div>
-        <div className="chips">
-          {dayWs.map(w => <button key={w.id} className={'chip nocap' + (target && w.id === target.id ? ' on' : '')}
-            onClick={() => setWid(w.id)}>
-            {w.name}{w.watch && w.watch.kcal ? ' · ' + fmtNum(w.watch.kcal) + ' kcal' : ''}
-          </button>)}
-        </div>
-      </div>}
       {f.k === 'free' && <>
         <div className="dim small" style={{ margin: '6px 2px 0', lineHeight: 1.45 }}>
           {t('Stairs, a hike, a long walk — real work your watch never called a session. Put what you think it actually cost: this figure is taken as it is, with none of the watch discount applied to it.')}
@@ -2149,7 +2171,7 @@ function WatchFigures({ w, hint }) {
   // asked again, because `watch.minutes` is the record that it was typed rather than measured:
   // without it, giving a session a duration made it indistinguishable from a live one, and the
   // field disappeared from under the finger that had just filled it.
-  const askDur = !!(w.watch && w.watch.minutes > 0) || !(w.end && w.start)
+  const askDur = asksDuration(w)
   // Whether the session came in with a clock of its own. When it did not, the start and end
   // are ours — made out of a typed duration, and taken away again when it is cleared.
   const [hadClock] = useState(() => !!(w.end && w.start))

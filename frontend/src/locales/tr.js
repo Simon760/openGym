@@ -1119,10 +1119,11 @@ export default {
   '{0} set': '{0} set',
   // Untranslated — English source strings, so the key sets stay in step
   'Day total': 'Day total',
-  'Which session are these for?': 'Which session are these for?',
   '{0} kcal of training onto {1}': '{0} kcal of training onto {1}',
   // Untranslated — English source strings, so the key sets stay in step
   'This is what the day’s totals add up, and what the deficit is worked out from — a session without it counts for nothing in either.': 'This is what the day’s totals add up, and what the deficit is worked out from — a session without it counts for nothing in either.',
   // Untranslated — English source strings, so the key sets stay in step
   'Recorded on this session': 'Recorded on this session',
+  // Untranslated — English source strings, so the key sets stay in step
+  'Each session': 'Each session',
 }
