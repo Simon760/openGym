@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { modeOf, isTimed, fmtSec, setLabel, defaultConfig, buildSets, exLine, workoutVolume, durMs, effortOf, stepEffort, capEffort, isBw, isPerSide, sideReps, repStep } from './history.js'
+import { modeOf, isTimed, fmtSec, setLabel, defaultConfig, buildSets, exLine, workoutVolume, durMs, setFigures, effortOf, stepEffort, capEffort, isBw, isPerSide, sideReps, repStep } from './history.js'
 import { EXDB } from './exercises.js'
 
 // Real ids out of the shipped catalogue, so the body-part fallback is exercised for real.
@@ -425,5 +425,68 @@ describe('durMs', () => {
     expect(durMs({})).toBe(0)
     expect(durMs({ watch: { kcal: 300 } })).toBe(0)
     expect(durMs(null)).toBe(0)
+  })
+})
+
+describe('setFigures', () => {
+  const past = () => ({ id: 'w', d: '2026-09-10' })                       // written up: no clock
+  const live = () => ({ id: 'w', d: '2026-09-10', start: 1000, end: 61000 })
+
+  it('records what the session cost', () => {
+    expect(setFigures(past(), { kcal: 300 }).watch).toEqual({ kcal: 300 })
+  })
+
+  it('gives a session with no clock one made from the typed duration', () => {
+    const w = setFigures(past(), { kcal: 300, mins: 45 })
+    expect(w.watch).toEqual({ kcal: 300, minutes: 45 })
+    expect(w.end - w.start).toBe(45 * 60000)
+    // and everything that prints a duration finds it
+    expect(durMs(w)).toBe(45 * 60000)
+  })
+
+  it('keeps the time of day a session already had, moving only its end', () => {
+    const w = setFigures(live(), { mins: 45, keepClock: true })
+    expect(w.start).toBe(1000)
+    expect(w.end).toBe(1000 + 45 * 60000)
+  })
+
+  it('leaves a measured duration alone when it is not asked for', () => {
+    // A live session was timed. Its clock is a measurement, not a default to type over.
+    const w = setFigures(live(), { kcal: 480, mins: 999, ask: false, keepClock: true })
+    expect(w.watch).toEqual({ kcal: 480 })
+    expect(w.end - w.start).toBe(60000)
+  })
+
+  it('corrects a duration rather than stacking on it', () => {
+    const w = past()
+    setFigures(w, { mins: 45 })
+    setFigures(w, { mins: 50 })
+    expect(w.watch.minutes).toBe(50)
+    expect(w.end - w.start).toBe(50 * 60000)
+  })
+
+  it('clears a figure back to absent rather than to zero', () => {
+    const w = past()
+    setFigures(w, { kcal: 300, mins: 45 })
+    setFigures(w, { kcal: 0, mins: 0 })
+    expect(w.watch).toBeUndefined()
+    // the clock was made out of the duration, so it goes with it
+    expect(w.start).toBeUndefined()
+    expect(w.end).toBeUndefined()
+    expect(durMs(w)).toBe(0)
+  })
+
+  it('does not take away a clock it did not make', () => {
+    const w = live()
+    setFigures(w, { kcal: 0, mins: 0, keepClock: true })
+    expect(w.start).toBe(1000)
+    expect(w.end).toBe(61000)
+  })
+
+  it('keeps the other things a watch reported', () => {
+    // hrAvg and km come from a Shortcut payload and are none of this form's business.
+    const w = { id: 'w', d: '2026-09-10', watch: { hrAvg: 128, km: 5.2, kcal: 400 } }
+    setFigures(w, { kcal: 300, mins: 45 })
+    expect(w.watch).toEqual({ hrAvg: 128, km: 5.2, kcal: 300, minutes: 45 })
   })
 })

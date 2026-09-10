@@ -460,6 +460,43 @@ export const durMs = w => (w && w.watch && w.watch.minutes > 0
   ? w.watch.minutes * 60000
   : w && w.end && w.start ? w.end - w.start : 0)
 
+/**
+ * Put a session's own figures on it — what it cost, and how long it took.
+ *
+ * `mins` is only applied when `ask`: a live session was timed, and a measured duration is not
+ * something to overwrite with a typed one.
+ *
+ * A duration is stored twice over. `watch.minutes` is the figure and the record that it was
+ * typed rather than measured — durMs reads it first. The start and end are what everything
+ * that reads a clock reads, with no idea it was typed: the history rows, the recovery window,
+ * the digest. Only the end moves when the session already had a start, because a real time of
+ * day is worth keeping; otherwise the anchor is the same 18:00 the rest of the app falls back
+ * to for a workout with no clock (see whenOf, and recovery.js's startOf). `keepClock` says the
+ * session arrived with a clock of its own, so clearing the duration must not take it away.
+ *
+ * Zero means absent rather than zero, here as everywhere: clearing a field takes the figure
+ * off the session instead of recording that it cost nothing.
+ */
+export function setFigures(w, { kcal = 0, mins = 0, ask = true, keepClock = false } = {}) {
+  const watch = { ...(w.watch || {}) }
+  if (kcal > 0) watch.kcal = Math.round(kcal)
+  else delete watch.kcal
+  if (ask) {
+    if (mins > 0) {
+      watch.minutes = Math.round(mins)
+      const from = w.start || new Date(w.d + 'T18:00:00').getTime()
+      w.start = from
+      w.end = from + Math.round(mins) * 60000
+    } else {
+      delete watch.minutes
+      if (!keepClock) { delete w.start; delete w.end }
+    }
+  }
+  if (Object.keys(watch).length) w.watch = watch
+  else delete w.watch
+  return w
+}
+
 export function setsDone(w) {
   let n = 0
   ;((w && w.entries) || []).forEach(e => ((e && e.sets) || []).forEach(s => { if (isWorking(s)) n++ }))

@@ -678,8 +678,6 @@ export default {
   'pick the exercises as you go': 'choisis les exercices au fur et à mesure',
   'What did your watch say?': 'Qu\'a dit ta montre ?',
   'Read it off the watch now — asked tomorrow it is a number nobody remembers, and the day’s deficit goes without it. The usual discount is applied when it is counted.': 'Lis-le sur la montre maintenant — demandé demain, c\'est un chiffre dont personne ne se souvient, et le déficit du jour s\'en passe. La retenue habituelle est appliquée au moment du calcul.',
-  'Save it on this session': 'L\'enregistrer sur cette séance',
-  '{0} kcal saved on this session': '{0} kcal enregistrées sur cette séance',
   'weighed today · ≈ {0} tomorrow, on today’s {1} kcal': 'pesé aujourd\'hui · ≈ {0} demain, sur les {1} kcal du jour',
   'Count today once it is logged': 'Compter aujourd\'hui dès qu\'il est logué',
   'Count today too': 'Compter aussi aujourd\'hui',
@@ -1117,4 +1115,6 @@ export default {
   '{0} kcal of training onto {1}': '{0} kcal d’entraînement sur {1}',
   // A session’s own figures, typed in from its detail
   'This is what the day’s totals add up, and what the deficit is worked out from — a session without it counts for nothing in either.': 'C’est ce que les totaux du jour additionnent, et ce à partir de quoi le déficit est calculé — une séance sans ça ne compte pour rien dans ni l’un ni l’autre.',
+  // A session’s figures, written as they are typed
+  'Recorded on this session': 'Enregistré sur cette séance',
 }

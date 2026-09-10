@@ -3,7 +3,7 @@ import { useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
 import { EXDB, EXIDX, BODYPARTS, isCardio, isBodyweightEq, allExercises, equipmentOf, exName, exNameEn, exSearchText, exMatches } from './lib/exercises.js'
 import { fmtDate, fmtNum, fmtNum2, fmtKg, fmtVol, fmtDur, durPart, todayISO, isoOf, uid, exCount, DAYN, MONTHS_LONG, ACCENTS } from './lib/format.js'
-import { lastEntryFor, bestWeightFor, buildSets, effectiveRoutineId, effectiveRoutine, weekDays, swapDays, workoutVolume, durMs, setsDone, setsDoneActive, lastBW, supersetUnits, unitOf, setLabel, defaultConfig, warmEntry, cleanupSg, modeOf, effortOf, isBw, isOnce, readoutOf, isPerSide, sideReps, isWorking, setTop } from './lib/history.js'
+import { lastEntryFor, bestWeightFor, buildSets, effectiveRoutineId, effectiveRoutine, weekDays, swapDays, workoutVolume, durMs, setFigures, setsDone, setsDoneActive, lastBW, supersetUnits, unitOf, setLabel, defaultConfig, warmEntry, cleanupSg, modeOf, effortOf, isBw, isOnce, readoutOf, isPerSide, sideReps, isWorking, setTop } from './lib/history.js'
 import { beep, vibrate } from './lib/sound.js'
 import { t, instrFor, getLang, INSTR_LANGS } from './lib/i18n.js'
 import { nav } from './lib/nav.js'
@@ -2147,45 +2147,40 @@ function WatchFigures({ w, hint }) {
   // Whether to ask for a duration at all. A live session was timed and is not asked — offering
   // to overwrite a measured duration with a typed one invites a worse number. A typed one is
   // asked again, because `watch.minutes` is the record that it was typed rather than measured:
-  // without it, saving a duration made the session indistinguishable from a live one, and the
-  // field disappeared from under the finger that had just filled it, taking the only way to
-  // correct it along with it.
+  // without it, giving a session a duration made it indistinguishable from a live one, and the
+  // field disappeared from under the finger that had just filled it.
   const askDur = !!(w.watch && w.watch.minutes > 0) || !(w.end && w.start)
+  // Whether the session came in with a clock of its own. When it did not, the start and end
+  // are ours — made out of a typed duration, and taken away again when it is cleared.
+  const [hadClock] = useState(() => !!(w.end && w.start))
   const [kcal, setKcal] = useState(() => (w.watch && w.watch.kcal) || 0)
   // Prefilled with whatever the session already has, from either place it can have come
   // from — so this reads as correcting a figure rather than starting from nothing.
   const [mins, setMins] = useState(() => Math.round(durMs(w) / 60000))
-  const [saved, setSaved] = useState(false)
-  const save = () => {
-    update(s => {
-      const x = (s.workouts || []).find(y => y.id === w.id)
-      if (!x) return
-      const watch = { ...(x.watch || {}) }
-      if (kcal > 0) watch.kcal = Math.round(kcal)
-      if (askDur && mins > 0) {
-        watch.minutes = Math.round(mins)
-        // Also as a start and an end, so everything that already reads a clock — the history
-        // rows, the recovery window, the digest — reads this one too with no idea it was
-        // typed. The anchor is the same 18:00 the rest of the app falls back to for a workout
-        // with no clock (see whenOf, and recovery.js's startOf).
-        x.start = new Date(w.d + 'T18:00:00').getTime()
-        x.end = x.start + Math.round(mins) * 60000
-      }
-      if (Object.keys(watch).length) x.watch = watch
-    })
-    setSaved(true)
-    toast(kcal > 0 ? t('{0} kcal saved on this session', fmtNum(Math.round(kcal))) : t('Saved'))
-  }
+  /**
+   * Written the moment it is typed.
+   *
+   * This used to need a second tap, on a small button that only appeared once you had typed
+   * something — while the big obvious button on the screen was the one that closed it and
+   * threw the figure away. So the commonest thing to do with this form was to fill it in,
+   * dismiss it, and lose the number: nothing reached the session, the day's totals stayed
+   * where they were, and there was no way to tell that from never having typed it. A figure
+   * you read off your watch and watched vanish is the worst thing this screen can do.
+   */
+  const write = (k, m) => update(s => {
+    const x = (s.workouts || []).find(y => y.id === w.id)
+    if (x) setFigures(x, { kcal: k, mins: m, ask: askDur, keepClock: hadClock })
+  })
+  const has = kcal > 0 || (askDur && mins > 0)
   return <div style={{ textAlign: 'left' }}>
     {askDur && <Stepper label={t('Duration (min)')} unit="min" value={mins} step={5} decimal={false}
-      onChange={n => { setMins(n || 0); setSaved(false) }} />}
+      onChange={n => { setMins(n || 0); write(kcal, n || 0) }} />}
     <Stepper label={t('Session energy')} unit="kcal" value={kcal} step={10} decimal={false}
-      onChange={n => { setKcal(n || 0); setSaved(false) }} />
+      onChange={n => { setKcal(n || 0); write(n || 0, mins) }} />
+    {/* Said out loud, because a form that saves itself gives no other sign that it did. */}
+    {has && <div className="small accent row" style={{ gap: 5, margin: '2px 2px 0' }}>
+      <Icon name="checkCircle" style={{ fontSize: 13 }} />{t('Recorded on this session')}</div>}
     {hint && <div className="dim small" style={{ margin: '6px 2px 10px', lineHeight: 1.45 }}>{hint}</div>}
-    {(kcal > 0 || (askDur && mins > 0)) && !saved &&
-      <Button size="sm" icon="check" onClick={save}>{t('Save it on this session')}</Button>}
-    {saved && <div className="small accent row" style={{ gap: 5 }}>
-      <Icon name="checkCircle" style={{ fontSize: 13 }} />{t('Saved')}</div>}
   </div>
 }
 

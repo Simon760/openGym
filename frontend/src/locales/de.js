@@ -702,8 +702,6 @@ export default {
   'pick the exercises as you go': 'pick the exercises as you go',
   'What did your watch say?': 'What did your watch say?',
   'Read it off the watch now — asked tomorrow it is a number nobody remembers, and the day’s deficit goes without it. The usual discount is applied when it is counted.': 'Read it off the watch now — asked tomorrow it is a number nobody remembers, and the day’s deficit goes without it. The usual discount is applied when it is counted.',
-  'Save it on this session': 'Save it on this session',
-  '{0} kcal saved on this session': '{0} kcal saved on this session',
   'weighed today · ≈ {0} tomorrow, on today’s {1} kcal': 'weighed today · ≈ {0} tomorrow, on today’s {1} kcal',
   'Count today once it is logged': 'Count today once it is logged',
   'Count today too': 'Count today too',
@@ -1142,4 +1140,6 @@ export default {
   '{0} kcal of training onto {1}': '{0} kcal of training onto {1}',
   // Untranslated — English source strings, so the key sets stay in step
   'This is what the day’s totals add up, and what the deficit is worked out from — a session without it counts for nothing in either.': 'This is what the day’s totals add up, and what the deficit is worked out from — a session without it counts for nothing in either.',
+  // Untranslated — English source strings, so the key sets stay in step
+  'Recorded on this session': 'Recorded on this session',
 }
