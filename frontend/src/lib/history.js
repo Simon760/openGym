@@ -447,6 +447,19 @@ export function workoutVolume(w) {
   ;((w && w.entries) || []).forEach(e => ((e && e.sets) || []).forEach(s => { if (isWorking(s)) v += setVol(s) }))
   return v
 }
+/**
+ * How long a session lasted, in ms.
+ *
+ * The watch's own figure first, then the clock the app ran. A duration typed on the watch
+ * sheet is a measurement like any other, and it was being stored where nothing that prints a
+ * duration ever looked for it — so a session written up afterwards read as having taken no
+ * time at all. Zero when there is neither: a session nobody timed has no duration, and
+ * inventing one is worse than leaving it out.
+ */
+export const durMs = w => (w && w.watch && w.watch.minutes > 0
+  ? w.watch.minutes * 60000
+  : w && w.end && w.start ? w.end - w.start : 0)
+
 export function setsDone(w) {
   let n = 0
   ;((w && w.entries) || []).forEach(e => ((e && e.sets) || []).forEach(s => { if (isWorking(s)) n++ }))

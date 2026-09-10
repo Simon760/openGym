@@ -1119,4 +1119,8 @@ export default {
   '{0} — to do': '{0} — to do',
   'Nothing logged today yet — Start builds a new session. Use “Already did it” for one you have done.': 'Nothing logged today yet — Start builds a new session. Use “Already did it” for one you have done.',
   '{0} set': '{0} set',
+  // Untranslated — English source strings, so the key sets stay in step
+  'Day total': 'Day total',
+  'Which session are these for?': 'Which session are these for?',
+  '{0} kcal of training onto {1}': '{0} kcal of training onto {1}',
 }

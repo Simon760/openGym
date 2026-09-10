@@ -3,13 +3,13 @@ import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
 import { exOr, exName } from '../lib/exercises.js'
-import { effectiveRoutine, lastEntryFor, bestWeightFor, buildSets, defaultConfig, warmEntry, swapEntry, setBodyweight, setsDoneActive, supersetUnits, unitOf, setLabel, modeOf, isBw, readoutOf, isOnce, cardioEffort, isPerSide, sideReps, repStep, EFFORT, effortOf, stepEffort, capEffort } from '../lib/history.js'
-import { fmtNum, fmtDate, fmtDur, fmtVol, todayISO, exCount, uid, DAYN } from '../lib/format.js'
+import { effectiveRoutine, lastEntryFor, bestWeightFor, buildSets, defaultConfig, warmEntry, swapEntry, setBodyweight, durMs, setsDone, setsDoneActive, supersetUnits, unitOf, setLabel, modeOf, isBw, readoutOf, isOnce, cardioEffort, isPerSide, sideReps, repStep, EFFORT, effortOf, stepEffort, capEffort } from '../lib/history.js'
+import { fmtNum, fmtDate, fmtDur, durPart, fmtVol, todayISO, exCount, uid, DAYN } from '../lib/format.js'
 import { beep, vibrate } from '../lib/sound.js'
 import { t } from '../lib/i18n.js'
 import { api } from '../lib/api.js'
 import Media from '../components/Media.jsx'
-import { startFlow, logPastSheet, exercisePicker, exConfigSheet, exerciseDetailSheet, topWeightSheet, finishWorkout, workoutCompleteSheet, confirmSheet, workoutDetailSheet, dayWorkoutsSheet } from '../sheets.jsx'
+import { startFlow, logPastSheet, exercisePicker, exConfigSheet, exerciseDetailSheet, topWeightSheet, finishWorkout, workoutCompleteSheet, confirmSheet, workoutDetailSheet } from '../sheets.jsx'
 import Icon from '../components/Icon.jsx'
 import { Button, Check, NumberField } from '../components/ui.jsx'
 import { nextPrescription, applyPrescription } from '../lib/progression.js'
@@ -27,10 +27,21 @@ function StartChooser() {
   // Summed over the day, and each figure absent rather than zero when nothing carried it —
   // a session typed up without a duration has none, and "0 min" would claim it did.
   const recap = doneToday.reduce((a, w) => ({
-    ms: a.ms + (w.end && w.start ? w.end - w.start : 0),
+    ms: a.ms + durMs(w),
     kcal: a.kcal + ((w.watch && w.watch.kcal) || 0),
     vol: a.vol + (w.vol || 0)
   }), { ms: 0, kcal: 0, vol: 0 })
+  // One session's own figures, on the same rule as the tiles above: absent rather than zero.
+  const sessionLine = w => {
+    const bits = [
+      ...durPart(durMs(w)),
+      ...(w.watch && w.watch.kcal ? [fmtNum(w.watch.kcal) + ' kcal'] : []),
+      ...(w.vol > 0 ? [fmtVol(w.vol, S.unit)] : [])
+    ]
+    // The set count only when nothing was measured: it is what keeps the line from being
+    // empty, not a fourth figure crowding out three that say more.
+    return bits.length ? bits.join(' · ') : t(setsDone(w) === 1 ? '{0} set' : '{0} sets', setsDone(w))
+  }
   // Named for the day it belongs to, so a week of second sessions does not become a list of
   // "New routine" with nothing to tell them apart. Renamed like any other in the editor.
   const newSession = () => {
@@ -44,11 +55,14 @@ function StartChooser() {
         what it came to. The recap takes the card, and the only thing left to decide sits
         under it. Before that, the card is the two ways of doing it. */}
     {doneToday.length > 0 ? <>
-      <div className="card" onClick={() => (doneToday.length > 1 ? dayWorkoutsSheet(doneToday) : workoutDetailSheet(doneToday[0]))}
-        style={{ borderColor: 'var(--acc)', cursor: 'pointer' }}>
+      <div className="card" style={{ borderColor: 'var(--acc)', ...(doneToday.length === 1 ? { cursor: 'pointer' } : null) }}
+        {...(doneToday.length === 1 ? { onClick: () => workoutDetailSheet(doneToday[0]) } : null)}>
         <div className="row between" style={{ marginBottom: 12 }}>
-          <div><div className="big">{doneToday.map(w => w.name).join(' · ')}</div>
-            <div className="muted small">{t(doneToday.length === 1 ? 'Done today' : '{0} sessions today', doneToday.length)}</div></div>
+          {/* A count is not a name and does not need name-sized type — at 30px "2 séances
+              aujourd'hui" took two lines and shoved the badge around. */}
+          <div><div className="big" style={doneToday.length > 1 ? { fontSize: 22 } : null}>
+            {doneToday.length === 1 ? doneToday[0].name : t('{0} sessions today', doneToday.length)}</div>
+            <div className="muted small">{doneToday.length === 1 ? t('Done today') : t('Day total')}</div></div>
           <span className="lrow-i" style={{ width: 38, height: 38, borderRadius: 9, fontSize: 22, background: 'var(--acc)' }}><Icon name="checkCircle" /></span>
         </div>
         <div className="tiles three" style={{ textAlign: 'left', marginBottom: 0 }}>
@@ -59,6 +73,18 @@ function StartChooser() {
           <div className="tile"><div className="l">{t('Volume')}</div>
             <div className="v" style={{ fontSize: '1.1rem' }}>{fmtVol(recap.vol, S.unit)}</div></div>
         </div>
+        {/* Every session on its own line once there is more than one. Their names joined into
+            a title with a single total underneath, a second session that carried no figures of
+            its own could not be told from one that was never logged at all — which is exactly
+            what it looked like. */}
+        {doneToday.length > 1 && <div className="list" style={{ marginTop: 12, marginBottom: 0 }}>
+          {doneToday.map(w => <div key={w.id} className="item" onClick={() => workoutDetailSheet(w)}>
+            <span className="lrow-i" style={{ width: 30, height: 30, borderRadius: 8, fontSize: 16 }}>
+              <Icon name={glyphOf((S.routines.find(r => r.id === w.routineId) || {}).emoji)} /></span>
+            <div className="grow"><div className="tt">{w.name}</div><div className="ss">{sessionLine(w)}</div></div>
+            <Icon name="chevronRight" className="chev" />
+          </div>)}
+        </div>}
       </div>
       <Button icon="plus" onClick={newSession}>{t('Add a session')}</Button>
       <div style={{ height: 6 }} />

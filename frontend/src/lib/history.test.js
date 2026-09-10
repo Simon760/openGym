@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { modeOf, isTimed, fmtSec, setLabel, defaultConfig, buildSets, exLine, workoutVolume, effortOf, stepEffort, capEffort, isBw, isPerSide, sideReps, repStep } from './history.js'
+import { modeOf, isTimed, fmtSec, setLabel, defaultConfig, buildSets, exLine, workoutVolume, durMs, effortOf, stepEffort, capEffort, isBw, isPerSide, sideReps, repStep } from './history.js'
 import { EXDB } from './exercises.js'
 
 // Real ids out of the shipped catalogue, so the body-part fallback is exercised for real.
@@ -404,5 +404,26 @@ describe('workoutVolume', () => {
   it('leaves an unloaded bodyweight set at zero volume rather than inventing a number', () => {
     const w = { entries: [{ id: BW, target: { bodyweight: true }, sets: [{ w: 0, r: 20, done: true }] }] }
     expect(workoutVolume(w)).toBe(0)
+  })
+})
+
+describe('durMs', () => {
+  it('reads the clock the app ran', () => {
+    expect(durMs({ start: 1000, end: 61000 })).toBe(60000)
+  })
+  it('prefers what the watch measured', () => {
+    // Both exist when a live session is annotated afterwards. The watch timed the training;
+    // the app timed the screen being open, warm-up and phone-checking included.
+    expect(durMs({ start: 1000, end: 61000, watch: { minutes: 48 } })).toBe(48 * 60000)
+  })
+  it('finds a duration typed on a session that was never timed', () => {
+    // A session written up afterwards has no start and no end. This was the whole bug: the
+    // minutes were stored and then read by nothing.
+    expect(durMs({ watch: { minutes: 60 } })).toBe(60 * 60000)
+  })
+  it('is zero rather than a guess when nobody timed it', () => {
+    expect(durMs({})).toBe(0)
+    expect(durMs({ watch: { kcal: 300 } })).toBe(0)
+    expect(durMs(null)).toBe(0)
   })
 })

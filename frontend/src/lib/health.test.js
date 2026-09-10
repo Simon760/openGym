@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseHealth, applyHealth, putHealth, healthFor, parseHealthCSV, applyHealthDays, mapHealthHeader } from './health.js'
+import { parseHealth, applyHealth, putHealth, healthFor, parseHealthCSV, applyHealthDays, mapHealthHeader, watchTarget } from './health.js'
 import { entryFor } from './nutrition.js'
 import { sleepHours } from './body.js'
 import { todayISO } from './format.js'
@@ -71,6 +71,61 @@ describe('applyHealth', () => {
     expect(r.skipped).toHaveLength(0)
     expect(r.wrote).toHaveLength(1)
     expect(healthFor(S, D)).toMatchObject({ sport: 612, sportMin: 47 })
+  })
+
+  it('does not write a second session’s figures over the first’s', () => {
+    // A day can hold two sessions. Taking the first one every time meant the evening's
+    // figures landed on the morning's session and erased what was already there: the day
+    // then read as one session's worth of energy, whichever way round they were typed.
+    const S = base({ workouts: [
+      { id: 'w1', d: D, name: 'Push', watch: { kcal: 400 }, entries: [] },
+      { id: 'w2', d: D, name: 'Padel', entries: [] }
+    ] })
+    const r = applyHealth(S, parseHealth({ date: D, workout: { kcal: 300 } }))
+    expect(S.workouts[0].watch).toEqual({ kcal: 400 })
+    expect(S.workouts[1].watch).toEqual({ kcal: 300 })
+    expect(r.wrote.join(' ')).toContain('Padel')
+  })
+
+  it('fills a day’s sessions in the order they happened', () => {
+    // Neither has a figure yet, so typing them in one after another has to fill them one
+    // after another rather than fight over the same session.
+    const S = base({ workouts: [
+      { id: 'w1', d: D, name: 'Push', entries: [] },
+      { id: 'w2', d: D, name: 'Padel', entries: [] }
+    ] })
+    applyHealth(S, parseHealth({ date: D, workout: { kcal: 400 } }))
+    applyHealth(S, parseHealth({ date: D, workout: { kcal: 300 } }))
+    expect(S.workouts.map(w => w.watch.kcal)).toEqual([400, 300])
+  })
+
+  it('corrects the newest session once every one of them has a figure', () => {
+    const S = base({ workouts: [
+      { id: 'w1', d: D, name: 'Push', watch: { kcal: 400 }, entries: [] },
+      { id: 'w2', d: D, name: 'Padel', watch: { kcal: 300 }, entries: [] }
+    ] })
+    applyHealth(S, parseHealth({ date: D, workout: { kcal: 350 } }))
+    expect(S.workouts.map(w => w.watch.kcal)).toEqual([400, 350])
+  })
+
+  it('puts the figures on the session it was told to', () => {
+    // What the sheet asks for when the day holds more than one: an answer beats a guess.
+    const S = base({ workouts: [
+      { id: 'w1', d: D, name: 'Push', entries: [] },
+      { id: 'w2', d: D, name: 'Padel', entries: [] }
+    ] })
+    applyHealth(S, { d: D, workoutId: 'w1', workout: { kcal: 300 } })
+    expect(S.workouts[0].watch).toEqual({ kcal: 300 })
+    expect(S.workouts[1].watch).toBeUndefined()
+  })
+
+  it('files training energy on its own by the same rule', () => {
+    const S = base({ workouts: [
+      { id: 'w1', d: D, name: 'Push', watch: { kcal: 400 }, entries: [] },
+      { id: 'w2', d: D, name: 'Padel', entries: [] }
+    ] })
+    applyHealth(S, parseHealth({ date: D, sport_kcal: 300 }))
+    expect(S.workouts.map(w => w.watch.kcal)).toEqual([400, 300])
   })
 
   it('still says so when the session details carry no figures at all', () => {
@@ -442,5 +497,30 @@ describe('effort logged by hand, through the importer', () => {
     const { payloads } = parseHealthCSV('Date,Apports kcal,Activité libre\n2026-03-12,2100,\n2026-03-13,2100,265\n')
     expect(payloads[0].free).toBeUndefined()
     expect(payloads[1].free).toBe(265)
+  })
+})
+
+describe('watchTarget', () => {
+  const day = [
+    { id: 'w1', d: D, name: 'Push', watch: { kcal: 400 } },
+    { id: 'w2', d: D, name: 'Padel' }
+  ]
+  it('picks the first session with nothing for those fields', () => {
+    expect(watchTarget(day, D, ['kcal']).id).toBe('w2')
+  })
+  it('reads each field on its own', () => {
+    // Push has energy but no duration, so a duration still belongs to it.
+    expect(watchTarget(day, D, ['minutes']).id).toBe('w1')
+  })
+  it('falls back to the newest when they all carry one', () => {
+    const full = [day[0], { ...day[1], watch: { kcal: 300 } }]
+    expect(watchTarget(full, D, ['kcal']).id).toBe('w2')
+  })
+  it('obeys an id', () => {
+    expect(watchTarget(day, D, ['kcal'], 'w1').id).toBe('w1')
+  })
+  it('is null on a day with no session', () => {
+    expect(watchTarget(day, '2026-01-01', ['kcal'])).toBe(null)
+    expect(watchTarget([], D, ['kcal'])).toBe(null)
   })
 })

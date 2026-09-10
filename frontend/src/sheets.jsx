@@ -3,7 +3,7 @@ import { useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
 import { EXDB, EXIDX, BODYPARTS, isCardio, isBodyweightEq, allExercises, equipmentOf, exName, exNameEn, exSearchText, exMatches } from './lib/exercises.js'
 import { fmtDate, fmtNum, fmtNum2, fmtKg, fmtVol, fmtDur, durPart, todayISO, isoOf, uid, exCount, DAYN, MONTHS_LONG, ACCENTS } from './lib/format.js'
-import { lastEntryFor, bestWeightFor, buildSets, effectiveRoutineId, effectiveRoutine, weekDays, swapDays, workoutVolume, setsDone, setsDoneActive, lastBW, supersetUnits, unitOf, setLabel, defaultConfig, warmEntry, cleanupSg, modeOf, effortOf, isBw, isOnce, readoutOf, isPerSide, sideReps, isWorking, setTop } from './lib/history.js'
+import { lastEntryFor, bestWeightFor, buildSets, effectiveRoutineId, effectiveRoutine, weekDays, swapDays, workoutVolume, durMs, setsDone, setsDoneActive, lastBW, supersetUnits, unitOf, setLabel, defaultConfig, warmEntry, cleanupSg, modeOf, effortOf, isBw, isOnce, readoutOf, isPerSide, sideReps, isWorking, setTop } from './lib/history.js'
 import { beep, vibrate } from './lib/sound.js'
 import { t, instrFor, getLang, INSTR_LANGS } from './lib/i18n.js'
 import { nav } from './lib/nav.js'
@@ -25,7 +25,7 @@ import { nextPrescription, applyPrescription, policyFor, defaultIncrement, POLIC
 import { MOBILE, shareExport, shareText, canShareText } from './lib/mobile.js'
 import { entryFor, hasMacros, kcalFromMacros, derivedMismatch, remainingOf, putEntry, isRefeed, goalFor, MACROS, MACRO_NAME } from './lib/nutrition.js'
 import { validBodyFat, composition, sleepFor, putSleep, validSleep, sleepHours, hoursBetween, validTime, BF_MIN, BF_MAX, SLEEP_MIN, SLEEP_MAX } from './lib/body.js'
-import { parseHealth, applyHealth, parseHealthCSV, applyHealthDays, shortcutRecipe, shortcutLink, historySpec } from './lib/health.js'
+import { parseHealth, applyHealth, parseHealthCSV, applyHealthDays, shortcutRecipe, shortcutLink, historySpec, watchTarget } from './lib/health.js'
 import { suppOn, suppName, tookOn, setTook, suppStreak, suppRate } from './lib/supp.js'
 import { weekFor, weekOfBlock, setWeekDay, duplicateBlock, emptyBlock, blocksOf, activeBlock, blockFromCurrent, startBlock, cancelSwitch, upcoming, daysUntil, removeBlock, sessionsIn, weekIndexAt, MAX_WEEKS, WEEKDAYS } from './lib/blocks.js'
 import { impliedTDEE, tdeeParts, trimOf, stepBaseOf, restStrictOf, countsToday, projectedWeight, recordCalibration, calibration, dayBalance, KCAL_PER_KG_FAT, BIG_EFFORT, TDEE_PARTS, TDEE_MIN, TDEE_MAX, TRIM_MAX, IMPLIED_MIN_SPAN, IMPLIED_MIN_DAYS, IMPLIED_MIN_WEIGHINS } from './lib/energy.js'
@@ -1376,10 +1376,17 @@ function NumRow({ label, unit, value, onChange, decimal = false }) {
  * zero would drag every average that reads it.
  */
 function ManualEntry({ onDone, close, iso = todayISO() }) {
+  const st = useStore(s => s.S)
   const [v, setV] = useState({})
   const [note, setNote] = useState('')
+  const [wid, setWid] = useState(null)
   const set = (k, n) => setV(x => ({ ...x, [k]: n }))
   const any = WATCH_FIELDS.some(f => v[f.k] > 0)
+  // Which session the figures belong to. A day can hold two, and this sheet knows nothing
+  // about which one you just finished — so it asks, but only when there is something to ask
+  // about, and preselects the session the figures would land on anyway.
+  const dayWs = (st.workouts || []).filter(w => w.d === iso)
+  const target = watchTarget(dayWs, iso, ['kcal', 'minutes'], wid)
 
   const save = () => {
     const p = { d: iso }
@@ -1387,6 +1394,7 @@ function ManualEntry({ onDone, close, iso = todayISO() }) {
       p.workout = {}
       if (v.sport > 0) p.workout.kcal = Math.round(v.sport)
       if (v.min > 0) p.workout.minutes = Math.round(v.min)
+      if (target) p.workoutId = target.id
     }
     // Absent, never zero. A field left empty is a figure nobody measured, and a zero here
     // would be read as a day of no movement — which is what the NEAT baseline is built from.
@@ -1406,6 +1414,18 @@ function ManualEntry({ onDone, close, iso = todayISO() }) {
     {WATCH_FIELDS.map(f => <div key={f.k}>
       <NumRow label={t(f.label)} unit={f.unit} decimal={f.decimal}
         value={v[f.k] ?? null} onChange={n => set(f.k, n)} />
+      {/* Straight under the two session fields, because it is part of the same question.
+          Each chip carries what that session already has, so replacing a figure is a thing
+          you can see yourself about to do. */}
+      {f.k === 'min' && dayWs.length > 1 && <div style={{ margin: '10px 2px 4px' }}>
+        <div className="dim small" style={{ marginBottom: 6 }}>{t('Which session are these for?')}</div>
+        <div className="chips">
+          {dayWs.map(w => <button key={w.id} className={'chip nocap' + (target && w.id === target.id ? ' on' : '')}
+            onClick={() => setWid(w.id)}>
+            {w.name}{w.watch && w.watch.kcal ? ' · ' + fmtNum(w.watch.kcal) + ' kcal' : ''}
+          </button>)}
+        </div>
+      </div>}
       {f.k === 'free' && <>
         <div className="dim small" style={{ margin: '6px 2px 0', lineHeight: 1.45 }}>
           {t('Stairs, a hike, a long walk — real work your watch never called a session. Put what you think it actually cost: this figure is taken as it is, with none of the watch discount applied to it.')}
@@ -2121,7 +2141,7 @@ function WorkoutDetail({ w, close }) {
         day's deficit. Each piece is dropped when nothing recorded it, never shown as zero. */}
     <div className="muted small" style={{ marginBottom: 12 }}>{[
       fmtDate(w.d, true),
-      ...durPart(w.end - w.start),
+      ...durPart(durMs(w)),
       ...(w.watch && w.watch.kcal > 0 ? [fmtNum(w.watch.kcal) + ' kcal'] : []),
       // A cardio session moved no load; "0 kg" beside a bodyweight in the same units is
       // noise pretending to be a measurement.
@@ -2201,7 +2221,7 @@ export function WorkoutRow({ w, onClick }) {
   return <div className="item" onClick={onClick}>
     <span className="lrow-i" style={{ width: 34, height: 34, borderRadius: 8, fontSize: 19 }}><Icon name={glyph} /></span>
     <div className="grow"><div className="tt">{w.name}</div>
-      <div className="ss">{[fmtDate(w.d, true), ...durPart(w.end - w.start),
+      <div className="ss">{[fmtDate(w.d, true), ...durPart(durMs(w)),
         t(setsDone(w) === 1 ? '{0} set' : '{0} sets', setsDone(w)),
         ...(w.vol > 0 ? [fmtVol(w.vol, st.unit)] : [])].join(' · ')}</div></div>
     {w.prs && w.prs.length > 0 && <span className="pr"><Icon name="trophy" />{w.prs.length} PR</span>}

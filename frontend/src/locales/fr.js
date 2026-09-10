@@ -1111,4 +1111,8 @@ export default {
   '{0} — to do': '{0} — à faire',
   'Nothing logged today yet — Start builds a new session. Use “Already did it” for one you have done.': 'Aucune séance enregistrée aujourd\'hui — Commencer en crée une neuve. Utilise « Déjà faite » pour une séance que tu as faite.',
   '{0} set': '{0} série',
+  // A day that held more than one session
+  'Day total': 'Total du jour',
+  'Which session are these for?': 'Pour quelle séance ?',
+  '{0} kcal of training onto {1}': '{0} kcal d’entraînement sur {1}',
 }

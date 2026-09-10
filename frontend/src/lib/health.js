@@ -137,6 +137,24 @@ export function putHealth(list, entry) {
 export const healthFor = (S, iso) => (S.health || []).find(e => e.d === iso) || null
 
 /**
+ * Which logged session a set of watch figures belongs to, on a day that may hold more than one.
+ *
+ * `.find` — the first session of the day — used to be the whole of this, and on a day trained
+ * twice it wrote the second session's figures over the first's: one figure lost, one filed
+ * against the wrong session, and a day total that read as a single session. So a figure only
+ * ever lands on a session that has nothing for those fields, oldest first, which means typing
+ * the day's sessions in one after another fills them in the order they happened. When every
+ * session already carries them there is nothing left to fill and it is a correction, so the
+ * newest is the one corrected. `id` overrides all of it: asked which session, the answer wins.
+ */
+export function watchTarget(workouts, iso, fields, id) {
+  const day = (workouts || []).filter(w => w.d === iso)
+  if (id) return day.find(w => w.id === id) || null
+  const free = day.filter(w => !fields.some(f => w.watch && w.watch[f] != null))
+  return free[0] || day[day.length - 1] || null
+}
+
+/**
  * Write a parsed payload into a draft state (call inside store.update) and report what
  * landed where. The session figures annotate the workout already logged that day rather
  * than creating one: the sets are BodyEvolve's record and the watch has no idea what they
@@ -153,10 +171,11 @@ export function applyHealth(S, p) {
   // reads like anything else the watch measured; otherwise against the day, exactly where a
   // hand-typed session with nothing to attach to already goes.
   if (p.sport != null) {
-    const w = (S.workouts || []).find(x => x.d === p.d)
+    const w = watchTarget(S.workouts, p.d, ['kcal'], p.workoutId)
     if (w) w.watch = { ...(w.watch || {}), kcal: p.sport }
     else S.health = putHealth(S.health, { ...(healthFor(S, p.d) || {}), d: p.d, sport: p.sport })
-    report.wrote.push(t('{0} kcal of training', p.sport))
+    // Named, because on a day with two sessions which one got it is the whole question.
+    report.wrote.push(w ? t('{0} kcal of training onto {1}', p.sport, w.name) : t('{0} kcal of training', p.sport))
   }
 
   if (p.steps != null || p.kcal != null || p.rhr != null || p.exerciseMin != null || p.neat != null || p.free != null) {
@@ -215,7 +234,7 @@ export function applyHealth(S, p) {
   }
 
   if (p.workout) {
-    const w = (S.workouts || []).find(x => x.d === p.d)
+    const w = watchTarget(S.workouts, p.d, Object.keys(p.workout), p.workoutId)
     if (w) {
       w.watch = { ...(w.watch || {}), ...p.workout }
       report.wrote.push(t('session details onto {0}', w.name))
