@@ -2132,8 +2132,68 @@ function DayAssign({ day, weekIdx = null, blockId = null, close }) {
 export const dayAssignSheet = (day, weekIdx = null, blockId = null) => ui().openSheet(close => <DayAssign day={day} weekIdx={weekIdx} blockId={blockId} close={close} />)
 
 /* ============================ workout detail ============================ */
-function WorkoutDetail({ w, close }) {
+/**
+ * A session's own figures — how long it took, what it cost — typed in.
+ *
+ * Shared by the finish summary and the detail sheet. A number you did not have the moment you
+ * finished is a number you go looking for afterwards, and the only place to put it used to be
+ * a sheet on the home screen that never said which session it was writing to. So it lives on
+ * the session itself, where you are standing when you notice it is missing.
+ *
+ * The duration is only asked for when nothing timed the session: a live one already knows,
+ * and offering to overwrite a measured duration with a typed one invites a worse number.
+ */
+function WatchFigures({ w, hint }) {
+  // Whether to ask for a duration at all. A live session was timed and is not asked — offering
+  // to overwrite a measured duration with a typed one invites a worse number. A typed one is
+  // asked again, because `watch.minutes` is the record that it was typed rather than measured:
+  // without it, saving a duration made the session indistinguishable from a live one, and the
+  // field disappeared from under the finger that had just filled it, taking the only way to
+  // correct it along with it.
+  const askDur = !!(w.watch && w.watch.minutes > 0) || !(w.end && w.start)
+  const [kcal, setKcal] = useState(() => (w.watch && w.watch.kcal) || 0)
+  // Prefilled with whatever the session already has, from either place it can have come
+  // from — so this reads as correcting a figure rather than starting from nothing.
+  const [mins, setMins] = useState(() => Math.round(durMs(w) / 60000))
+  const [saved, setSaved] = useState(false)
+  const save = () => {
+    update(s => {
+      const x = (s.workouts || []).find(y => y.id === w.id)
+      if (!x) return
+      const watch = { ...(x.watch || {}) }
+      if (kcal > 0) watch.kcal = Math.round(kcal)
+      if (askDur && mins > 0) {
+        watch.minutes = Math.round(mins)
+        // Also as a start and an end, so everything that already reads a clock — the history
+        // rows, the recovery window, the digest — reads this one too with no idea it was
+        // typed. The anchor is the same 18:00 the rest of the app falls back to for a workout
+        // with no clock (see whenOf, and recovery.js's startOf).
+        x.start = new Date(w.d + 'T18:00:00').getTime()
+        x.end = x.start + Math.round(mins) * 60000
+      }
+      if (Object.keys(watch).length) x.watch = watch
+    })
+    setSaved(true)
+    toast(kcal > 0 ? t('{0} kcal saved on this session', fmtNum(Math.round(kcal))) : t('Saved'))
+  }
+  return <div style={{ textAlign: 'left' }}>
+    {askDur && <Stepper label={t('Duration (min)')} unit="min" value={mins} step={5} decimal={false}
+      onChange={n => { setMins(n || 0); setSaved(false) }} />}
+    <Stepper label={t('Session energy')} unit="kcal" value={kcal} step={10} decimal={false}
+      onChange={n => { setKcal(n || 0); setSaved(false) }} />
+    {hint && <div className="dim small" style={{ margin: '6px 2px 10px', lineHeight: 1.45 }}>{hint}</div>}
+    {(kcal > 0 || (askDur && mins > 0)) && !saved &&
+      <Button size="sm" icon="check" onClick={save}>{t('Save it on this session')}</Button>}
+    {saved && <div className="small accent row" style={{ gap: 5 }}>
+      <Icon name="checkCircle" style={{ fontSize: 13 }} />{t('Saved')}</div>}
+  </div>
+}
+
+function WorkoutDetail({ w: given, close }) {
   const st = useStore(s => s.S)
+  // The stored session rather than the one handed over when the sheet opened, so the line
+  // below shows a figure the moment it is typed in underneath it.
+  const w = (st.workouts || []).find(x => x.id === given.id) || given
   return <>
     <h3>{w.name}</h3>
     {/* Date, how long, what it cost, how much was moved, how many sets, and the weight it
@@ -2157,6 +2217,12 @@ function WorkoutDetail({ w, close }) {
           <div className="ss">{e.sets.filter(s => s.done).map(s => setLabel(e.id, s, e.target)).join('  ·  ') || t('no sets')}</div></div>
       </div>
     })}
+    {/* Where a session with no time and no energy against it gets them. Every screen that
+        adds a day up reads these two, so a session missing them drags the day's totals down
+        with it — and this is the screen you are on when you notice. */}
+    <h4 className="sec">{t('What did your watch say?')}</h4>
+    <WatchFigures w={w} hint={t('This is what the day’s totals add up, and what the deficit is worked out from — a session without it counts for nothing in either.')} />
+    <div style={{ height: 14 }} />
     <Button variant="danger" onClick={() => confirmSheet({ title: t('Delete workout?'), message: t('This removes it from your history for good.'), confirmText: t('Delete'), danger: true, onConfirm: () => { update(s => { s.workouts = s.workouts.filter(x => x.id !== w.id) }); close(); toast(t('Workout deleted')) } })}>{t('Delete workout')}</Button>
   </>
 }
@@ -2429,35 +2495,12 @@ function LogPastSheet({ close, routineId }) {
 export const logPastSheet = routineId =>
   ui().openSheet(close => <LogPastSheet close={close} {...(routineId !== undefined ? { routineId } : {})} />)
 
-function FinishSummary({ w, prs, e1prs = [], close }) {
+function FinishSummary({ w: given, prs, e1prs = [], close }) {
   const st = useStore(s => s.S)
-  // The watch is in your hand and the number is on its screen. Asked ten hours later it is a
-  // number nobody remembers, and the deficit for the day goes without it — which is the one
-  // figure a training session actually moves.
-  const [kcal, setKcal] = useState(() => (w.watch && w.watch.kcal) || 0)
-  // A session typed up afterwards was never timed, so the duration is asked for rather than
-  // measured. Live sessions keep the clock they ran on and are not asked.
-  const timed = !!(w.end && w.start)
-  const [mins, setMins] = useState(() => (timed ? Math.round((w.end - w.start) / 60000) : 0))
-  const [saved, setSaved] = useState(false)
+  // The stored session, so the tiles below show a duration the moment it is typed in.
+  const w = (st.workouts || []).find(x => x.id === given.id) || given
+  const ms = durMs(w)
   const warm = (w.entries || []).reduce((n, e) => n + (e.sets || []).filter(x => x.warm && x.done).length, 0)
-  const saveKcal = () => {
-    update(s => {
-      const t = (s.workouts || []).find(x => x.id === w.id)
-      if (!t) return
-      if (kcal > 0) t.watch = { ...(t.watch || {}), kcal: Math.round(kcal) }
-      // Written as a start and an end, not as a bare number of minutes, so everything that
-      // already reads a duration — the summary, the history, the digest — reads this one too
-      // with no idea it was typed. The anchor is the same 18:00 the rest of the app falls
-      // back to for a workout with no clock (see whenOf, and recovery.js's startOf).
-      if (!timed && mins > 0) {
-        t.start = new Date(w.d + 'T18:00:00').getTime()
-        t.end = t.start + Math.round(mins) * 60000
-      }
-    })
-    setSaved(true)
-    toast(kcal > 0 ? t('{0} kcal saved on this session', fmtNum(Math.round(kcal))) : t('Saved'))
-  }
   return <div style={{ textAlign: 'center', padding: '8px 0' }}>
     <div style={{ fontSize: 44, display: 'flex', justifyContent: 'center', color: 'var(--acc)' }}><Icon name="trophy" /></div>
     <h3 style={{ margin: '8px 0' }}>{t('Workout complete!')}</h3>
@@ -2465,10 +2508,9 @@ function FinishSummary({ w, prs, e1prs = [], close }) {
       {/* A session typed up afterwards has no duration until you give it one below — and
           `end - start` on two absent fields printed "NaN min". Its day is the useful thing
           in the tile until then. */}
-      <div className="tile"><div className="l">{timed ? t('Duration') : mins > 0 ? t('Duration') : t('Day')}</div>
-        <div className="v" style={{ fontSize: '1.1rem' }}>
-          {timed ? fmtDur(w.end - w.start) : mins > 0 ? fmtDur(mins * 60000) : fmtDate(w.d, true)}</div></div>
-      <div className="tile"><div className="l">{t('Volume')}</div><div className="v" style={{ fontSize: '1.1rem' }}>{fmtVol(w.vol, st.unit)}</div></div>
+      <div className="tile"><div className="l">{ms ? t('Duration') : t('Day')}</div>
+        <div className="v" style={{ fontSize: '1.1rem' }}>{ms ? fmtDur(ms) : fmtDate(w.d, true)}</div></div>
+      <div className="tile"><div className="l">{t('Volume')}</div><div className="v" style={{ fontSize: '1.1rem' }}>{w.vol > 0 ? fmtVol(w.vol, st.unit) : '—'}</div></div>
       <div className="tile"><div className="l">{t('Sets')}</div><div className="v" style={{ fontSize: '1.1rem' }}>{setsDone(w)}</div></div>
       <div className="tile"><div className="l">{t('PRs')}</div><div className="v" style={{ fontSize: 20 }}>{prs.length || '—'}</div></div>
     </div>
@@ -2482,20 +2524,11 @@ function FinishSummary({ w, prs, e1prs = [], close }) {
       {t(warm === 1 ? '{0} warm-up set, counted in none of the above.' : '{0} warm-up sets, counted in none of the above.', warm)}
     </div>}
 
+    {/* The watch is in your hand and the number is on its screen. Asked ten hours later it is
+        a number nobody remembers, and the day's deficit goes without it — which is the one
+        figure a training session actually moves. */}
     <h4 className="sec" style={{ textAlign: 'left' }}>{t('What did your watch say?')}</h4>
-    <div style={{ textAlign: 'left' }}>
-      {/* Only for a session that was not timed: a live one already knows, and offering to
-          overwrite a measured duration with a typed one is an invitation to a worse number. */}
-      {!timed && <Stepper label={t('Duration (min)')} unit="min" value={mins} step={5} decimal={false}
-        onChange={n => { setMins(n || 0); setSaved(false) }} />}
-      <Stepper label={t('Session energy')} unit="kcal" value={kcal} step={10} decimal={false}
-        onChange={n => { setKcal(n || 0); setSaved(false) }} />
-      <div className="dim small" style={{ margin: '6px 2px 10px', lineHeight: 1.45 }}>
-        {t('Read it off the watch now — asked tomorrow it is a number nobody remembers, and the day’s deficit goes without it. The usual discount is applied when it is counted.')}
-      </div>
-      {(kcal > 0 || (!timed && mins > 0)) && !saved && <Button size="sm" icon="check" onClick={saveKcal}>{t('Save it on this session')}</Button>}
-      {saved && <div className="small accent row" style={{ gap: 5 }}><Icon name="checkCircle" style={{ fontSize: 13 }} />{t('Saved')}</div>}
-    </div>
+    <WatchFigures w={w} hint={t('Read it off the watch now — asked tomorrow it is a number nobody remembers, and the day’s deficit goes without it. The usual discount is applied when it is counted.')} />
 
     <h4 className="sec" style={{ textAlign: 'left' }}>{t('What you just trained')}</h4>
     <BodyMap load={loadOfWorkouts([w])} body={st.body} />

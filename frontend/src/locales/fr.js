@@ -1115,4 +1115,6 @@ export default {
   'Day total': 'Total du jour',
   'Which session are these for?': 'Pour quelle séance ?',
   '{0} kcal of training onto {1}': '{0} kcal d’entraînement sur {1}',
+  // A session’s own figures, typed in from its detail
+  'This is what the day’s totals add up, and what the deficit is worked out from — a session without it counts for nothing in either.': 'C’est ce que les totaux du jour additionnent, et ce à partir de quoi le déficit est calculé — une séance sans ça ne compte pour rien dans ni l’un ni l’autre.',
 }

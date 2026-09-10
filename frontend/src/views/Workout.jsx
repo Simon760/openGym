@@ -70,8 +70,10 @@ function StartChooser() {
             <div className="v" style={{ fontSize: '1.1rem' }}>{recap.ms ? fmtDur(recap.ms) : '—'}</div></div>
           <div className="tile"><div className="l">{t('Energy')}</div>
             <div className="v" style={{ fontSize: '1.1rem' }}>{recap.kcal ? fmtNum(recap.kcal) + ' kcal' : '—'}</div></div>
+          {/* Dashed like the other two when it is zero: a day of cardio moved no load, and
+              "0 kg" beside two real figures reads as a measurement that came out empty. */}
           <div className="tile"><div className="l">{t('Volume')}</div>
-            <div className="v" style={{ fontSize: '1.1rem' }}>{fmtVol(recap.vol, S.unit)}</div></div>
+            <div className="v" style={{ fontSize: '1.1rem' }}>{recap.vol > 0 ? fmtVol(recap.vol, S.unit) : '—'}</div></div>
         </div>
         {/* Every session on its own line once there is more than one. Their names joined into
             a title with a single total underneath, a second session that carried no figures of
