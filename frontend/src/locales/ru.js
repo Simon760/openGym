@@ -1126,4 +1126,17 @@ export default {
   'Recorded on this session': 'Recorded on this session',
   // Untranslated — English source strings, so the key sets stay in step
   'Each session': 'Each session',
+  // Untranslated — English source strings, so the key sets stay in step
+  'Export training (CSV)': 'Export training (CSV)',
+  'Sets, reps, weight and energy — a date range, or since your current routine started.': 'Sets, reps, weight and energy — a date range, or since your current routine started.',
+  'Export your training': 'Export your training',
+  'A CSV, one row per set — reps, weight, and each session’s energy. Nutrition, sleep and weigh-ins stay out of it; the full backup above has those.': 'A CSV, one row per set — reps, weight, and each session’s energy. Nutrition, sleep and weigh-ins stay out of it; the full backup above has those.',
+  'Since the current routine started': 'Since the current routine started',
+  'From': 'From',
+  'To': 'To',
+  'today': 'today',
+  'Nothing logged in this range': 'Nothing logged in this range',
+  'Export CSV': 'Export CSV',
+  '{0} rows exported': '{0} rows exported',
+  'training, no session logged': 'training, no session logged',
 }

@@ -12,7 +12,7 @@ import { t, LANGS, INSTR_LANGS, ONLY_LANG } from '../lib/i18n.js'
 import { DEMO, SOLO, REPO } from '../lib/demo.js'
 import { FIREBASE } from '../lib/firebase.js'
 import { MOBILE, shareExport, syncReminder } from '../lib/mobile.js'
-import { loadStarterPlan, confirmSheet, importFromApp, healthImportSheet } from '../sheets.jsx'
+import { loadStarterPlan, confirmSheet, importFromApp, healthImportSheet, sportExportSheet } from '../sheets.jsx'
 import Icon from '../components/Icon.jsx'
 import { Section, Row, SelectRow, Switch, Segmented, Button, TextField } from '../components/ui.jsx'
 import { APP_NAME, FILE_PREFIX, UPSTREAM, UPSTREAM_REPO } from '../lib/brand.js'
@@ -226,6 +226,9 @@ export default function Settings() {
         accessory="chevron" onClick={() => importRef.current.click()} />
       <Row icon="upload" iconTint="var(--blue)" title={t('Import backup')} accessory="chevron" onClick={() => fileRef.current.click()} />
       <Row icon="download" iconTint="var(--blue)" title={t('Export backup (JSON)')} accessory="chevron" onClick={doExport} />
+      <Row icon="download" iconTint="var(--orange)" title={t('Export training (CSV)')}
+        subtitle={t('Sets, reps, weight and energy — a date range, or since your current routine started.')}
+        accessory="chevron" onClick={sportExportSheet} />
       <Row icon="trash" iconTint="var(--red)" title={t('Reset everything')} danger onClick={() => confirmSheet({ title: t('Reset everything?'), message: t('Deletes your plan, workouts and body weight on this device. This cannot be undone.'), confirmText: t('Delete everything'), danger: true, onConfirm: () => { replaceState(JSON.parse(JSON.stringify(DEF)), true); nav('/home'); toast(t('All data reset')) } })} />
     </Section>
     <input ref={fileRef} type="file" accept=".json,application/json" style={{ display: 'none' }} onChange={doImport} />

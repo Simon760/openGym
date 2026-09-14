@@ -1118,4 +1118,17 @@ export default {
   'Recorded on this session': 'Enregistré sur cette séance',
   // One block per session on a day trained more than once
   'Each session': 'Chaque séance',
+  // Exporting sport data alone, as a dated CSV
+  'Export training (CSV)': 'Exporter mes séances (CSV)',
+  'Sets, reps, weight and energy — a date range, or since your current routine started.': 'Séries, répétitions, poids et énergie — une période au choix, ou depuis le début de ta routine en cours.',
+  'Export your training': 'Exporter mes séances',
+  'A CSV, one row per set — reps, weight, and each session’s energy. Nutrition, sleep and weigh-ins stay out of it; the full backup above has those.': 'Un CSV, une ligne par série — répétitions, poids, et l’énergie de chaque séance. Ni la nutrition, ni le sommeil, ni les pesées n’y figurent : la sauvegarde complète ci-dessus s’en charge.',
+  'Since the current routine started': 'Depuis le début de la routine en cours',
+  'From': 'Du',
+  'To': 'Au',
+  'today': 'aujourd’hui',
+  'Nothing logged in this range': 'Rien d’enregistré sur cette période',
+  'Export CSV': 'Exporter le CSV',
+  '{0} rows exported': '{0} lignes exportées',
+  'training, no session logged': 'sport, sans séance enregistrée',
 }

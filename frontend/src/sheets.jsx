@@ -26,6 +26,7 @@ import { MOBILE, shareExport, shareText, canShareText } from './lib/mobile.js'
 import { entryFor, hasMacros, kcalFromMacros, derivedMismatch, remainingOf, putEntry, isRefeed, goalFor, MACROS, MACRO_NAME } from './lib/nutrition.js'
 import { validBodyFat, composition, sleepFor, putSleep, validSleep, sleepHours, hoursBetween, validTime, BF_MIN, BF_MAX, SLEEP_MIN, SLEEP_MAX } from './lib/body.js'
 import { parseHealth, applyHealth, parseHealthCSV, applyHealthDays, shortcutRecipe, shortcutLink, historySpec, watchTarget } from './lib/health.js'
+import { currentProgrammeStart, earliestLoggedDay, sportExportCSV, sportExportSummary } from './lib/sport-export.js'
 import { suppOn, suppName, tookOn, setTook, suppStreak, suppRate } from './lib/supp.js'
 import { weekFor, weekOfBlock, setWeekDay, duplicateBlock, emptyBlock, blocksOf, activeBlock, blockFromCurrent, startBlock, cancelSwitch, upcoming, daysUntil, removeBlock, sessionsIn, weekIndexAt, MAX_WEEKS, WEEKDAYS } from './lib/blocks.js'
 import { impliedTDEE, tdeeParts, trimOf, stepBaseOf, restStrictOf, countsToday, projectedWeight, recordCalibration, calibration, dayBalance, KCAL_PER_KG_FAT, BIG_EFFORT, TDEE_PARTS, TDEE_MIN, TDEE_MAX, TRIM_MAX, IMPLIED_MIN_SPAN, IMPLIED_MIN_DAYS, IMPLIED_MIN_WEIGHINS } from './lib/energy.js'
@@ -1717,6 +1718,77 @@ function HealthImport({ close, arrived }) {
   </>
 }
 export const healthImportSheet = arrived => ui().openSheet(close => <HealthImport close={close} arrived={arrived} />)
+
+/* ============================ sport-only export ============================ */
+/**
+ * The training alone, as a dated CSV — a coach reads it, a spreadsheet pivots it. The JSON
+ * backup above is a whole profile meant to come back into this app; this is meant to leave
+ * it, so it carries none of the nutrition, sleep or weigh-in log with it.
+ */
+function SportExport({ close }) {
+  const st = useStore(x => x.S)
+  const [from, setFrom] = useState(() => earliestLoggedDay(st) || todayISO())
+  const [to, setTo] = useState(todayISO())
+  // Dated only once a programme has a date to give — a block, or history to read one back
+  // out of. Absent on a fresh profile, and the preset below simply does not show.
+  const start = currentProgrammeStart(st)
+
+  // Each field keeps the other honest rather than letting the range invert silently.
+  const changeFrom = v => { setFrom(v); if (v > to) setTo(v) }
+  const changeTo = v => { setTo(v); if (v < from) setFrom(v) }
+
+  const { sessions, sets } = sportExportSummary(st, from, to)
+
+  const run = async () => {
+    const { csv, count } = sportExportCSV(st, from, to)
+    const name = FILE_PREFIX + '-sport-' + from + '_' + to + '.csv'
+    if (MOBILE) {
+      try { await shareExport(csv, name) } catch (e) { return /* share sheet dismissed */ }
+    } else {
+      // BOM first: Excel guesses plain ASCII otherwise and mangles every accent in the file.
+      const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click()
+      URL.revokeObjectURL(a.href)
+    }
+    close()
+    toast(t('{0} rows exported', count))
+  }
+
+  return <>
+    <h3>{t('Export your training')}</h3>
+    <div className="dim small" style={{ margin: '0 2px 14px', lineHeight: 1.45 }}>
+      {t('A CSV, one row per set — reps, weight, and each session’s energy. Nutrition, sleep and weigh-ins stay out of it; the full backup above has those.')}
+    </div>
+    {start && <>
+      <Button variant="tinted" icon="calendar" onClick={() => { setFrom(start); setTo(todayISO()) }}>
+        {t('Since the current routine started')}
+      </Button>
+      <div className="dim small" style={{ margin: '6px 2px 16px' }}>{fmtDate(start, true)} → {t('today')}</div>
+    </>}
+    <div className="row" style={{ gap: 10, alignItems: 'flex-end' }}>
+      <div style={{ flex: 1 }}>
+        <div className="dim small" style={{ margin: '0 2px 6px' }}>{t('From')}</div>
+        <input className="field tm" type="date" value={from} max={to}
+          onChange={e => e.target.value && changeFrom(e.target.value)} />
+      </div>
+      <div style={{ flex: 1 }}>
+        <div className="dim small" style={{ margin: '0 2px 6px' }}>{t('To')}</div>
+        <input className="field tm" type="date" value={to} min={from} max={todayISO()}
+          onChange={e => e.target.value && changeTo(e.target.value)} />
+      </div>
+    </div>
+    <div className="dim small" style={{ margin: '12px 2px 16px' }}>
+      {sessions ? [
+        t(sessions === 1 ? '{0} workout' : '{0} workouts', sessions),
+        t(sets === 1 ? '{0} set' : '{0} sets', sets)
+      ].join(' · ') : t('Nothing logged in this range')}
+    </div>
+    <Button variant="primary" icon="download" disabled={!sessions} onClick={run}>{t('Export CSV')}</Button>
+    <div style={{ height: 8 }} />
+    <Button variant="ghost" className="dim" onClick={close}>{t('Cancel')}</Button>
+  </>
+}
+export const sportExportSheet = () => ui().openSheet(close => <SportExport close={close} />)
 
 /* ============================ sleep ============================ */
 // Filed under the day you woke up, not the day you went to bed: that is the day it affects,
