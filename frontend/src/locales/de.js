@@ -1156,4 +1156,6 @@ export default {
   'Export CSV': 'Export CSV',
   '{0} rows exported': '{0} rows exported',
   'training, no session logged': 'training, no session logged',
+  // Untranslated — English source strings, so the key sets stay in step
+  'Set {0}': 'Set {0}',
 }

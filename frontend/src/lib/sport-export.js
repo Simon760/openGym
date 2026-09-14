@@ -1,14 +1,18 @@
-// A CSV of the training itself — one row per set, for a coach, a spreadsheet, or a second
-// pair of eyes. Not the JSON backup Settings already offers: that is a whole profile meant
-// to come back into this app; this is meant to leave it and be read by something else, so it
-// is flat, dated, and in the language the app already speaks.
+// A CSV of the training itself, read the way a session actually reads: the date and what it
+// cost once, an exercise's name once, then its sets underneath, one line each. Not the JSON
+// backup Settings already offers — that is a whole profile meant to come back into this app;
+// this is meant to leave it and be read by a coach or opened in a spreadsheet, so it is
+// grouped and in the language the app already speaks, not a flat table repeating the same
+// session figures on every row.
 //
-// Long format on purpose — one row per set, a session's own figures (duration, energy, body
-// weight, volume) repeated on every one of its rows rather than sitting on a header row of
-// their own — because that is what a spreadsheet actually pivots and filters on.
+// The grouping means rows are not all the same width — a session line carries its own
+// figures, an exercise line just a name one column in, a set line just its number and its
+// detail two columns in — and a spreadsheet reads that as indentation for free. A blank line
+// separates one session's block from the next, the way paragraphs would in a text a person
+// wrote by hand.
 
 import { EXIDX, exName } from './exercises.js'
-import { setLabel, durMs, modeOf, isWorking, setTop, setTopReps, isBw } from './history.js'
+import { setLabel, durMs, isWorking } from './history.js'
 import { activeBlock } from './blocks.js'
 import { fmtDate } from './format.js'
 import { t } from './i18n.js'
@@ -37,8 +41,9 @@ export function earliestLoggedDay(S) {
   return (S.workouts || []).reduce((min, w) => (min == null || w.d < min ? w.d : min), null)
 }
 
-const HEADER = ['Date', 'Séance', 'Exercice', 'Série', 'Répétitions', 'Poids (kg)', 'Détail',
-  'Durée séance (min)', 'Énergie séance (kcal)', 'Volume séance (kg)', 'Poids du jour (kg)']
+// Describes the outer, session-level shape — what every block in the file opens with. The
+// exercise and set lines underneath are sub-rows of it, not columns of their own.
+const HEADER = ['Date', 'Séance', 'Durée (min)', 'Énergie (kcal)', 'Volume (kg)', 'Poids du jour (kg)']
 
 // RFC 4182-ish: only quote a cell that needs it, so an ordinary CSV stays easy to eyeball.
 const cell = v => {
@@ -47,69 +52,63 @@ const cell = v => {
 }
 const round1 = n => (n == null ? null : Math.round(n * 10) / 10)
 
+/** One session, as its own block: the header line, then every exercise with its sets under
+ *  it. `[]` when there is truly nothing to say — no set was ticked off and no watch figure
+ *  was ever attached, which is what a session started and abandoned looks like. */
+function workoutBlock(w) {
+  const mins = round1(durMs(w) / 60000) || ''
+  const kcal = (w.watch && w.watch.kcal) || ''
+  const vol = w.vol > 0 ? w.vol : ''
+  const bw = w.bw || ''
+  const body = []
+  ;(w.entries || []).forEach(e => {
+    const sets = (e.sets || []).filter(isWorking)
+    if (!sets.length) return
+    body.push(['', exName(EXIDX[e.id]) || e.n || e.id])
+    sets.forEach((s, i) => body.push(['', '', t('Set {0}', i + 1), setLabel(e.id, s, e.target)]))
+  })
+  if (!body.length && !mins && !kcal) return []
+  return [[w.d, w.name, mins, kcal, vol, bw], ...body]
+}
+
+/** A day the watch measured training on with nothing logged here for it to attach to — see
+ *  lib/health.js: a watch measuring a session is evidence it happened either way. */
+const strayBlock = h => [[h.d, t('training, no session logged'), h.sportMin || '', h.sport || '']]
+
 /**
- * One row per completed set (warm-ups excluded — see isWorking) for every session between
- * two days inclusive, plus one row for a day whose training energy was logged without a
- * session at all to attach it to — see lib/health.js: a watch measuring a session is
- * evidence it happened, whether or not it was logged here, and an export that only walked
- * S.workouts would drop it silently.
- *
- * Reps and weight are filled only where they mean something — a lift or a bodyweight set —
- * and left empty rather than zero everywhere else (a cardio set's own minutes, speed and
- * distance are already in Détail, via the exact formatting the rest of the app reads sets
- * with). A drop set is still one row: the loaded columns take its heaviest load, same as
- * every other place in the app that has to reduce a multi-load set to one number.
+ * Every session between two days inclusive, each as its own block, in the order they were
+ * trained — interleaved with a day whose training energy was logged without a session to
+ * carry it, so the file reads as one chronological account rather than sessions first and
+ * loose figures dumped after.
  */
 export function sportExportRows(S, fromISO, toISO) {
   const inRange = d => d >= fromISO && d <= toISO
-  const rows = []
-
   const workouts = (S.workouts || []).filter(w => inRange(w.d))
-    .sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : (a.start || 0) - (b.start || 0)))
+  const strayDays = (S.health || []).filter(h => inRange(h.d) &&
+    (h.sport != null || h.sportMin != null) && !workouts.some(w => w.d === h.d))
 
-  workouts.forEach(w => {
-    const mins = round1(durMs(w) / 60000) || ''
-    const kcal = (w.watch && w.watch.kcal) || ''
-    const vol = w.vol > 0 ? w.vol : ''
-    const bw = w.bw || ''
-    let any = false
-    ;(w.entries || []).forEach(e => {
-      const cfg = { ...(e.target || {}), id: e.id }
-      const mode = modeOf(cfg)
-      const name = exName(EXIDX[e.id]) || e.n || e.id
-      ;(e.sets || []).forEach((s, i) => {
-        if (!isWorking(s)) return
-        any = true
-        const loaded = mode === 'reps'
-        const reps = loaded ? setTopReps(s) : ''
-        // A pure bodyweight set with nothing added reads as an empty cell, not a "0 kg" that
-        // claims a plate was on it — the same rule the app's own set labels already follow.
-        const weight = loaded && !(isBw(cfg) && setTop(s) === 0) ? setTop(s) : ''
-        rows.push([w.d, w.name, name, i + 1, reps, weight, setLabel(e.id, s, e.target),
-          mins, kcal, vol, bw])
-      })
-    })
-    // A session logged with nothing ticked off still happened and still cost what it cost —
-    // keep its own energy and duration on the record rather than dropping the row entirely.
-    if (!any && (kcal || mins)) rows.push([w.d, w.name, '', '', '', '', '', mins, kcal, vol, bw])
+  const units = [
+    ...workouts.map(w => ({ d: w.d, at: w.start || 0, block: () => workoutBlock(w) })),
+    ...strayDays.map(h => ({ d: h.d, at: 0, block: () => strayBlock(h) }))
+  ].sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : a.at - b.at))
+
+  const rows = []
+  units.forEach(u => {
+    const block = u.block()
+    if (!block.length) return
+    if (rows.length) rows.push([])
+    rows.push(...block)
   })
-
-  // Days the watch measured training on but nothing here was logged to carry it.
-  ;(S.health || []).forEach(h => {
-    if (!inRange(h.d) || (h.sport == null && h.sportMin == null)) return
-    if (workouts.some(w => w.d === h.d)) return
-    rows.push([h.d, t('training, no session logged'), '', '', '', '', '',
-      h.sportMin || '', h.sport || '', '', ''])
-  })
-
-  rows.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
   return rows
 }
 
 export function sportExportCSV(S, fromISO, toISO) {
   const rows = sportExportRows(S, fromISO, toISO)
   const lines = [HEADER, ...rows].map(r => r.map(cell).join(','))
-  return { csv: lines.join('\r\n'), count: rows.length }
+  // Sessions, not lines — a blank separator and two sub-rows per exercise are not "a row of
+  // training" to whoever reads the confirmation toast afterwards.
+  const count = rows.filter(r => r.length >= 2 && r[0]).length
+  return { csv: lines.join('\r\n'), count }
 }
 
 /** A short line for the sheet to show before exporting: what this range actually holds. */

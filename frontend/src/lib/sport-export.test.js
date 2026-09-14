@@ -1,9 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { currentProgrammeStart, earliestLoggedDay, sportExportRows, sportExportCSV, sportExportSummary } from './sport-export.js'
-import { EXDB } from './exercises.js'
+import { EXDB, EXIDX, exName } from './exercises.js'
 
 const LIFT = EXDB.find(e => e.bp !== 'cardio' && e.eq !== 'body weight').id
-const BW = EXDB.find(e => e.eq === 'body weight' && e.bp !== 'cardio').id
 const CARDIO = EXDB.find(e => e.bp === 'cardio').id
 
 const D1 = '2026-08-01', D2 = '2026-08-05', D3 = '2026-08-10'
@@ -69,15 +68,33 @@ describe('currentProgrammeStart', () => {
   })
 })
 
-describe('sportExportRows', () => {
-  it('keeps only what falls inside the range, inclusive of both ends', () => {
-    const S = base({ workouts: [
-      workout({ id: 'a', d: D1, entries: [{ id: LIFT, target: {}, sets: [liftedSet(60, 10)] }] }),
-      workout({ id: 'b', d: D2, entries: [{ id: LIFT, target: {}, sets: [liftedSet(60, 10)] }] }),
-      workout({ id: 'c', d: D3, entries: [{ id: LIFT, target: {}, sets: [liftedSet(60, 10)] }] })
-    ] })
-    expect(sportExportRows(S, D1, D2).map(r => r[0])).toEqual([D1, D2])
-    expect(sportExportRows(S, D2, D2).map(r => r[0])).toEqual([D2])
+describe('sportExportRows — one block per session', () => {
+  it('opens a session with one header line carrying its own figures', () => {
+    const S = base({ workouts: [workout({ watch: { kcal: 430 }, vol: 1800, bw: 79,
+      entries: [{ id: LIFT, target: {}, sets: [liftedSet(60, 10)] }] })] })
+    const rows = sportExportRows(S, D2, D2)
+    expect(rows[0]).toEqual([D2, 'Push', 50, 430, 1800, 79])
+  })
+
+  it('shapes exercise and set lines exactly — header, exercise, then one line per set', () => {
+    const S = base({ workouts: [workout({ entries: [
+      { id: LIFT, target: {}, sets: [liftedSet(60, 10), liftedSet(62.5, 8)] }
+    ] })] })
+    const rows = sportExportRows(S, D2, D2)
+    // header, exercise, set 1, set 2 — four lines for one exercise of two sets
+    expect(rows).toHaveLength(4)
+    expect(rows[1]).toEqual(['', exName(EXIDX[LIFT])])
+    expect(rows[2]).toEqual(['', '', 'Set 1', '60×10'])
+    expect(rows[3][2]).toBe('Set 2')
+    expect(rows[3][3]).toContain('62.5')  // number formatting follows lang, forced to 'en' under vitest — see i18n.js TESTING
+  })
+
+  it('keeps a drop set’s whole chain on its one line', () => {
+    const S = base({ workouts: [workout({ entries: [{ id: LIFT, target: {}, sets: [
+      { w: 60, r: 10, done: true, drops: [{ w: 45, r: 8 }] }
+    ] }] })] })
+    const rows = sportExportRows(S, D2, D2)
+    expect(rows[2][3]).toBe('60×10→45×8')
   })
 
   it('drops warm-up sets and unchecked sets, keeps done working sets', () => {
@@ -87,77 +104,38 @@ describe('sportExportRows', () => {
       liftedSet(60, 10)
     ] }] })] })
     const rows = sportExportRows(S, D2, D2)
-    expect(rows).toHaveLength(1)
-    expect(rows[0][5]).toBe(60)
+    expect(rows.filter(r => typeof r[2] === 'string' && r[2].startsWith('Set'))).toHaveLength(1)
   })
 
-  it('reads reps and weight off a straight lifting set', () => {
-    const S = base({ workouts: [workout({ entries: [{ id: LIFT, target: {}, sets: [liftedSet(82.5, 8)] }] })] })
-    const [row] = sportExportRows(S, D2, D2)
-    expect(row[4]).toBe(8)      // Répétitions
-    expect(row[5]).toBe(82.5)   // Poids (kg)
-    expect(row[6]).toBe('82.5×8')
-  })
-
-  it('leaves weight blank on a bodyweight set carrying nothing added, rather than writing 0', () => {
-    const S = base({ workouts: [workout({ entries: [{ id: BW, target: {}, sets: [liftedSet(0, 15)] }] })] })
-    const [row] = sportExportRows(S, D2, D2)
-    expect(row[4]).toBe(15)
-    expect(row[5]).toBe('')
-  })
-
-  it('still shows the added weight on a bodyweight set that carries one', () => {
-    const S = base({ workouts: [workout({ entries: [{ id: BW, target: { bodyweight: true }, sets: [liftedSet(10, 8)] }] })] })
-    const [row] = sportExportRows(S, D2, D2)
-    expect(row[5]).toBe(10)
-  })
-
-  it('leaves reps and weight blank on a cardio set — the real figures live in Détail', () => {
+  it('reads a cardio set’s detail the same way the app already labels it', () => {
     const S = base({ workouts: [workout({ entries: [{ id: CARDIO, target: { mode: 'cardio' },
       sets: [{ min: 20, done: true }] }] })] })
-    const [row] = sportExportRows(S, D2, D2)
-    expect(row[4]).toBe('')
-    expect(row[5]).toBe('')
-    expect(row[6]).toContain('20 min')
-  })
-
-  it('takes a drop set’s heaviest load for Reps/Poids, and keeps the whole chain in Détail', () => {
-    const S = base({ workouts: [workout({ entries: [{ id: LIFT, target: {}, sets: [
-      { w: 60, r: 10, done: true, drops: [{ w: 45, r: 8 }] }
-    ] }] })] })
-    const [row] = sportExportRows(S, D2, D2)
-    expect(row[4]).toBe(10)
-    expect(row[5]).toBe(60)
-    expect(row[6]).toBe('60×10→45×8')
-  })
-
-  it('repeats the session’s own figures on every one of its rows', () => {
-    const S = base({ workouts: [workout({
-      watch: { kcal: 430 }, bw: 79.2, vol: 1800,
-      entries: [{ id: LIFT, target: {}, sets: [liftedSet(60, 10), liftedSet(60, 9)] }]
-    }) ] })
     const rows = sportExportRows(S, D2, D2)
-    expect(rows).toHaveLength(2)
-    rows.forEach(r => { expect(r[8]).toBe(430); expect(r[9]).toBe(1800); expect(r[10]).toBe(79.2) })
+    expect(rows[2][3]).toContain('20 min')
   })
 
-  it('keeps a session that has watch figures but nothing ticked off, as one row', () => {
-    const S = base({ workouts: [workout({ watch: { kcal: 300 },
-      entries: [{ id: LIFT, target: {}, sets: [{ w: 60, r: 10, done: false }] }] })] })
-    const rows = sportExportRows(S, D2, D2)
-    expect(rows).toHaveLength(1)
-    expect(rows[0][8]).toBe(300)
-    expect(rows[0][2]).toBe('') // no exercise actually performed
+  it('separates two sessions with one blank line', () => {
+    const S = base({ workouts: [
+      workout({ id: 'a', d: D1, entries: [{ id: LIFT, target: {}, sets: [liftedSet(60, 10)] }] }),
+      workout({ id: 'b', d: D2, entries: [{ id: LIFT, target: {}, sets: [liftedSet(60, 10)] }] })
+    ] })
+    const rows = sportExportRows(S, D1, D2)
+    const blankIdx = rows.findIndex(r => r.length === 0)
+    expect(blankIdx).toBeGreaterThan(0)
+    expect(rows[blankIdx + 1][0]).toBe(D2)
+  })
+
+  it('does not open a blank line before the very first session', () => {
+    const S = base({ workouts: [workout({ entries: [{ id: LIFT, target: {}, sets: [liftedSet(60, 10)] }] })] })
+    expect(sportExportRows(S, D2, D2)[0].length).toBeGreaterThan(0)
   })
 
   it('keeps a live session’s own clock even with nothing ticked off — it still ran that long', () => {
-    // workout() gives every fixture a 50-minute start/end by default: a session that really
-    // ran is real information regardless of whether a set got checked off inside it.
+    // workout() gives every fixture a 50-minute start/end by default.
     const S = base({ workouts: [workout({ entries: [{ id: LIFT, target: {}, sets: [{ w: 60, r: 10, done: false }] }] })] })
     const rows = sportExportRows(S, D2, D2)
     expect(rows).toHaveLength(1)
-    expect(rows[0][7]).toBe(50)
-    expect(rows[0][8]).toBe('')
+    expect(rows[0]).toEqual([D2, 'Push', 50, '', '', ''])
   })
 
   it('drops a session with no clock, no watch figures and nothing done — truly empty', () => {
@@ -169,9 +147,7 @@ describe('sportExportRows', () => {
   it('surfaces a day the watch measured training on with nothing logged here for it', () => {
     const S = base({ health: [{ d: D2, sport: 300, sportMin: 40 }] })
     const rows = sportExportRows(S, D2, D2)
-    expect(rows).toHaveLength(1)
-    expect(rows[0][7]).toBe(40)
-    expect(rows[0][8]).toBe(300)
+    expect(rows).toEqual([[D2, 'training, no session logged', 40, 300]])
   })
 
   it('does not duplicate that figure when a session already carries it', () => {
@@ -179,26 +155,50 @@ describe('sportExportRows', () => {
       workouts: [workout({ watch: { kcal: 300 }, entries: [{ id: LIFT, target: {}, sets: [liftedSet(60, 10)] }] })],
       health: [{ d: D2, sport: 300 }]
     })
-    expect(sportExportRows(S, D2, D2)).toHaveLength(1)
+    expect(sportExportRows(S, D2, D2).filter(r => r.length && r[0] === D2)).toHaveLength(1)
   })
 
-  it('sorts chronologically', () => {
+  it('interleaves a stray day chronologically rather than dumping it at the end', () => {
+    const S = base({
+      workouts: [workout({ d: D3, entries: [{ id: LIFT, target: {}, sets: [liftedSet(60, 10)] }] })],
+      health: [{ d: D1, sport: 200 }]
+    })
+    const rows = sportExportRows(S, D1, D3)
+    expect(rows[0][0]).toBe(D1)
+  })
+
+  it('respects the date range on both ends', () => {
     const S = base({ workouts: [
-      workout({ id: 'a', d: D3, entries: [{ id: LIFT, target: {}, sets: [liftedSet(60, 10)] }] }),
-      workout({ id: 'b', d: D1, entries: [{ id: LIFT, target: {}, sets: [liftedSet(60, 10)] }] })
+      workout({ id: 'a', d: D1, entries: [{ id: LIFT, target: {}, sets: [liftedSet(60, 10)] }] }),
+      workout({ id: 'b', d: D3, entries: [{ id: LIFT, target: {}, sets: [liftedSet(60, 10)] }] })
     ] })
-    expect(sportExportRows(S, D1, D3).map(r => r[0])).toEqual([D1, D3])
+    expect(sportExportRows(S, D2, D3).some(r => r[0] === D1)).toBe(false)
+    expect(sportExportRows(S, D1, D1).some(r => r[0] === D3)).toBe(false)
   })
 })
 
 describe('sportExportCSV', () => {
-  it('starts with the header and quotes a cell that needs it', () => {
+  it('starts with the session header and quotes a cell that needs it', () => {
     const S = base({ workouts: [workout({ name: 'Push, heavy', entries: [{ id: LIFT, target: {}, sets: [liftedSet(60, 10)] }] })] })
-    const { csv, count } = sportExportCSV(S, D2, D2)
+    const { csv } = sportExportCSV(S, D2, D2)
     const lines = csv.split('\r\n')
-    expect(lines[0]).toBe('Date,Séance,Exercice,Série,Répétitions,Poids (kg),Détail,Durée séance (min),Énergie séance (kcal),Volume séance (kg),Poids du jour (kg)')
+    expect(lines[0]).toBe('Date,Séance,Durée (min),Énergie (kcal),Volume (kg),Poids du jour (kg)')
     expect(lines[1]).toContain('"Push, heavy"')
-    expect(count).toBe(1)
+  })
+
+  it('an exercise and set line read as indented — leading cells empty', () => {
+    const S = base({ workouts: [workout({ entries: [{ id: LIFT, target: {}, sets: [liftedSet(60, 10)] }] })] })
+    const lines = sportExportCSV(S, D2, D2).csv.split('\r\n')
+    expect(lines[2]).toMatch(/^,[^,]/)       // exercise: one leading comma
+    expect(lines[3]).toMatch(/^,,Set 1,/)  // set: two leading commas
+  })
+
+  it('counts sessions, not raw lines', () => {
+    const S = base({ workouts: [
+      workout({ id: 'a', d: D1, entries: [{ id: LIFT, target: {}, sets: [liftedSet(60, 10), liftedSet(60, 9)] }] }),
+      workout({ id: 'b', d: D2, entries: [{ id: LIFT, target: {}, sets: [liftedSet(60, 10)] }] })
+    ] })
+    expect(sportExportCSV(S, D1, D2).count).toBe(2)
   })
 
   it('is empty but well-formed when the range holds nothing', () => {

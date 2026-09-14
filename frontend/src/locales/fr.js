@@ -1131,4 +1131,6 @@ export default {
   'Export CSV': 'Exporter le CSV',
   '{0} rows exported': '{0} lignes exportées',
   'training, no session logged': 'sport, sans séance enregistrée',
+  // One set line inside the grouped sport export
+  'Set {0}': 'Série {0}',
 }
