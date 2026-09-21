@@ -1141,4 +1141,8 @@ export default {
   'training, no session logged': 'training, no session logged',
   // Untranslated — English source strings, so the key sets stay in step
   'Set {0}': 'Set {0}',
+  // Untranslated — English source strings, so the key sets stay in step
+  'Previous week': 'Previous week',
+  'Next week': 'Next week',
+  'Weekly average': 'Weekly average',
 }

@@ -9,6 +9,8 @@
 // target are all derived on read, so fixing a number you mistyped on Tuesday immediately
 // fixes every reading that used it — the same rule the progression engine follows.
 
+import { isoOf } from './format.js'
+
 export const MACROS = ['p', 'c', 'f']
 
 // Atwater factors: protein and carbohydrate yield 4 kcal per gram, fat 9. These are the
@@ -150,6 +152,36 @@ export const seriesOf = (S, days, now = Date.now()) =>
   (S.nutrition || [])
     .filter(e => num(e.kcal) && inWindow(e.d, days, now))
     .map(e => ({ t: new Date(e.d + 'T12:00:00').getTime(), y: num(e.kcal), d: e.d }))
+
+/**
+ * One specific week, Monday first — the seven days a weekly chart needs, each paired with
+ * its entry or `null` when the day was never logged, plus the same field average avgOver
+ * gives: only the days that logged a field count toward that field's average, so three days
+ * entered do not get spread thin across a week of seven.
+ *
+ * Unlike avgOver, which counts back a number of days from now, this takes a week by its own
+ * Monday — the week a chart is showing is not always this one.
+ */
+export function weekOf(S, mondayISO) {
+  const days = []
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(mondayISO + 'T12:00:00')
+    d.setDate(d.getDate() + i)
+    const iso = isoOf(d)
+    days.push({ iso, entry: entryFor(S, iso) })
+  }
+  const sums = { kcal: 0, p: 0, c: 0, f: 0 }, counts = { kcal: 0, p: 0, c: 0, f: 0 }
+  days.forEach(({ entry }) => {
+    if (!entry) return
+    for (const k of ['kcal', ...MACROS]) {
+      const v = num(entry[k])
+      if (v) { sums[k] += v; counts[k]++ }
+    }
+  })
+  const avg = {}
+  for (const k of ['kcal', ...MACROS]) avg[k] = counts[k] ? Math.round(sums[k] / counts[k]) : null
+  return { days, avg, logged: days.filter(x => x.entry).length }
+}
 
 /**
  * Insert or replace a day's entry and return a new, date-sorted list. Kept here rather

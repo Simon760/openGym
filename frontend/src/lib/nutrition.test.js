@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   entryFor, lastEntry, hasMacros, kcalFromMacros, derivedMismatch, macroSplit,
-  remainingOf, avgOver, seriesOf, putEntry, KCAL_PER_G, MISMATCH_TOL
+  remainingOf, avgOver, seriesOf, weekOf, putEntry, KCAL_PER_G, MISMATCH_TOL
 } from './nutrition.js'
 import { isoOf } from './format.js'
 
@@ -192,5 +192,46 @@ describe('entryFor / lastEntry', () => {
   it('reads a profile that has never logged intake', () => {
     expect(entryFor({}, iso(0))).toBe(null)
     expect(lastEntry({})).toBe(null)
+  })
+})
+
+describe('weekOf', () => {
+  const MON = '2026-08-03'   // a real Monday
+
+  it('gives all seven days, Monday first, each paired with its entry or null', () => {
+    const st = S({ d: MON, kcal: 2000, p: 150, c: 250, f: 60 })
+    const wk = weekOf(st, MON)
+    expect(wk.days.map(d => d.iso)).toEqual([
+      '2026-08-03', '2026-08-04', '2026-08-05', '2026-08-06',
+      '2026-08-07', '2026-08-08', '2026-08-09'
+    ])
+    expect(wk.days[0].entry).toMatchObject({ kcal: 2000 })
+    expect(wk.days[1].entry).toBe(null)
+  })
+
+  it('averages each field only over the days that logged it, same rule as avgOver', () => {
+    const st = S(
+      { d: MON, kcal: 2000, p: 150 },
+      { d: '2026-08-04', kcal: 2400 },
+      { d: '2026-08-05', kcal: 1800, p: 170 }
+    )
+    const wk = weekOf(st, MON)
+    expect(wk.avg.kcal).toBe(Math.round((2000 + 2400 + 1800) / 3))
+    expect(wk.avg.p).toBe(160)   // (150+170)/2, not spread across 3 or 7 days
+    expect(wk.avg.c).toBe(null)
+    expect(wk.logged).toBe(3)
+  })
+
+  it('is a well-formed empty week when nothing was logged', () => {
+    const wk = weekOf(S(), MON)
+    expect(wk.days.every(d => d.entry === null)).toBe(true)
+    expect(wk.avg).toEqual({ kcal: null, p: null, c: null, f: null })
+    expect(wk.logged).toBe(0)
+  })
+
+  it('reads a week other than the current one — any Monday it is given', () => {
+    const st = S({ d: '2026-07-06', kcal: 2200 })   // an earlier Monday
+    expect(weekOf(st, '2026-07-06').avg.kcal).toBe(2200)
+    expect(weekOf(st, MON).avg.kcal).toBe(null)
   })
 })

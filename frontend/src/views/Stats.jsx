@@ -3,10 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { EXIDX, exName } from '../lib/exercises.js'
 import { lastBW, streakWeeks, setLabel, modeOf, effortOf, setTop, exEntryOf } from '../lib/history.js'
-import { fmtNum, fmtDate, fmtVol, todayISO, weekKey, fmtNum2 } from '../lib/format.js'
+import { fmtNum, fmtDate, fmtVol, todayISO, weekKey, fmtNum2, isoOf, DAYS } from '../lib/format.js'
 import { t } from '../lib/i18n.js'
 import { bwSheet, goalSheet, calendarSheet, workoutDetailSheet, WorkoutRow, bwDeltaColor, nutriSheet, nutriGoalSheet, sleepSheet, tdeeSheet } from '../sheets.jsx'
 import LineChart from '../components/LineChart.jsx'
+import BarChart from '../components/BarChart.jsx'
 import Heatmap from '../components/Heatmap.jsx'
 import Icon from '../components/Icon.jsx'
 import BodyMap, { BodyMapLegend } from '../components/BodyMap.jsx'
@@ -17,7 +18,7 @@ import {
   hasEffort, displayScale, scaleName, toScale, avgRir, effortSummary, effortWeeks,
   effortHistogram, isHardSet, HARD_RIR
 } from '../lib/effort.js'
-import { avgOver, seriesOf, MACROS, MACRO_NAME, MACRO_COLOR } from '../lib/nutrition.js'
+import { avgOver, seriesOf, weekOf, MACROS, MACRO_NAME, MACRO_COLOR, KCAL_PER_G } from '../lib/nutrition.js'
 import { bodyFatSeries, compositionTrend, sleepSeries, sleepAverage, sleepDebt, lastComposition, whenOf } from '../lib/body.js'
 import { deficitTotals, deficitSeries, impliedTDEE, predictedVsActual, projectedWeight, cutRate, tdeeParts, KCAL_PER_KG_FAT, LOSS_CEILING_PCT } from '../lib/energy.js'
 import { Button, Segmented, SelectRow } from '../components/ui.jsx'
@@ -138,6 +139,85 @@ function EffortCard({ S }) {
 // fast. An average that quietly divided by the length of the window would report a steady
 // 2 400 kcal week as 1 700 because two days were never filled in — and read as a deficit that
 // was never eaten.
+// One macro's grams turned into the calories it actually accounts for, on the app's own
+// factors — a stacked bar's segments have to be in the same unit as its height, and grams
+// are not it.
+//
+// This is what the bar is built from, in kcal terms, rather than the day's own logged kcal
+// figure: the two agree when a log is internally consistent and drift apart when it is not,
+// same tension macroSplit already has to answer for the pie it draws. Forcing the stack to
+// the logged total would leave a gap explained by nothing on screen, which reads as a
+// rendering bug rather than the real mismatch it is — derivedMismatch is where that
+// mismatch actually gets said out loud, not silently absorbed into a bar's height.
+const macroKcal = (entry, m) => (entry && entry[m] ? entry[m] * KCAL_PER_G[m] : 0)
+
+// The metrics the weekly chart can show, in the order the toggle offers them. kcal stacks
+// the three macros on the app's own colours (see nutrition.js's own legend, reused rather
+// than invented again here); a single macro shows only itself, in that macro's own colour —
+// so switching the toggle never changes what a colour means.
+const METRIC = {
+  kcal: { unit: 'kcal', color: null },
+  p: { unit: 'g', color: MACRO_COLOR.p },
+  c: { unit: 'g', color: MACRO_COLOR.c },
+  f: { unit: 'g', color: MACRO_COLOR.f }
+}
+
+/**
+ * This week's intake, one bar a day — the shape a trend line can't show, because "which
+ * three days slipped" is a question about specific days, not a slope. Independent of the
+ * card's own 7/30/90/All window below it: that one is about the average over a stretch of
+ * time, this one is always a specific, nameable week, with its own arrows to page through
+ * the weeks before it.
+ */
+function WeekBars({ S, goal }) {
+  const [offset, setOffset] = useState(0)
+  const [metric, setMetric] = useState('kcal')
+  const today = new Date()
+  const monday = new Date(today)
+  monday.setDate(today.getDate() - ((today.getDay() + 6) % 7) + offset * 7)
+  const mondayISO = isoOf(monday)
+  const wk = weekOf(S, mondayISO)
+  const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6)
+
+  const bars = wk.days.map(({ iso, entry }) => ({
+    iso,
+    label: t(DAYS[new Date(iso + 'T12:00:00').getDay()]),
+    segments: !entry ? []
+      : metric === 'kcal'
+        ? MACROS.filter(m => entry[m] > 0).map(m => ({ v: macroKcal(entry, m), color: MACRO_COLOR[m] }))
+        : entry[metric] > 0 ? [{ v: entry[metric], color: METRIC[metric].color }] : []
+  }))
+
+  return <>
+    <div className="row between" style={{ margin: '2px 0 10px' }}>
+      <button className="iconbtn" style={{ width: 28, height: 28, fontSize: 14 }}
+        onClick={() => setOffset(o => o - 1)} aria-label={t('Previous week')}><Icon name="chevronLeft" /></button>
+      <span className="small" style={{ fontWeight: 600 }}>{offset === 0 ? t('This week') : fmtDate(mondayISO) + ' – ' + fmtDate(isoOf(sunday))}</span>
+      <button className="iconbtn" style={{ width: 28, height: 28, fontSize: 14, opacity: offset === 0 ? 0.35 : 1 }}
+        disabled={offset === 0} onClick={() => setOffset(o => Math.min(0, o + 1))}
+        aria-label={t('Next week')}><Icon name="chevronRight" /></button>
+    </div>
+    <Segmented className="seg-range" value={metric} onChange={setMetric}
+      options={[{ value: 'kcal', label: 'kcal' }, { value: 'p', label: t(MACRO_NAME.p) },
+        { value: 'c', label: t(MACRO_NAME.c) }, { value: 'f', label: t(MACRO_NAME.f) }]} />
+    <div className="chart" style={{ marginTop: 10 }}>
+      <BarChart bars={bars} h={150} unit={METRIC[metric].unit} todayISO={todayISO()}
+        goal={metric === 'kcal' ? goal?.kcal : goal?.[metric]} />
+    </div>
+    <div className="dim small" style={{ margin: '4px 2px 10px' }}>{t('Weekly average')}</div>
+    <div className="tiles" style={{ gridTemplateColumns: 'repeat(4,1fr)', gap: 8 }}>
+      <div className="tile" style={{ padding: '10px 8px' }}>
+        <div className="l">kcal</div>
+        <div className="v" style={{ fontSize: 17 }}>{wk.avg.kcal ?? '—'}</div>
+      </div>
+      {MACROS.map(m => <div key={m} className="tile" style={{ padding: '10px 8px' }}>
+        <div className="l">{t(MACRO_NAME[m])}</div>
+        <div className="v" style={{ fontSize: 17 }}>{wk.avg[m] != null ? wk.avg[m] + ' g' : '—'}</div>
+      </div>)}
+    </div>
+  </>
+}
+
 function NutritionCard({ S }) {
   const [win, setWin] = useState(30)
   const avg = avgOver(S, win)
@@ -154,6 +234,8 @@ function NutritionCard({ S }) {
         <Button size="sm" icon="plus" onClick={nutriSheet}>{t('Log')}</Button>
       </div>
     </div>
+    <WeekBars S={S} goal={goal} />
+    <div style={{ borderTop: '1px solid var(--sep)', margin: '4px 0 14px' }} />
     <Segmented className="seg-range" value={win} onChange={setWin}
       options={[{ value: 7, label: '7d' }, { value: 30, label: '30d' }, { value: 90, label: '90d' }, { value: 0, label: t('All') }]} />
     {!avg.logged ? <div className="muted small">{t('Nothing logged in this period.')}</div> : <>

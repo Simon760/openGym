@@ -1133,4 +1133,8 @@ export default {
   'training, no session logged': 'sport, sans séance enregistrée',
   // One set line inside the grouped sport export
   'Set {0}': 'Série {0}',
+  // The weekly nutrition bar chart
+  'Previous week': 'Semaine précédente',
+  'Next week': 'Semaine suivante',
+  'Weekly average': 'Moyenne hebdo',
 }
