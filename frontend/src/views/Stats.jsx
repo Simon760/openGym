@@ -228,10 +228,10 @@ function NutritionCard({ S }) {
     <div className="row between" style={{ marginBottom: 8 }}>
       <h2 style={{ margin: 0 }}>{t('Nutrition')}</h2>
       <div className="row" style={{ gap: 8 }}>
-        <Button size="sm" icon="target" style={goal ? { color: 'var(--yellow)' } : undefined} onClick={nutriGoalSheet}>
+        <Button size="sm" icon="target" style={goal ? { color: 'var(--yellow)' } : undefined} onClick={() => nutriGoalSheet()}>
           {goal?.kcal ? fmtNum(goal.kcal) : t('Goal')}
         </Button>
-        <Button size="sm" icon="plus" onClick={nutriSheet}>{t('Log')}</Button>
+        <Button size="sm" icon="plus" onClick={() => nutriSheet()}>{t('Log')}</Button>
       </div>
     </div>
     <WeekBars S={S} goal={goal} />
@@ -298,7 +298,7 @@ function EnergyCard({ S }) {
   return <div className="card">
     <div className="row between" style={{ marginBottom: 8 }}>
       <h2 style={{ margin: 0 }}>{t('Energy')}</h2>
-      <Button size="sm" icon="flame" style={tdee ? { color: 'var(--yellow)' } : undefined} onClick={tdeeSheet}>
+      <Button size="sm" icon="flame" style={tdee ? { color: 'var(--yellow)' } : undefined} onClick={() => tdeeSheet()}>
         {tdee ? fmtNum(tdee.total) : t('Maintenance')}
       </Button>
     </div>
@@ -425,7 +425,7 @@ function EnergyCard({ S }) {
           {implied.tdee != null && tdee && implied.tdee !== tdee.total && <div className="small" style={{ marginTop: 10 }}>
             <span className="muted">{t('Your weight curve puts maintenance at')} </span>
             <b>{fmtNum(implied.tdee)} kcal</b>
-            <Button size="sm" icon="bolt" style={{ marginLeft: 8 }} onClick={tdeeSheet}>{t('Adjust')}</Button>
+            <Button size="sm" icon="bolt" style={{ marginLeft: 8 }} onClick={() => tdeeSheet()}>{t('Adjust')}</Button>
           </div>}
         </>}
       </>}
@@ -444,7 +444,7 @@ function SleepCard({ S }) {
   return <div className="card">
     <div className="row between" style={{ marginBottom: 8 }}>
       <h2 style={{ margin: 0 }}>{t('Sleep')}</h2>
-      <Button size="sm" icon="plus" onClick={sleepSheet}>{t('Log')}</Button>
+      <Button size="sm" icon="plus" onClick={() => sleepSheet()}>{t('Log')}</Button>
     </div>
     <Segmented className="seg-range" value={win} onChange={setWin}
       options={[{ value: 7, label: '7d' }, { value: 30, label: '30d' }, { value: 90, label: '90d' }, { value: 0, label: t('All') }]} />
@@ -638,7 +638,7 @@ export default function Stats() {
         <div className="row between" style={{ marginBottom: 8 }}>
           <h2 style={{ margin: 0 }}>{t('Body weight')}</h2>
           <div className="row" style={{ gap: 8 }}>
-            <Button size="sm" icon="target" style={S.targetW ? { color: 'var(--yellow)' } : undefined} onClick={goalSheet}>{S.targetW ? fmtNum(S.targetW) : t('Goal')}</Button>
+            <Button size="sm" icon="target" style={S.targetW ? { color: 'var(--yellow)' } : undefined} onClick={() => goalSheet()}>{S.targetW ? fmtNum(S.targetW) : t('Goal')}</Button>
             <Button size="sm" icon="plus" onClick={() => bwSheet()}>{t('Log')}</Button>
           </div>
         </div>

@@ -38,6 +38,14 @@ const ui = () => useUI.getState()
 const toast = m => ui().toast(m)
 const snd = () => S().sound
 
+// A sheet opener handed straight to onClick gets called with the click event. Read as a day,
+// that event opened the food log on "Invalid Date", and its Save then threw on a circular
+// structure without a word — the entry was simply never written. So an opener takes only what
+// it can use: a day as an ISO string, an options object that is not an event.
+// src/click-handlers.test.js keeps the call sites from doing it in the first place.
+const isEvent = x => !!x && typeof x === 'object' && ('nativeEvent' in x || (typeof Event !== 'undefined' && x instanceof Event))
+const dayProp = iso => (typeof iso === 'string' && iso ? { iso } : {})
+
 /* ============================ custom confirm dialog ============================ */
 function ConfirmDialog({ title, message, confirmText, cancelText, danger, onConfirm, close }) {
   return <div style={{ textAlign: 'center', padding: '4px 0' }}>
@@ -178,8 +186,8 @@ function BwSheet({ onDone, close, iso = todayISO() }) {
     </>}
   </>
 }
-export function bwSheet(opts = {}) {
-  return ui().openSheet(close => <BwSheet {...opts} close={close} />)
+export function bwSheet(opts) {
+  return ui().openSheet(close => <BwSheet {...(isEvent(opts) ? {} : opts)} close={close} />)
 }
 
 /* ============================ import from another app ============================ */
@@ -436,7 +444,7 @@ function NutriSheet({ close, iso = todayISO() }) {
     </>}
   </>
 }
-export const nutriSheet = iso => ui().openSheet(close => <NutriSheet close={close} {...(iso ? { iso } : {})} />)
+export const nutriSheet = iso => ui().openSheet(close => <NutriSheet close={close} {...dayProp(iso)} />)
 
 function NutriGoalSheet({ close }) {
   const st = S()
@@ -1471,7 +1479,7 @@ function ManualEntry({ onDone, close, iso = todayISO() }) {
  * Typing the day's figures in is the daily gesture, so it opens from the home screen rather
  * than from the bottom of an import screen in Settings. Two taps and a number.
  */
-export const watchSheet = iso => ui().openSheet(close => <WatchLog close={close} {...(iso ? { iso } : {})} />)
+export const watchSheet = iso => ui().openSheet(close => <WatchLog close={close} {...dayProp(iso)} />)
 
 function WatchLog({ close, iso }) {
   const [done, setDone] = useState(null)
@@ -1717,7 +1725,7 @@ function HealthImport({ close, arrived }) {
     {recipe && <TextArea rows={12} readOnly value={shortcutRecipe()} style={{ marginTop: 10 }} />}
   </>
 }
-export const healthImportSheet = arrived => ui().openSheet(close => <HealthImport close={close} arrived={arrived} />)
+export const healthImportSheet = arrived => ui().openSheet(close => <HealthImport close={close} arrived={isEvent(arrived) ? null : arrived} />)
 
 /* ============================ sport-only export ============================ */
 /**
@@ -1854,7 +1862,7 @@ function SleepSheet({ close, iso = todayISO() }) {
       onChange={n => update(s => { s.sleepGoal = validSleep(n) })} />
   </>
 }
-export const sleepSheet = iso => ui().openSheet(close => <SleepSheet close={close} {...(iso ? { iso } : {})} />)
+export const sleepSheet = iso => ui().openSheet(close => <SleepSheet close={close} {...dayProp(iso)} />)
 
 /* ============================ digest ============================ */
 // Everything the log knows about a period, as text to hand to something that coaches you.

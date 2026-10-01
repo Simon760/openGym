@@ -176,7 +176,7 @@ export default function Settings() {
       {/* Two names for the same judgement, so the column asks in the scale you already think in.
           The (i) sits before the control — you read it on the way to the choice, not after it. */}
       <Row icon="target" iconTint="var(--purple)" title={t('Effort per set')}>
-        <button className="helpbtn" aria-label={t('What are RIR and RPE?')} onClick={effortHelpSheet}><Icon name="info" /></button>
+        <button className="helpbtn" aria-label={t('What are RIR and RPE?')} onClick={() => effortHelpSheet()}><Icon name="info" /></button>
         <Segmented className="seg-inline"
           options={[{ value: 'none', label: t('Off') }, { value: 'rir', label: t('RIR') }, { value: 'rpe', label: t('RPE') }]}
           value={effortOf(S)} onChange={v => update(s => { s.effort = v; delete s.showRir })} />
@@ -220,7 +220,7 @@ export default function Settings() {
       <Row icon="sparkles" iconTint="var(--acc)" title={t('Load starter plan (PPL)')} accessory="chevron" onClick={loadStarterPlan} />
       <Row icon="heart" iconTint="var(--red)" title={t('Import health data')}
         subtitle={t('Steps, energy, sleep and session details — an Apple Shortcut, or your tracker’s CSV.')}
-        accessory="chevron" onClick={healthImportSheet} />
+        accessory="chevron" onClick={() => healthImportSheet()} />
       <Row icon="shuffle" iconTint="var(--teal)" title={t('Import from another app')}
         subtitle={t('FitNotes, Strong, Hevy — or body weight from Apple Health')}
         accessory="chevron" onClick={() => importRef.current.click()} />
@@ -228,7 +228,7 @@ export default function Settings() {
       <Row icon="download" iconTint="var(--blue)" title={t('Export backup (JSON)')} accessory="chevron" onClick={doExport} />
       <Row icon="download" iconTint="var(--orange)" title={t('Export training (CSV)')}
         subtitle={t('Sets, reps, weight and energy — a date range, or since your current routine started.')}
-        accessory="chevron" onClick={sportExportSheet} />
+        accessory="chevron" onClick={() => sportExportSheet()} />
       <Row icon="trash" iconTint="var(--red)" title={t('Reset everything')} danger onClick={() => confirmSheet({ title: t('Reset everything?'), message: t('Deletes your plan, workouts and body weight on this device. This cannot be undone.'), confirmText: t('Delete everything'), danger: true, onConfirm: () => { replaceState(JSON.parse(JSON.stringify(DEF)), true); nav('/home'); toast(t('All data reset')) } })} />
     </Section>
     <input ref={fileRef} type="file" accept=".json,application/json" style={{ display: 'none' }} onChange={doImport} />

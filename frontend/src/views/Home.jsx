@@ -118,7 +118,7 @@ export default function Home() {
       <div><h1>{user ? t('Hi {0}', user.name) : APP_NAME}</h1><div className="sub">{selDate.toLocaleDateString(dateLocale(), { weekday: 'long', day: 'numeric', month: 'long' })}
         {!isToday && <button className="tag acc" style={{ marginLeft: 8, border: 0 }} onClick={() => setSel(todayISO())}>{t('Today')}</button>}</div></div>
       <div className="row" style={{ gap: 8 }}>
-        <button className="iconbtn" onClick={digestSheet} aria-label={t('Send to your coach')}><Icon name="clipboard" /></button>
+        <button className="iconbtn" onClick={() => digestSheet()} aria-label={t('Send to your coach')}><Icon name="clipboard" /></button>
         <button className="iconbtn" onClick={() => nav('/settings')} aria-label={t('Settings')}><Icon name="gear" /></button>
       </div>
     </div>
@@ -212,7 +212,7 @@ export default function Home() {
       <div className="row between" style={{ marginBottom: 6 }}>
         <h2 style={{ margin: 0 }}>{t('Body weight')}</h2>
         <div className="row" style={{ gap: 8 }}>
-          <Button size="sm" icon="target" style={S.targetW ? { color: 'var(--yellow)' } : undefined} onClick={goalSheet}>{S.targetW ? fmtNum(S.targetW) : t('Goal')}</Button>
+          <Button size="sm" icon="target" style={S.targetW ? { color: 'var(--yellow)' } : undefined} onClick={() => goalSheet()}>{S.targetW ? fmtNum(S.targetW) : t('Goal')}</Button>
           <Button size="sm" icon="plus" onClick={() => bwSheet({ iso })}>{t('Log')}</Button>
         </div>
       </div>
@@ -310,7 +310,7 @@ export default function Home() {
       <div className="row between" style={{ marginBottom: 6 }}>
         <h2 style={{ margin: 0 }}>{t('Nutrition')}</h2>
         <div className="row" style={{ gap: 8 }}>
-          <Button size="sm" icon="target" style={dayGoal ? { color: 'var(--yellow)' } : undefined} onClick={nutriGoalSheet}>
+          <Button size="sm" icon="target" style={dayGoal ? { color: 'var(--yellow)' } : undefined} onClick={() => nutriGoalSheet()}>
             {dayGoal?.kcal ? fmtNum(dayGoal.kcal) : t('Goal')}
           </Button>
           <Button size="sm" icon="plus" onClick={() => nutriSheet(iso)}>{t('Log')}</Button>
@@ -363,7 +363,7 @@ export default function Home() {
           {fmtNum(Math.abs(balance.deficit))} <span className="muted" style={{ fontSize: '.9rem' }}>kcal</span>
         </div>
       </div> : S.tdee || !todayNutri ? null : <div style={{ marginTop: 10 }}>
-        <Button size="sm" icon="flame" onClick={tdeeSheet}>{t('Set your maintenance')}</Button>
+        <Button size="sm" icon="flame" onClick={() => tdeeSheet()}>{t('Set your maintenance')}</Button>
       </div>}
     </div>
 

@@ -61,13 +61,13 @@ export default function Plan() {
   return <>
     <div className="hdr">
       <div><h1>{t('Plan')}</h1><div className="sub">{t('Your weekly routine')}</div></div>
-      <button className="iconbtn" onClick={planToolsSheet} aria-label={t('Share your plan')} title={t('Share your plan')}><Icon name="upload" /></button>
+      <button className="iconbtn" onClick={() => planToolsSheet()} aria-label={t('Share your plan')} title={t('Share your plan')}><Icon name="upload" /></button>
     </div>
     <div className="cols"><div>
       {/* The block, above the week it produces: the week below is a view of this, and editing
           a day edits this block rather than some free-floating schedule. */}
       <div className="list" style={{ marginBottom: 4 }}>
-        <div className="item" onClick={blocksSheet}>
+        <div className="item" onClick={() => blocksSheet()}>
           <span className="lrow-i" style={{ background: at ? 'var(--acc)' : 'var(--surface-3)' }}><Icon name="calendar" /></span>
           <div className="grow" style={{ minWidth: 0 }}>
             <div className="tt">{at ? at.block.name : t('Simple week')}
