@@ -1,15 +1,15 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
 import { exOr, exName } from '../lib/exercises.js'
-import { effectiveRoutine, lastEntryFor, bestWeightFor, buildSets, defaultConfig, warmEntry, swapEntry, setBodyweight, durMs, setsDone, setsDoneActive, supersetUnits, unitOf, setLabel, modeOf, isBw, readoutOf, isOnce, cardioEffort, isPerSide, sideReps, repStep, EFFORT, effortOf, stepEffort, capEffort } from '../lib/history.js'
+import { effectiveRoutine, lastEntryFor, bestWeightFor, buildSets, defaultConfig, warmEntry, swapEntry, setBodyweight, durMs, setsDone, setsDoneActive, supersetUnits, unitOf, nextSetAfter, carryForward, setLabel, modeOf, isBw, readoutOf, isOnce, cardioEffort, isPerSide, sideReps, repStep, EFFORT, effortOf, stepEffort, capEffort } from '../lib/history.js'
 import { fmtNum, fmtDate, fmtDur, durPart, fmtVol, todayISO, exCount, uid, DAYN } from '../lib/format.js'
 import { beep, vibrate } from '../lib/sound.js'
 import { t } from '../lib/i18n.js'
 import { api } from '../lib/api.js'
 import Media from '../components/Media.jsx'
-import { startFlow, logPastSheet, exercisePicker, exConfigSheet, exerciseDetailSheet, topWeightSheet, finishWorkout, workoutCompleteSheet, confirmSheet, workoutDetailSheet } from '../sheets.jsx'
+import { startFlow, logPastSheet, exercisePicker, exConfigSheet, exerciseDetailSheet, finishWorkout, workoutCompleteSheet, confirmSheet, workoutDetailSheet } from '../sheets.jsx'
 import Icon from '../components/Icon.jsx'
 import { Button, Check, NumberField } from '../components/ui.jsx'
 import { nextPrescription, applyPrescription } from '../lib/progression.js'
@@ -253,7 +253,7 @@ function ExerciseBlock({ entryIdx, compact, onToggle, onField, onAddSet, onRemov
       {/* the header carries the same eff3 sizing as the rows, or the labels drift off their columns */}
       <div className={'sethead' + (col3 ? ' eff3' : '')}><span className="n-sp" /><span className="w-sp">{col1.hd}</span>{col2 && <span className="r-sp">{col2.hd}</span>}{col3 && <span className="eff-sp">{col3.hd}</span>}{timed && <span className="ck-sp" />}<span className="ck-sp" /></div>
       {/* One set can render several rows: itself, then any extra loads carried on it. */}
-      {entry.sets.map((s, i) => [<div key={i} className={'setrow' + (s.done ? ' done' : '') + (col3 ? ' eff3' : '')}
+      {entry.sets.map((s, i) => [<div key={i} data-set={entryIdx + ':' + i} className={'setrow' + (s.done ? ' done' : '') + (col3 ? ' eff3' : '')}
         style={s.warm ? { opacity: .62 } : undefined}>
         {/* The set number doubles as the warm-up toggle. A warm-up is logged like any other
             set and counted in none of the figures — not volume, not a record, and above all
@@ -309,6 +309,65 @@ function ExerciseBlock({ entryIdx, compact, onToggle, onField, onAddSet, onRemov
   </>
 }
 
+/* ---------- keeping the next set within reach ----------
+   A session is run one-handed, twenty-odd ticks of the same thumb. The set to do next has to
+   come to the thumb rather than the thumb go looking for it — under the rest bar, or under
+   the tab bar, is out of reach however visible the rest of the screen is. */
+const motion = () => (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth')
+// The line nothing reachable sits below: the top of the rest bar when one is up, of the tab
+// bar when not.
+function thumbFloor() {
+  const cover = document.getElementById('timer') || document.getElementById('tabbar')
+  return (cover ? cover.getBoundingClientRect().top : window.innerHeight) - 14
+}
+const setRow = at => (at ? document.querySelector(`[data-set="${at[0]}:${at[1]}"]`) : null)
+// After a tick: the next set, if it is out of sight, brought to sit just above the bar — the
+// lowest place on the screen a thumb reaches, from below as from above (in a superset the next
+// set is back up in the first exercise). A row already in sight stays put: the screen jumping
+// under a finger is its own kind of mis-tap.
+function bringToThumb(el) {
+  if (!el) return
+  const r = el.getBoundingClientRect(), floor = thumbFloor(), ceiling = 64
+  if (r.bottom > floor || r.top < ceiling) window.scrollBy({ top: r.bottom - floor, behavior: motion() })
+}
+// An exercise just come up, or the screen just opened on one: from the top, so its name is the
+// first thing read — but never so far up that its first set to do is left under the bar.
+function showFromTop(el, instant) {
+  const top = el ? Math.max(0, el.getBoundingClientRect().bottom + window.scrollY - thumbFloor()) : 0
+  window.scrollTo({ top, behavior: instant ? 'auto' : motion() })
+}
+// Rendered after the rest bar has come up and the page has grown room for it.
+const afterLayout = fn => setTimeout(fn, 160)
+
+/* ---------- every exercise in the session, to jump to one ---------- */
+function UnitList({ close }) {
+  const A = useStore(s => s.S.active)
+  const update = useStore(s => s.update)
+  if (!A) return null
+  const units = supersetUnits(A.entries)
+  const cur = Math.min(A.cur, Math.max(0, A.entries.length - 1))
+  return <>
+    <h3>{t('Exercises')}</h3>
+    <div className="list" style={{ marginBottom: 0 }}>
+      {units.map((u, k) => {
+        const sets = u.flatMap(i => A.entries[i].sets)
+        const done = sets.filter(x => x.done).length
+        const finished = sets.length > 0 && done === sets.length
+        return <div key={k} className="item" onClick={() => { update(s => { s.active.cur = u[0] }); close() }}>
+          <span className="lrow-i" style={{ width: 30, height: 30, borderRadius: 8, fontSize: 15,
+            background: finished ? 'var(--acc)' : 'var(--surface-3)', color: finished ? 'var(--on-acc)' : 'var(--label)' }}>
+            {finished ? <Icon name="check" /> : k + 1}</span>
+          <div className="grow">
+            <div className="tt exn">{u.map(i => exName(exOr(A.entries[i].id))).join(' + ')}</div>
+            <div className="ss">{t('{0} sets', done + '/' + sets.length)}</div>
+          </div>
+          {u.includes(cur) ? <span className="tag acc nocap">{t('Now')}</span> : <Icon name="chevronRight" className="chev" />}
+        </div>
+      })}
+    </div>
+  </>
+}
+
 /* ---------- active workout ---------- */
 function ActiveWorkout() {
   const nav = useNavigate()
@@ -326,11 +385,9 @@ function ActiveWorkout() {
   const done = setsDoneActive(A)
 
   const mutEntry = (idx, fn) => update(s => { fn(s.active.entries[idx]) }, true)
-  // Clearing an optional field drops the key rather than storing null, so a set only carries
-  // what was actually logged — in the session, in history and in a backup.
-  const setField = (idx, i, field, v) => mutEntry(idx, e => {
-    if (v == null) delete e.sets[i][field]; else e.sets[i][field] = v
-  })
+  // A new weight or rep count on a set still to do carries down to the sets after it that
+  // still matched — see carryForward for what it leaves alone.
+  const setField = (idx, i, field, v) => mutEntry(idx, e => { carryForward(e.sets, i, field, v) })
   const modeAt = idx => modeOf({ ...(A.entries[idx].target || {}), id: A.entries[idx].id })
   const addSet = idx => mutEntry(idx, e => {
     const l = e.sets[e.sets.length - 1]
@@ -384,33 +441,64 @@ function ActiveWorkout() {
 
   const toggle = (idx, i) => {
     const m = modeAt(idx)
-    const cardioEntry = m === 'cardio'
-    const isLastUnit = unitIdx >= units.length - 1
-    let askTop = false, exJustDone = false, workoutDone = false
-    mutEntry(idx, e => {
+    let ticked = false, exJustDone = false, workoutDone = false, next = null
+    update(s => {
+      const e = s.active.entries[idx]
       e.sets[i].done = !e.sets[i].done
-      if (e.sets[i].done) {
-        beep(S.sound, 1040, 0.12); vibrate(30)
-        const isLastExInUnit = idx === unit[unit.length - 1]
-        const unitDone = unit.every(ui => (ui === idx ? e : A.entries[ui]).sets.every(x => x.done))
+      if (!e.sets[i].done) return
+      ticked = true
+      beep(S.sound, 1040, 0.12); vibrate(30)
+      const isLastExInUnit = idx === unit[unit.length - 1]
+      const unitDone = unit.every(k => s.active.entries[k].sets.every(x => x.done))
+      exJustDone = e.sets.every(x => x.done)
+      // What comes up next is the next exercise that still has a set to do — the one after
+      // this, or, once the end is reached, one skipped on the way. None left is the session.
+      const open = u => u.some(k => s.active.entries[k].sets.some(x => !x.done))
+      const ahead = unitDone ? [...units.slice(unitIdx + 1), ...units.slice(0, unitIdx)].find(open) : null
+      if (unitDone && !ahead) { workoutDone = true; stopRest(); return }   // the whole session
+      if (unitDone) {
+        // The longest rest of a session is the one between two exercises, and it used to be
+        // the one left untimed — the bar stopped and a "weight you used" prompt came up in its
+        // place, asking for a figure already on every row. Now the rest runs, and the next
+        // exercise comes up under it. The heaviest set still becomes next time's weight when
+        // the session is finished (doFinishWorkout).
+        next = ahead
+        s.active.cur = next[0]
         // No rest timer on a session being typed up: the rest happened hours ago.
-        if (isLastExInUnit && !unitDone && !A.log) startRest(S.restSec)
-        else if (unitDone) stopRest()
-        if (unitDone && isLastUnit) workoutDone = true      // last exercise's last set → done
-        // Only loaded reps training has a "working weight" worth confirming — a bodyweight
-        // plank has nothing to put in that slider, and neither does a set of push-ups
-        // (issue #32: the fewest taps that still record what happened).
-        const loaded = m === 'reps' && !(isBw({ ...(e.target || {}), id: e.id }) && !e.sets.some(x => x.w > 0))
-        if (e.sets.every(x => x.done)) { exJustDone = true; if (loaded && !e.asked) { e.asked = true; askTop = true } }
-      }
-    })
-    // reps: topWeight first (it chains into the finish/continue prompt on the last unit).
-    // cardio/timed or already-confirmed: go straight to the prompt.
-    if (askTop) topWeightSheet(idx)
-    else if (workoutDone) workoutCompleteSheet()
-    else if (exJustDone && cardioEntry) useUI.getState().toast(t('Cardio logged'))
+        if (!A.log) startRest(S.restSec); else stopRest()
+      } else if (isLastExInUnit && !A.log) startRest(S.restSec)
+    }, true)
+    if (workoutDone) workoutCompleteSheet()
+    else if (next) useUI.getState().toast(t('Next: {0}', next.map(k => exName(exOr(A.entries[k].id))).join(' + ')))
+    else if (exJustDone && m === 'cardio') useUI.getState().toast(t('Cardio logged'))
     else if (exJustDone && m === 'time') useUI.getState().toast(t('Hold logged'))
+    // Same exercise, next set: brought to the thumb. A new exercise scrolls itself — below.
+    if (ticked && !next && !workoutDone) afterLayout(() => {
+      const A2 = useStore.getState().S.active
+      if (A2) bringToThumb(setRow(nextSetAfter(A2.entries, unitOf(supersetUnits(A2.entries), idx), idx, i)))
+    })
   }
+
+  // An exercise coming up — Next, Prev, a jump from the list, or the last set of the one before
+  // ticked. It slides in from the side it came from, so the screen visibly changes even when two
+  // exercises look alike, and the page goes back to its top. Opening the screen does the same
+  // without the slide: a session starts, or is resumed, with its next set already in reach —
+  // under the exercise animation it used to sit beneath the tab bar.
+  const shown = useRef(unitIdx)
+  const dir = useRef(1)
+  if (shown.current !== unitIdx) { dir.current = unitIdx > shown.current ? 1 : -1; shown.current = unitIdx }
+  const opened = useRef(false)
+  useEffect(() => {
+    const first = !opened.current
+    opened.current = true
+    const tm = afterLayout(() => {
+      const A2 = useStore.getState().S.active
+      if (!A2 || !A2.entries.length) return
+      const u = unitOf(supersetUnits(A2.entries), Math.min(A2.cur, A2.entries.length - 1))
+      showFromTop(setRow(nextSetAfter(A2.entries, u, u[0], -1)), first)
+    })
+    return () => clearTimeout(tm)
+  }, [unitIdx])
 
   // Live-presence heartbeat so the admin dashboard can show who's training now. Signed-in only —
   // guests have no server session. Reads fresh state each tick so progress stays current.
@@ -457,7 +545,12 @@ function ActiveWorkout() {
     <div className="wprog"><i style={{ width: (total ? done / total * 100 : 0) + '%' }} /></div>
 
     {A.entries.length ? <>
-      <div className="muted small" style={{ marginBottom: 6 }}>{isSuperset ? t('Superset {0} / {1}', unitIdx + 1, units.length) : t('Exercise {0} / {1}', unitIdx + 1, units.length)}</div>
+      {/* Where you are in the session, and the way to anywhere else in it. */}
+      <button className="exnav muted small" onClick={() => useUI.getState().openSheet(close => <UnitList close={close} />)}>
+        {isSuperset ? t('Superset {0} / {1}', unitIdx + 1, units.length) : t('Exercise {0} / {1}', unitIdx + 1, units.length)}
+        <Icon name="chevronDown" />
+      </button>
+      <div key={'u' + unitIdx + ':' + unit.map(k => A.entries[k].id).join('+')} className="exin" style={{ '--exin-dx': dir.current * 14 + 'px' }}>
       {isSuperset ? (
         <div className="ss-card">
           <div className="ss-hd"><Icon name="link" />{t('Superset · do these back-to-back, rest after both')}</div>
@@ -470,6 +563,7 @@ function ActiveWorkout() {
       ) : (
         <ExerciseBlock entryIdx={cur} onToggle={i => toggle(cur, i)} onField={(i, f, v) => setField(cur, i, f, v)} onAddSet={() => addSet(cur)} onRemoveSet={() => removeSet(cur)} onStartTimed={i => startTimed(cur, i)} onWarm={i => setWarm(cur, i)} onDrop={(i, k, add) => setDrop(cur, i, k, add)} onDropField={(i, k, f, v) => setDropField(cur, i, k, f, v)} onSwap={() => swapEx(cur)} onBodyweight={() => toggleBw(cur)} />
       )}
+      </div>
     </> : <div className="empty"><div className="ico"><Icon name="shuffle" /></div>{t('Freestyle workout — add your first exercise.')}</div>}
 
     <div style={{ height: 12 }} />

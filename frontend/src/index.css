@@ -590,6 +590,14 @@ h4.sec{
 .sethead .r-sp{flex:1;text-align:center}
 .sethead .eff-sp{text-align:center}
 .sethead .ck-sp{width:30px;flex:none}
+/* "Exercice 2 / 6" — a button now (it opens the session's list), dressed as the label it was. */
+.exnav{display:inline-flex;align-items:center;gap:4px;background:none;border:0;padding:4px 0;margin:0 0 6px;
+  font-family:inherit;cursor:pointer}
+.exnav .icn{font-size:14px}
+/* An exercise coming up slides in from the side it came from (--exin-dx is set per change), so
+   the screen visibly changes even between two exercises that look alike. */
+@keyframes exin{from{opacity:0;transform:translateX(var(--exin-dx,14px))}to{opacity:1;transform:none}}
+.exin{animation:exin var(--med) var(--ease)}
 .setrow{display:flex;align-items:center;gap:8px;padding:7px 0;position:relative}
 .setrow+.setrow::before{
   content:'';position:absolute;left:32px;right:0;top:0;height:var(--hair);background:var(--sep);
@@ -895,6 +903,9 @@ h4.sec{
   max-width:88vw;text-align:center;
 }
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+/* Above the rest bar while one is up: every exercise change now says what comes next, and it
+   says it while the rest is running — on top of the clock and the +15 s it was asking about. */
+body.resting #toast{bottom:calc(212px + var(--sab))}
 
 /* ---------------------------------------------------------------- misc --- */
 .empty{text-align:center;color:var(--label-2);padding:44px 20px;font-size:15px;line-height:1.45}

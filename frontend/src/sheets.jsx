@@ -3,7 +3,7 @@ import { useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
 import { EXDB, EXIDX, BODYPARTS, isCardio, isBodyweightEq, allExercises, equipmentOf, exName, exNameEn, exSearchText, exMatches } from './lib/exercises.js'
 import { fmtDate, fmtNum, fmtNum2, fmtKg, fmtVol, fmtDur, durPart, todayISO, isoOf, uid, exCount, DAYN, MONTHS_LONG, ACCENTS } from './lib/format.js'
-import { lastEntryFor, bestWeightFor, buildSets, effectiveRoutineId, effectiveRoutine, weekDays, swapDays, workoutVolume, durMs, setFigures, asksDuration, setsDone, setsDoneActive, lastBW, supersetUnits, unitOf, setLabel, defaultConfig, warmEntry, cleanupSg, modeOf, effortOf, isBw, isOnce, readoutOf, isPerSide, sideReps, isWorking, setTop } from './lib/history.js'
+import { lastEntryFor, bestWeightFor, buildSets, effectiveRoutineId, effectiveRoutine, weekDays, swapDays, workoutVolume, durMs, setFigures, asksDuration, setsDone, setsDoneActive, lastBW, setLabel, defaultConfig, warmEntry, cleanupSg, modeOf, effortOf, isBw, isOnce, readoutOf, isPerSide, sideReps, isWorking, setTop } from './lib/history.js'
 import { beep, vibrate } from './lib/sound.js'
 import { t, instrFor, getLang, INSTR_LANGS } from './lib/i18n.js'
 import { nav } from './lib/nav.js'
@@ -12,7 +12,7 @@ import Media, { Thumb } from './components/Media.jsx'
 import Stepper from './components/Stepper.jsx'
 import Icon from './components/Icon.jsx'
 import { Button, Slider, Switch, Segmented, SelectRow, Row, TextArea, NumberField } from './components/ui.jsx'
-import { useSaveOnDismiss, useOnDismiss } from './components/Modals.jsx'
+import { useSaveOnDismiss } from './components/Modals.jsx'
 import { glyphOf, GLYPH_GROUPS, DEFAULT_GLYPH } from './lib/glyphs.js'
 import BodyMap from './components/BodyMap.jsx'
 import { loadOfWorkouts, musclesOf, MUSCLE_NAME } from './lib/muscles.js'
@@ -2476,59 +2476,6 @@ export function beginWorkout(routineId, bw, { log = false, d = todayISO(), warm 
   useUI.getState().stopRest()
   nav('/workout')
 }
-function TopWeight({ entryIdx, close }) {
-  const st = useStore(s => s.S)
-  const A = st.active
-  // The workout can end underneath this sheet: finishing from the last exercise clears
-  // `active`, and this re-renders before the sheet is torn down. Everything below is
-  // read defensively and the sheet dismisses itself — reading A.entries straight took
-  // the whole app down with it. Hooks still run unconditionally, so the bail-out has
-  // to sit after every one of them.
-  const entry = A ? A.entries[entryIdx] : null
-  const ex = entry && EXIDX[entry.id]
-  const maxSet = entry ? Math.max(0, ...entry.sets.filter(s => s.done).map(setTop)) : 0
-  const prevBest = entry ? Math.max((st.exWeights[entry.id] || {}).w || 0, bestWeightFor(st, entry.id)) : 0
-  const [v, setV] = useState(entry ? (Math.max(maxSet, prevBest) || entry.target.weight || 0) : 0)
-  useEffect(() => { if (!entry) close() }, [!entry])
-
-  const units = supersetUnits(A ? A.entries : [])
-  const unit = entry ? unitOf(units, entryIdx) : []
-  const unitDone = !!entry && unit.every(i => A.entries[i].sets.every(s => s.done))
-  const unitIdx = units.findIndex(u => u === unit)
-  const isLastUnit = unitIdx === units.length - 1
-  // Waved away, it does what its own "Just close" does: the weight is recorded, nothing
-  // advances. Dismissing used to be the one way out of it that dropped the weight.
-  useOnDismiss(() => (entry && ex ? commit(false) : undefined))
-  if (!entry || !ex) return null
-
-  const commit = advance => {
-    const n = Math.round((v || 0) * 10) / 10
-    if (!isFinite(n) || n < 0) { toast(t('Enter a valid weight')); return false }
-    update(s => {
-      s.active.entries[entryIdx].topW = n
-      const cur = s.exWeights[entry.id]
-      s.exWeights[entry.id] = { w: Math.max(n, cur ? cur.w : 0), d: todayISO() }
-    })
-    close()
-    if (advance && unitDone) {
-      if (isLastUnit) workoutCompleteSheet()               // whole workout done → finish/continue prompt
-      else update(s => { s.active.cur = units[unitIdx + 1][0] })
-    } else toast(t('Tracked — next time starts at {0}', fmtNum(S().exWeights[entry.id].w) + ' ' + st.unit))
-  }
-  return <>
-    <h3 className="exn row" style={{ gap: 8 }}><Icon name="checkCircle" style={{ color: 'var(--acc)' }} />{t('{0} done', exName(ex))}</h3>
-    <div className="muted small">{t('Confirm the weight you worked with — your highest becomes the default next time.')}{!unitDone && unit.length > 1 ? ' ' + t('Then finish the superset partner.') : ''}</div>
-    <WeightInput value={v} setValue={setV} unit={st.unit} />
-    <div style={{ height: 10 }} />
-    {prevBest > 0 ? <div className="small dim" style={{ textAlign: 'center', marginBottom: 12 }}>{t('Previous best:')} {fmtNum(prevBest)} {st.unit}{maxSet > prevBest && <span style={{ color: 'var(--yellow)' }}> — {t('new record!')}</span>}</div> : <div style={{ height: 4 }} />}
-    {unitDone ? <>
-      <Button variant="primary" trailingIcon={isLastUnit ? null : 'chevronRight'} onClick={() => commit(true)}>{isLastUnit ? t('Save') : t('Save & next exercise')}</Button>
-      <div style={{ height: 8 }} /><Button variant="ghost" className="dim" onClick={() => commit(false)}>{t('Just close')}</Button>
-    </> : <Button variant="primary" onClick={() => commit(false)}>{t('Save weight')}</Button>}
-  </>
-}
-export const topWeightSheet = entryIdx => ui().openSheet(close => <TopWeight entryIdx={entryIdx} close={close} />)
-
 // Shown when the last exercise's last set is checked — finish, or keep going.
 function WorkoutComplete({ close }) {
   return <div style={{ textAlign: 'center', padding: '8px 0' }}>

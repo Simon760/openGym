@@ -533,6 +533,52 @@ export function supersetUnits(items) {
 }
 export function unitOf(units, idx) { return units.find(u => u.includes(idx)) || [idx] }
 
+/**
+ * The set to do after this one, as [entry index, set index] — null once the unit is done.
+ * `i` of -1 asks for the first one, for an exercise just come up.
+ *
+ * A plain exercise just goes down its sets. A superset goes across before it goes down: A1,
+ * then B1, then A2, because that is the order the exercises are done in, back to back with
+ * the rest after the round. A set skipped on the way is picked up last rather than never.
+ */
+export function nextSetAfter(entries, unit, idx, i) {
+  const open = (e, k) => !!(entries[e] && entries[e].sets[k] && !entries[e].sets[k].done)
+  const pos = unit.indexOf(idx)
+  const rounds = Math.max(0, ...unit.map(e => (entries[e] ? entries[e].sets.length : 0)))
+  for (let r = i; r < rounds; r++) {
+    for (let k = r === i ? pos + 1 : 0; k < unit.length; k++) if (open(unit[k], r)) return [unit[k], r]
+  }
+  for (const e of unit) {
+    const k = entries[e] ? entries[e].sets.findIndex(x => !x.done) : -1
+    if (k >= 0) return [e, k]
+  }
+  return null
+}
+
+/**
+ * Change one field of one set — and, for the weight or the reps of a set still to do, the
+ * same on the sets after it that still say what this one said. That is how a session changes:
+ * the bar goes up five kilos and every set left goes up with it, rather than the same
+ * correction made four times with buttons a thumb barely fits.
+ *
+ * A set already done keeps what it was done with. One that already differed — a pyramid, a
+ * back-off set — was planned that way and is left alone, and a warm-up and a working set never
+ * drag each other along. Clearing an optional field drops the key rather than storing null, so
+ * a set only carries what was actually logged. Mutates `sets`, the caller's draft.
+ */
+export function carryForward(sets, i, field, v) {
+  const s = sets[i]
+  if (!s) return sets
+  const was = s[field]
+  if (v == null) delete s[field]; else s[field] = v
+  if ((field !== 'w' && field !== 'r') || v == null || s.done || was === v) return sets
+  for (let j = i + 1; j < sets.length; j++) {
+    const n = sets[j]
+    if (!n.done && !!n.warm === !!s.warm && n[field] === was) n[field] = v
+  }
+  return sets
+}
+
 export function streakWeeks(S) {
   if (!S.workouts.length) return 0
   const weeks = new Set(S.workouts.map(w => weekKey(w.d)))

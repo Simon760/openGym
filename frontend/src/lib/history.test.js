@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { modeOf, isTimed, fmtSec, setLabel, defaultConfig, buildSets, exLine, workoutVolume, durMs, setFigures, effortOf, stepEffort, capEffort, isBw, isPerSide, sideReps, repStep } from './history.js'
+import { modeOf, isTimed, fmtSec, setLabel, defaultConfig, buildSets, exLine, workoutVolume, durMs, setFigures, effortOf, stepEffort, capEffort, isBw, isPerSide, sideReps, repStep, nextSetAfter, carryForward } from './history.js'
 import { EXDB } from './exercises.js'
 
 // Real ids out of the shipped catalogue, so the body-part fallback is exercised for real.
@@ -488,5 +488,84 @@ describe('setFigures', () => {
     const w = { id: 'w', d: '2026-09-10', watch: { hrAvg: 128, km: 5.2, kcal: 400 } }
     setFigures(w, { kcal: 300, mins: 45 })
     expect(w.watch).toEqual({ hrAvg: 128, km: 5.2, kcal: 300, minutes: 45 })
+  })
+})
+
+describe('nextSetAfter', () => {
+  const ex = (...done) => ({ sets: done.map(d => ({ done: d })) })
+
+  it('goes down a plain exercise', () => {
+    const entries = [ex(true, true, false, false)]
+    expect(nextSetAfter(entries, [0], 0, 1)).toEqual([0, 2])
+  })
+
+  it('goes across a superset before it goes down — A1, B1, then A2', () => {
+    const entries = [ex(true, false, false), ex(false, false, false)]
+    expect(nextSetAfter(entries, [0, 1], 0, 0)).toEqual([1, 0])
+    entries[1].sets[0].done = true
+    expect(nextSetAfter(entries, [0, 1], 1, 0)).toEqual([0, 1])
+  })
+
+  it('picks up a set skipped on the way rather than never', () => {
+    const entries = [ex(false, true, true)]
+    expect(nextSetAfter(entries, [0], 0, 2)).toEqual([0, 0])
+  })
+
+  it('is null once the whole unit is done', () => {
+    const entries = [ex(true, true), ex(true, true)]
+    expect(nextSetAfter(entries, [0, 1], 1, 1)).toBe(null)
+  })
+
+  it('with -1, gives the first set to do of an exercise just come up — superset order too', () => {
+    expect(nextSetAfter([ex(false, false)], [0], 0, -1)).toEqual([0, 0])
+    expect(nextSetAfter([ex(true, false), ex(true, false)], [0, 1], 0, -1)).toEqual([0, 1])
+  })
+
+  it('copes with a superset whose exercises have different set counts', () => {
+    const entries = [ex(true, true, false), ex(true, true)]
+    expect(nextSetAfter(entries, [0, 1], 1, 1)).toEqual([0, 2])
+  })
+})
+
+describe('carryForward', () => {
+  const sets = (...ws) => ws.map(w => ({ w, r: 8, done: false }))
+
+  it('carries a new weight down to every set still to do that had the old one', () => {
+    const s = sets(87.5, 87.5, 87.5, 87.5)
+    carryForward(s, 0, 'w', 92.5)
+    expect(s.map(x => x.w)).toEqual([92.5, 92.5, 92.5, 92.5])
+  })
+
+  it('works keystroke by keystroke — the sets follow the one being typed', () => {
+    const s = sets(87.5, 87.5, 87.5)
+    for (const v of [9, 92, 92.5]) carryForward(s, 0, 'w', v)
+    expect(s.map(x => x.w)).toEqual([92.5, 92.5, 92.5])
+  })
+
+  it('leaves a done set, a set that already differed and a warm-up alone', () => {
+    const s = [{ w: 40, r: 10, done: false, warm: true }, { w: 87.5, r: 8, done: false },
+      { w: 87.5, r: 8, done: true }, { w: 80, r: 10, done: false }, { w: 87.5, r: 8, done: false }]
+    carryForward(s, 1, 'w', 90)
+    expect(s.map(x => x.w)).toEqual([40, 90, 87.5, 80, 90])
+  })
+
+  it('does not carry from a set already done — that is a correction to what happened', () => {
+    const s = [{ w: 87.5, r: 8, done: true }, { w: 87.5, r: 8, done: false }]
+    carryForward(s, 0, 'w', 85)
+    expect(s.map(x => x.w)).toEqual([85, 87.5])
+  })
+
+  it('carries reps the same way', () => {
+    const s = sets(80, 80, 80)
+    carryForward(s, 1, 'r', 6)
+    expect(s.map(x => x.r)).toEqual([8, 6, 6])
+  })
+
+  it('carries neither effort nor anything else, and drops a cleared optional field', () => {
+    const s = [{ w: 80, r: 8, rir: 2, done: false }, { w: 80, r: 8, rir: 2, done: false }]
+    carryForward(s, 0, 'rir', 1)
+    expect(s.map(x => x.rir)).toEqual([1, 2])
+    carryForward(s, 0, 'rir', null)
+    expect('rir' in s[0]).toBe(false)
   })
 })
