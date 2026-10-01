@@ -4,6 +4,7 @@ import { beep, vibrate } from '../lib/sound.js'
 import { api } from '../lib/api.js'
 import { t } from '../lib/i18n.js'
 import { useStore } from './useStore.js'
+import { forgetDismiss, runDismiss, runAllDismiss } from '../lib/dismiss.js'
 
 // Fire-and-forget: lets the server push a "rest over" alert if this tab gets suspended
 // before the local timer completes. No-ops for guests / offline.
@@ -34,8 +35,24 @@ export const useUI = create((set, get) => ({
     const close = () => get().closeSheet(id)
     return { id, close, lock: v => set(s => ({ sheets: s.sheets.map(x => x.id === id ? { ...x, locked: v } : x) })) }
   },
-  closeSheet(id) { set(s => ({ sheets: s.sheets.filter(x => x.id !== id) })) },
-  closeAll() { set({ sheets: [] }) },
+  closeSheet(id) {
+    forgetDismiss(id)
+    set(s => ({ sheets: s.sheets.filter(x => x.id !== id) }))
+  },
+  // Waved away rather than closed with one of its buttons — see lib/dismiss.js. The sheet's own
+  // handler runs first and keeps what was typed; one that refused the input stays open.
+  // Returns whether it stayed.
+  dismissSheet(id) {
+    const stay = runDismiss(id)
+    if (!stay) get().closeSheet(id)
+    return stay
+  },
+  // Everything goes — a link opened the app over whatever was left open. Nobody cancelled
+  // anything, so each sheet keeps what was typed into it on the way out.
+  closeAll() {
+    runAllDismiss()
+    set({ sheets: [] })
+  },
   editBlock(id) { set({ planBlock: id || null }) },
 
   toast(msg) {

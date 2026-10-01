@@ -1,10 +1,40 @@
-import { useEffect, useRef } from 'react'
+import { createContext, useContext, useEffect, useRef } from 'react'
 import { useUI } from '../store/useUI.js'
+import { registerDismiss } from '../lib/dismiss.js'
 import { onControl, dragBy } from '../lib/sheetdrag.js'
+
+// Which sheet a component is drawn in, so it can say what dismissing that sheet means.
+const SheetId = createContext(null)
+
+/** Run `fn` when the sheet this is drawn in is waved away. Answer false to keep it open. */
+export function useOnDismiss(fn) {
+  const id = useContext(SheetId)
+  const latest = useRef(fn)
+  latest.current = fn
+  useEffect(() => (id == null ? undefined : registerDismiss(id, () => latest.current())), [id])
+}
+
+/**
+ * Waving a sheet away keeps what was typed into it, exactly as its own Save would — same
+ * write, same toast, so it is never a silent guess. Tapping the dimmed page above a sheet is
+ * how a phone's number pad gets put away (it has no OK key), and that tap used to throw the
+ * figure away without a word.
+ *
+ * `form` is everything the sheet's inputs hold. While it is still what the sheet opened with,
+ * dismissing only closes it: a weigh-in prefilled from yesterday is not a weigh-in today until
+ * something is touched. A save that refuses its input says why and answers false, and the
+ * sheet stays where it is.
+ */
+export function useSaveOnDismiss(form, save) {
+  const opened = useRef(undefined)
+  const now = JSON.stringify(form)
+  if (opened.current === undefined) opened.current = now
+  useOnDismiss(() => (now === opened.current ? undefined : save()))
+}
 
 // One bottom sheet (or centered dialog) with swipe-to-dismiss.
 function Sheet({ sheet }) {
-  const { closeSheet } = useUI()
+  const { closeSheet, dismissSheet } = useUI()
   const ref = useRef(null)
   const drag = useRef({ startY: null, delta: 0, on: false })
 
@@ -33,7 +63,7 @@ function Sheet({ sheet }) {
     const el = ref.current, d = drag.current
     if (d.startY === null) return
     el.style.transition = 'transform .2s'
-    if (d.delta > 90 && !sheet.locked) { el.style.transform = 'translateY(110%)'; setTimeout(() => closeSheet(sheet.id), 180) }
+    if (d.delta > 90 && !sheet.locked) { el.style.transform = 'translateY(110%)'; setTimeout(dismiss, 180) }
     else el.style.transform = ''
     d.startY = null
     d.on = false
@@ -48,20 +78,25 @@ function Sheet({ sheet }) {
   }, [])
 
   const close = () => closeSheet(sheet.id)
+  // A sheet that refused what was typed in it stays, so one swiped off screen comes back.
+  function dismiss() {
+    if (dismissSheet(sheet.id) && ref.current) ref.current.style.transform = ''
+  }
+  const body = <SheetId.Provider value={sheet.id}>{sheet.render(close)}</SheetId.Provider>
   if (sheet.kind === 'center') {
     return (
       <div>
-        <div className="mback" onClick={() => { if (!sheet.locked) close() }} />
-        <div className="center">{sheet.render(close)}</div>
+        <div className="mback" onClick={() => { if (!sheet.locked) dismiss() }} />
+        <div className="center">{body}</div>
       </div>
     )
   }
   return (
     <div>
-      <div className="mback" onClick={() => { if (!sheet.locked) close() }} />
+      <div className="mback" onClick={() => { if (!sheet.locked) dismiss() }} />
       <div className="sheet" ref={ref} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
         <div className="grab" />
-        {sheet.render(close)}
+        {body}
       </div>
     </div>
   )

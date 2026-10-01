@@ -12,6 +12,7 @@ import Media, { Thumb } from './components/Media.jsx'
 import Stepper from './components/Stepper.jsx'
 import Icon from './components/Icon.jsx'
 import { Button, Slider, Switch, Segmented, SelectRow, Row, TextArea, NumberField } from './components/ui.jsx'
+import { useSaveOnDismiss, useOnDismiss } from './components/Modals.jsx'
 import { glyphOf, GLYPH_GROUPS, DEFAULT_GLYPH } from './lib/glyphs.js'
 import BodyMap from './components/BodyMap.jsx'
 import { loadOfWorkouts, musclesOf, MUSCLE_NAME } from './lib/muscles.js'
@@ -25,7 +26,7 @@ import { nextPrescription, applyPrescription, policyFor, defaultIncrement, POLIC
 import { MOBILE, shareExport, shareText, canShareText } from './lib/mobile.js'
 import { entryFor, hasMacros, kcalFromMacros, derivedMismatch, remainingOf, putEntry, isRefeed, goalFor, MACROS, MACRO_NAME } from './lib/nutrition.js'
 import { validBodyFat, composition, sleepFor, putSleep, validSleep, sleepHours, hoursBetween, validTime, BF_MIN, BF_MAX, SLEEP_MIN, SLEEP_MAX } from './lib/body.js'
-import { parseHealth, applyHealth, parseHealthCSV, applyHealthDays, shortcutRecipe, shortcutLink, historySpec, watchTarget } from './lib/health.js'
+import { parseHealth, applyHealth, parseHealthCSV, applyHealthDays, shortcutRecipe, shortcutLink, historySpec, watchTarget, healthFor } from './lib/health.js'
 import { currentProgrammeStart, earliestLoggedDay, sportExportCSV, sportExportSummary } from './lib/sport-export.js'
 import { suppOn, suppName, tookOn, setTook, suppStreak, suppRate } from './lib/supp.js'
 import { weekFor, weekOfBlock, setWeekDay, duplicateBlock, emptyBlock, blocksOf, activeBlock, blockFromCurrent, startBlock, cancelSwitch, upcoming, daysUntil, removeBlock, sessionsIn, weekIndexAt, MAX_WEEKS, WEEKDAYS } from './lib/blocks.js'
@@ -135,7 +136,7 @@ function BwSheet({ onDone, close, iso = todayISO() }) {
   const comp = composition({ w: v, bf })
   const save = () => {
     const n = Math.round((v || 0) * 100) / 100
-    if (!n || n <= 0) { toast(t('Enter a valid weight')); return }
+    if (!n || n <= 0) { toast(t('Enter a valid weight')); return false }
     const pct = validBodyFat(bf)
     update(s => {
       // Written before the weigh-in lands, because inserting it destroys the thing being
@@ -155,6 +156,7 @@ function BwSheet({ onDone, close, iso = todayISO() }) {
     close()
     if (onDone) onDone(n); else toast(t('Weight saved'))
   }
+  useSaveOnDismiss({ v, bf }, save)
   const recent = [...st.bodyweight].reverse().slice(0, 3)
   const delEntry = d => update(s => { s.bodyweight = s.bodyweight.filter(b => b.d !== d) })
   return <>
@@ -295,17 +297,19 @@ function GoalSheet({ close }) {
   const st = S()
   const bw = lastBW(st)
   const [v, setV] = useState(st.targetW || (bw ? bw.w : 70))
+  const save = () => {
+    const n = Math.round((v || 0) * 100) / 100
+    if (!n || n <= 0) { toast(t('Enter a valid weight')); return false }
+    update(s => { s.targetW = n }); close()
+    const b = lastBW(S()); toast(t('Goal set: {0}', fmtNum(n) + ' ' + st.unit) + (b ? ' (' + t('{0} to go', fmtNum(Math.abs(n - b.w))) + ')' : ''))
+  }
+  useSaveOnDismiss({ v }, save)
   return <>
     <h3>{t('Target weight')}</h3>
     <div className="muted small">{t('Your goal is drawn as a line through the weight charts, and gains/losses are colored by whether they move toward it.')}</div>
     <WeightInput value={v} setValue={setV} unit={st.unit} />
     <div style={{ height: 14 }} />
-    <Button variant="primary" onClick={() => {
-      const n = Math.round((v || 0) * 100) / 100
-      if (!n || n <= 0) { toast(t('Enter a valid weight')); return }
-      update(s => { s.targetW = n }); close()
-      const b = lastBW(S()); toast(t('Goal set: {0}', fmtNum(n) + ' ' + st.unit) + (b ? ' (' + t('{0} to go', fmtNum(Math.abs(n - b.w))) + ')' : ''))
-    }}>{t('Save goal')}</Button>
+    <Button variant="primary" onClick={save}>{t('Save goal')}</Button>
     {st.targetW && <><div style={{ height: 8 }} /><Button variant="danger" onClick={() => { update(s => { s.targetW = null }); close(); toast(t('Goal removed')) }}>{t('Remove goal')}</Button></>}
   </>
 }
@@ -346,6 +350,7 @@ function NutriSheet({ close, iso = todayISO() }) {
     close()
     toast(v.kcal || derived ? t('Intake saved') : t('Intake cleared'))
   }
+  useSaveOnDismiss({ v, refeed, took }, save)
   const recent = [...(st.nutrition || [])].reverse().slice(0, 3)
   const delEntry = d => update(s => { s.nutrition = (s.nutrition || []).filter(e => e.d !== d) })
 
@@ -453,6 +458,13 @@ function NutriGoalSheet({ close }) {
   }))
   const set = (k, n) => setV(o => ({ ...o, [k]: n || 0 }))
   const derived = kcalFromMacros(v)
+  const save = () => {
+    const goal = {}
+    for (const k of ['kcal', ...MACROS]) if (v[k] > 0) goal[k] = v[k]
+    if (!Object.keys(goal).length) { toast(t('Set at least one target')); return false }
+    update(s => { s.nutriGoal = goal }); close(); toast(t('Targets set'))
+  }
+  useSaveOnDismiss({ v }, save)
   return <>
     <h3>{t('Daily targets')}</h3>
     <div className="muted small">{t('Only the targets you set are counted down — calories alone is a complete setup.')}</div>
@@ -466,12 +478,7 @@ function NutriGoalSheet({ close }) {
       </Button>
     </>}
     <div style={{ height: 14 }} />
-    <Button variant="primary" onClick={() => {
-      const goal = {}
-      for (const k of ['kcal', ...MACROS]) if (v[k] > 0) goal[k] = v[k]
-      if (!Object.keys(goal).length) { toast(t('Set at least one target')); return }
-      update(s => { s.nutriGoal = goal }); close(); toast(t('Targets set'))
-    }}>{t('Save targets')}</Button>
+    <Button variant="primary" onClick={save}>{t('Save targets')}</Button>
     {st.nutriGoal && <><div style={{ height: 8 }} />
       <Button variant="danger" onClick={() => { update(s => { s.nutriGoal = null }); close(); toast(t('Targets removed')) }}>{t('Remove targets')}</Button></>}
   </>
@@ -497,6 +504,16 @@ function TdeeSheet({ close }) {
   const parts = tdeeParts(v)
   const implied = impliedTDEE(st)
   const gap = parts && implied.tdee ? parts.total - implied.tdee : null
+  const save = () => {
+    if (!parts) { toast(t('A maintenance figure sits between {0} and {1} kcal.', TDEE_MIN, TDEE_MAX)); return false }
+    update(s => {
+      s.tdee = { bmr: parts.bmr, neat: parts.neat, other: parts.other, sport: parts.sport, stepBase: v.stepBase }
+      s.watchTrim = Math.round(trim) / 100
+      s.restStrict = strict
+    })
+    close(); toast(t('Maintenance set'))
+  }
+  useSaveOnDismiss({ v, trim, strict }, save)
 
   const why = {
     weighIns: t('It needs at least {0} weigh-ins.', IMPLIED_MIN_WEIGHINS),
@@ -651,15 +668,7 @@ function TdeeSheet({ close }) {
     </>}
 
     <div style={{ height: 14 }} />
-    <Button variant="primary" onClick={() => {
-      if (!parts) { toast(t('A maintenance figure sits between {0} and {1} kcal.', TDEE_MIN, TDEE_MAX)); return }
-      update(s => {
-        s.tdee = { bmr: parts.bmr, neat: parts.neat, other: parts.other, sport: parts.sport, stepBase: v.stepBase }
-        s.watchTrim = Math.round(trim) / 100
-        s.restStrict = strict
-      })
-      close(); toast(t('Maintenance set'))
-    }}>{t('Save')}</Button>
+    <Button variant="primary" onClick={save}>{t('Save')}</Button>
     {st.tdee && <><div style={{ height: 8 }} />
       <Button variant="danger" onClick={() => { update(s => { s.tdee = null }); close(); toast(t('Maintenance cleared')) }}>{t('Delete')}</Button></>}
   </>
@@ -1092,6 +1101,7 @@ function ExConfig({ ex, existing, onSave, onDelete, close, routine }) {
       onSave(out)
     }
   }
+  useSaveOnDismiss(c, save)
   return <>
     <h3 className="exn">{exName(ex)}</h3>
     {exNameEn(ex) && <div className="small dim" style={{ marginTop: -6, marginBottom: 8 }}>{exNameEn(ex)}</div>}
@@ -1386,10 +1396,26 @@ function NumRow({ label, unit, value, onChange, decimal = false }) {
  */
 function ManualEntry({ onDone, close, iso = todayISO() }) {
   const st = useStore(s => s.S)
-  const [v, setV] = useState({})
-  const [note, setNote] = useState('')
-  const set = (k, n) => setV(x => ({ ...x, [k]: n }))
   const dayWs = (st.workouts || []).filter(w => w.d === iso)
+  // Opened on what the day already carries, so the home screen's "561 kcal ›" opens on 561
+  // and not on an empty form that reads as if nothing was ever saved. The session figures are
+  // the ones sitting on the session they would be written to; with no session that day they
+  // were filed against the day. A length is offered back only where one was typed — a session
+  // timed live keeps its own clock, and this field left empty leaves that clock alone.
+  const [v, setV] = useState(() => {
+    const h = healthFor(st, iso) || {}
+    const w = dayWs.length === 1 ? watchTarget(dayWs, iso, ['kcal', 'minutes']) : null
+    const out = {}
+    const sport = w ? w.watch && w.watch.kcal : h.sport
+    const min = w ? w.watch && w.watch.minutes : h.sportMin
+    if (sport > 0) out.sport = sport
+    if (min > 0) out.min = min
+    if (h.steps > 0) out.steps = h.steps
+    if (h.free > 0) out.free = h.free
+    return out
+  })
+  const [note, setNote] = useState(() => (healthFor(st, iso) || {}).freeNote || '')
+  const set = (k, n) => setV(x => ({ ...x, [k]: n }))
   // A day can hold more than one session, and one pair of fields can only ever describe one
   // of them: you typed the session you had in mind, saved, and the other stayed empty for
   // good. So on a day trained twice this sheet asks per session, by name, prefilled with
@@ -1407,7 +1433,7 @@ function ManualEntry({ onDone, close, iso = todayISO() }) {
   const any = WATCH_FIELDS.some(f => (multi && (f.k === 'sport' || f.k === 'min') ? false : v[f.k] > 0)) ||
     (multi && dayWs.some(w => svOf(w).kcal > 0 || svOf(w).min > 0))
 
-  const save = () => {
+  const write = () => {
     const p = { d: iso }
     if (multi) {
       const sessions = dayWs
@@ -1426,8 +1452,16 @@ function ManualEntry({ onDone, close, iso = todayISO() }) {
     if (v.free > 0) { p.free = Math.round(v.free); if (note.trim()) p.freeNote = note.trim() }
     let report
     update(s => { report = applyHealth(s, p) })
-    onDone(report)
+    return report
   }
+  const save = () => onDone(write())
+  // Dismissed rather than saved: the same write, and a toast in place of the summary page the
+  // sheet is no longer open to show.
+  useSaveOnDismiss({ v, note, sv }, () => {
+    if (!any) return
+    const report = write()
+    toast(report.wrote.length ? t('Saved') : t('Nothing was saved'))
+  })
 
   return <>
     {close && <h3>{t('My watch')}</h3>}
@@ -1816,11 +1850,12 @@ function SleepSheet({ close, iso = todayISO() }) {
   const short = goal && slept != null ? Math.round((goal - slept) * 10) / 10 : null
 
   const save = () => {
-    if (!validTime(bed) || !validTime(wake)) { toast(t('Enter both times as HH:MM')); return }
+    if (!validTime(bed) || !validTime(wake)) { toast(t('Enter both times as HH:MM')); return false }
     update(s => { s.sleep = putSleep(s.sleep, { d: iso, bed, wake, awake, q }) })
     close()
     toast(slept != null ? t('Sleep saved') : t('Sleep cleared'))
   }
+  useSaveOnDismiss({ bed, wake, awake, q }, save)
   const clear = () => {
     update(s => { s.sleep = (s.sleep || []).filter(e => e.d !== iso) })
     close(); toast(t('Sleep cleared'))
@@ -2461,11 +2496,14 @@ function TopWeight({ entryIdx, close }) {
   const unitDone = !!entry && unit.every(i => A.entries[i].sets.every(s => s.done))
   const unitIdx = units.findIndex(u => u === unit)
   const isLastUnit = unitIdx === units.length - 1
+  // Waved away, it does what its own "Just close" does: the weight is recorded, nothing
+  // advances. Dismissing used to be the one way out of it that dropped the weight.
+  useOnDismiss(() => (entry && ex ? commit(false) : undefined))
   if (!entry || !ex) return null
 
   const commit = advance => {
     const n = Math.round((v || 0) * 10) / 10
-    if (!isFinite(n) || n < 0) { toast(t('Enter a valid weight')); return }
+    if (!isFinite(n) || n < 0) { toast(t('Enter a valid weight')); return false }
     update(s => {
       s.active.entries[entryIdx].topW = n
       const cur = s.exWeights[entry.id]
