@@ -14,3 +14,8 @@ export const UPSTREAM_REPO = 'https://github.com/DuarteSantos8/openGym'
 
 // Lowercase, hyphen-safe: what an exported backup or plan file is called on disk.
 export const FILE_PREFIX = 'bodyevolve'
+
+// Which build this is, stamped in by vite.config.js — shown at the bottom of Settings and on the
+// crash screen, the one fact a bug report needs and neither side could otherwise see. A bare
+// `vitest` run has no define, so it falls back.
+export const BUILD = typeof __BUILD__ !== 'undefined' ? __BUILD__ : { v: '?', sha: 'dev', at: '' }

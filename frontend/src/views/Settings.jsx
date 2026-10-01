@@ -15,10 +15,7 @@ import { MOBILE, shareExport, syncReminder } from '../lib/mobile.js'
 import { loadStarterPlan, confirmSheet, importFromApp, healthImportSheet, sportExportSheet } from '../sheets.jsx'
 import Icon from '../components/Icon.jsx'
 import { Section, Row, SelectRow, Switch, Segmented, Button, TextField } from '../components/ui.jsx'
-import { APP_NAME, FILE_PREFIX, UPSTREAM, UPSTREAM_REPO } from '../lib/brand.js'
-
-/* Stamped in by vite.config.js; a bare `vitest` run has no define, so it falls back. */
-const BUILD = typeof __BUILD__ !== 'undefined' ? __BUILD__ : { v: '?', sha: 'dev', at: '' }
+import { APP_NAME, FILE_PREFIX, UPSTREAM, UPSTREAM_REPO, BUILD } from '../lib/brand.js'
 import { suppOn } from '../lib/supp.js'
 import { countsToday } from '../lib/energy.js'
 
@@ -68,6 +65,22 @@ export default function Settings() {
     catch (e) { if (e.name !== 'NotAllowedError' && e.name !== 'AbortError') toast(e.message || t('Sign-in failed')) }
   }
   const registerHere = () => useUI.getState().openSheet(close => <RegisterInline close={close} setUser={setUser} pushState={pushState} pullState={pullState} toast={toast} />)
+  // The one action here nothing walks back, so a backup is downloaded before anything is
+  // touched — the very file Import backup reads. And it says where the data goes. Signed in,
+  // the emptied state is what syncs to the account and from there to every device on it, so
+  // "on this device" would have been a lie; clearing only this phone is what Sign out does.
+  const wipe = () => confirmSheet({
+    title: user ? t('Delete all your data?') : t('Reset everything?'),
+    message: user
+      ? t('Your plan, workouts, body weight and everything else — on this phone and on your account, so on every device signed in to it. A backup file is downloaded first. To clear only this phone, sign out instead.')
+      : t('Deletes your plan, workouts, body weight and everything else on this device. A backup file is downloaded first.'),
+    confirmText: t('Delete everything'), danger: true,
+    onConfirm: async () => {
+      await doExport()
+      replaceState(JSON.parse(JSON.stringify(DEF)), true)
+      nav('/home'); toast(t('All data reset'))
+    }
+  })
   // Ends the profile's sessions on every device — this one included, so on success it lands in
   // the same place as the plain sign-out above (home, local data cleared). On failure nothing
   // local is touched: still signed in here, and say so rather than leaving a half-signed-out app.
@@ -229,7 +242,8 @@ export default function Settings() {
       <Row icon="download" iconTint="var(--orange)" title={t('Export training (CSV)')}
         subtitle={t('Sets, reps, weight and energy — a date range, or since your current routine started.')}
         accessory="chevron" onClick={() => sportExportSheet()} />
-      <Row icon="trash" iconTint="var(--red)" title={t('Reset everything')} danger onClick={() => confirmSheet({ title: t('Reset everything?'), message: t('Deletes your plan, workouts and body weight on this device. This cannot be undone.'), confirmText: t('Delete everything'), danger: true, onConfirm: () => { replaceState(JSON.parse(JSON.stringify(DEF)), true); nav('/home'); toast(t('All data reset')) } })} />
+      <Row icon="trash" iconTint="var(--red)" title={user ? t('Delete all my data') : t('Reset everything')}
+        subtitle={user ? t('This phone and your account — every device.') : undefined} danger onClick={wipe} />
     </Section>
     <input ref={fileRef} type="file" accept=".json,application/json" style={{ display: 'none' }} onChange={doImport} />
     {/* Reset after reading so picking the same file twice still fires onChange. */}
