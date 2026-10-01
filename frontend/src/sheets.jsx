@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
-import { EXDB, EXIDX, BODYPARTS, isCardio, isBodyweightEq, allExercises, equipmentOf, exName, exNameEn, exSearchText, exMatches } from './lib/exercises.js'
+import { EXIDX, CATEGORIES, inCategory, categoryOf, isCardio, isBodyweightEq, allExercises, equipmentOf, exName, exNameEn, exMatches, termLabel } from './lib/exercises.js'
+import { CategoryChips, EquipmentChips } from './components/ExerciseFilters.jsx'
 import { fmtDate, fmtNum, fmtNum2, fmtKg, fmtVol, fmtDur, durPart, todayISO, isoOf, uid, exCount, DAYN, MONTHS_LONG, ACCENTS } from './lib/format.js'
 import { lastEntryFor, bestWeightFor, buildSets, effectiveRoutineId, effectiveRoutine, weekDays, swapDays, workoutVolume, durMs, setFigures, asksDuration, setsDone, setsDoneActive, lastBW, usageOf, setLabel, defaultConfig, warmEntry, cleanupSg, modeOf, effortOf, isBw, isOnce, readoutOf, isPerSide, sideReps, isWorking, setTop } from './lib/history.js'
 import { beep, vibrate } from './lib/sound.js'
@@ -917,7 +918,12 @@ export const addToRoutineSheet = ex => ui().openSheet(close => <AddToRoutine ex=
 // (planning, logging, PRs, stats), just without an animation.
 function CustomExForm({ existing, prefill, onDone, close }) {
   const [n, setN] = useState(existing ? existing.n : (prefill || ''))
-  const [bp, setBp] = useState(existing ? existing.bp : '')
+  // Picked as a category — Biceps and Triceps rather than one "bras" — and stored as the body
+  // part plus, for the arms, the target muscle, which is what files it under the right one and
+  // lights the right muscle on the map.
+  const [cat, setCat] = useState(() => (existing ? (categoryOf(existing) || {}).key || '' : ''))
+  const chosen = CATEGORIES.find(c => c.key === cat) || null
+  const bp = chosen ? chosen.bp : ''
   const [desc, setDesc] = useState(existing ? (existing.desc || '') : '')
   const save = () => {
     const name = n.trim()
@@ -927,10 +933,11 @@ function CustomExForm({ existing, prefill, onDone, close }) {
     if (dup) { toast(t('“{0}” already exists', dup.n)); return }
     const d = desc.trim().slice(0, 1000)
     let id = existing && existing.id
-    if (existing) update(s => { const c = (s.customEx || []).find(x => x.id === id); if (c) { c.n = name; c.bp = bp; c.desc = d } })
+    const tg = chosen.tg || (existing && existing.bp === bp ? existing.tg || '' : '')
+    if (existing) update(s => { const c = (s.customEx || []).find(x => x.id === id); if (c) { c.n = name; c.bp = bp; c.tg = tg; c.desc = d } })
     else {
       id = 'c' + uid()
-      update(s => { (s.customEx = s.customEx || []).push({ id, n: name, bp, desc: d, tg: '', eq: 'custom', custom: true }) })
+      update(s => { (s.customEx = s.customEx || []).push({ id, n: name, bp, desc: d, tg, eq: 'custom', custom: true }) })
     }
     close()
     toast(existing ? t('Saved') : t('“{0}” created', name))
@@ -941,7 +948,7 @@ function CustomExForm({ existing, prefill, onDone, close }) {
     <div className="muted small" style={{ marginBottom: 12 }}>{t('Name it and pick a body part — it behaves like any other exercise, just without an animation.')}</div>
     <input className="input" placeholder={t('Exercise name')} value={n} onChange={e => setN(e.target.value)} />
     <div className="chips" style={{ margin: '12px 0' }}>
-      {BODYPARTS.map(b => <button key={b} className={'chip' + (bp === b ? ' on' : '')} onClick={() => setBp(b)}>{t(b)}</button>)}
+      {CATEGORIES.map(c => <button key={c.key} className={'chip nocap' + (cat === c.key ? ' on' : '')} onClick={() => setCat(c.key)}>{termLabel(c.key)}</button>)}
     </div>
     {bp === 'cardio' && <div className="small dim row" style={{ marginBottom: 10, gap: 5 }}><Icon name="figureRun" style={{ fontSize: 13 }} />{t('Cardio exercises log time + speed instead of weight × reps.')}</div>}
     <textarea className="input" rows={4} maxLength={1000} placeholder={t('Description (optional) — setup, cues, anything you want to remember')}
@@ -974,59 +981,71 @@ export function deleteCustomEx(ex, afterDelete) {
 }
 
 /* ============================ exercise picker ============================ */
-// Exercises already used in your routines or past workouts (for the "Chosen" filter + a marker).
-function usageMap(st) {
-  const u = {}
-  st.routines.forEach(r => r.ex.forEach(e => { u[e.id] = (u[e.id] || 0) + 1 }))
-  st.workouts.forEach(w => w.entries.forEach(e => { u[e.id] = (u[e.id] || 0) + 1 }))
-  return u
-}
 function ExercisePicker({ onPick, close, query }) {
   const st = useStore(s => s.S)
-  const usage = usageMap(st)
+  // Exercises already in your routines or past workouts, and how often: the "Chosen" filter,
+  // the star, and the order of every list below.
+  const usage = usageOf(st)
   const [q, setQ] = useState(query || '')
-  const [bp, setBp] = useState('')          // '' = all, '★' = chosen, else a body part
+  const [cat, setCat] = useState('')        // '' = all, '★' = chosen, else a category
   const [eq, setEq] = useState('')          // '' = any equipment
   const [shown, setShown] = useState(50)
-  const ql = q.toLowerCase().trim()
+  const ql = q.trim()
+  const searching = !!ql
   const all = allExercises(st)
-  let base = all.filter(e => (bp === '★' ? usage[e.id] : (!bp || e.bp === bp)) && exMatches(e, ql))
-  if (bp === '★') base = [...base].sort((a, b) => (usage[b.id] - usage[a.id]) || (a.n < b.n ? -1 : 1))
+  // Your own first, in every list: what you have trained or planned, the most used first, then
+  // the rest of the catalogue in its own order. In a category of a hundred and fifty curls,
+  // the one done every week used to sit wherever the alphabet put it.
+  const used = e => usage.get(e.id) || 0
+  const base = all.filter(e => (cat === '★' ? used(e) : inCategory(e, cat)) && exMatches(e, ql))
+    .sort((a, b) => used(b) - used(a))
   const eqOpts = equipmentOf(base)
   // Drop the equipment filter if the search narrowed it away, so you never hit a dead end.
   const eqOn = eqOpts.includes(eq) ? eq : ''
   const f = eqOn ? base.filter(e => e.eq === eqOn) : base
-  const chosenCount = Object.keys(usage).length
+  const chosenCount = usage.size
+  const rows = f.slice(0, shown)
+  const mine = cat === '★' ? [] : rows.filter(used)
+  const rest = cat === '★' ? rows : rows.filter(e => !used(e))
+  // `close` goes with it: most callers open a config sheet on top and dismiss this one
+  // themselves, but a caller that is done the moment you tap a row needs a way to say so.
+  const row = e => <div key={e.id} className="item" onClick={() => onPick(e, close)}>
+    <Thumb ex={e} /><div className="grow"><div className="tt exn">{exName(e)}</div><div className="ss">{termLabel(e.tg || e.bp)} · {termLabel(e.eq)}{exNameEn(e) && <span className="dim"> · {exNameEn(e)}</span>}</div></div>
+    {used(e) > 0 && <span className="tag acc"><Icon name="starFill" /></span>}<Icon name="plus" className="chev" />
+  </div>
+  const create = <div className="item" onClick={() => customExSheet(null, ex => onPick(ex), q.trim())}>
+    <div className="thumb thumb-x"><Icon name="sparkles" /></div>
+    <div className="grow"><div className="tt">{searching ? t('Create “{0}”', q.trim()) : t('Create your own exercise')}</div><div className="ss">{t('name + body part, no animation')}</div></div><Icon name="plus" className="chev" />
+  </div>
+  const pickCat = v => { setCat(v); setEq(''); setShown(50) }
   return <>
     <h3>{t('Add exercise')}</h3>
-    <div className="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></svg>
+    {/* Pinned to the top of the sheet, so typing never scrolls the field away from the list
+        it is filtering. */}
+    <div className="search pick-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></svg>
       <input className="input" placeholder={t('Search {0} exercises…', all.length)} value={q} onChange={e => { setQ(e.target.value); setShown(50) }} /></div>
-    <div className="chips" style={{ margin: eqOpts.length > 1 ? '10px 0 6px' : '10px 0' }}>
-      {chosenCount > 0 && <button className={'chip' + (bp === '★' ? ' on' : '')} onClick={() => { setBp('★'); setEq(''); setShown(50) }}><Icon name="starFill" style={{ fontSize: 12, display: 'inline-block', marginRight: 4, verticalAlign: '-1px' }} />{t('Chosen')} ({chosenCount})</button>}
-      <button className={'chip nocap' + (!bp ? ' on' : '')} onClick={() => { setBp(''); setEq(''); setShown(50) }}>{t('All')}</button>
-      {BODYPARTS.map(b => <button key={b} className={'chip' + (bp === b ? ' on' : '')} onClick={() => { setBp(b); setEq(''); setShown(50) }}>{t(b)}</button>)}
-    </div>
-    {eqOpts.length > 1 && <div className="chips" style={{ marginBottom: 10 }}>
-      <button className={'chip nocap' + (!eqOn ? ' on' : '')} onClick={() => { setEq(''); setShown(50) }}>{t('Any equipment')}</button>
-      {eqOpts.map(x => <button key={x} className={'chip' + (eqOn === x ? ' on' : '')} onClick={() => { setEq(x); setShown(50) }}>{t(x)}</button>)}
-    </div>}
-    <div className="list">
-      {bp !== '★' && <div className="item" onClick={() => customExSheet(null, ex => onPick(ex), q.trim())}>
-        <div className="thumb thumb-x"><Icon name="sparkles" /></div>
-        <div className="grow"><div className="tt">{t('Create your own exercise')}</div><div className="ss">{t('name + body part, no animation')}</div></div><Icon name="plus" className="chev" />
-      </div>}
-      {/* `close` goes with it: most callers open a config sheet on top and dismiss this one
-          themselves, but a caller that is done the moment you tap a row needs a way to say so. */}
-      {f.slice(0, shown).map(e => <div key={e.id} className="item" onClick={() => onPick(e, close)}>
-        <Thumb ex={e} /><div className="grow"><div className="tt exn">{exName(e)}</div><div className="ss capitalize">{t(e.tg || e.bp)} · {t(e.eq)}{exNameEn(e) && <span className="nocap dim"> · {exNameEn(e)}</span>}</div></div>
-        {usage[e.id] && <span className="tag acc"><Icon name="starFill" /></span>}<Icon name="plus" className="chev" />
-      </div>)}
-      {f.length === 0 && bp === '★' && <div className="empty">{t('Nothing chosen yet — add exercises and they’ll show up here.')}</div>}
-    </div>
+    <CategoryChips value={cat} onChange={pickCat} searching={searching} style={{ margin: '4px 0 10px' }}
+      extra={chosenCount > 0 ? [{ key: '★', label: t('Chosen'),
+        chip: <><Icon name="starFill" style={{ fontSize: 12, display: 'inline-block', marginRight: 4, verticalAlign: '-1px' }} />{t('Chosen')} ({chosenCount})</> }] : []} />
+    <EquipmentChips options={eqOpts} value={eqOn} onChange={x => { setEq(x); setShown(50) }} searching={searching} style={{ marginBottom: 10 }} />
+    {!searching && cat !== '★' && <div className="list" style={{ marginBottom: 8 }}>{create}</div>}
+    {mine.length > 0 && <>
+      <h4 className="sec">{t('Your exercises')}</h4>
+      <div className="list">{mine.map(row)}</div>
+    </>}
+    {rest.length > 0 && <>
+      {mine.length > 0 && <h4 className="sec">{t('All the others')}</h4>}
+      <div className="list">{rest.map(row)}</div>
+    </>}
+    {f.length === 0 && cat === '★' && <div className="empty">{t('Nothing chosen yet — add exercises and they’ll show up here.')}</div>}
+    {f.length === 0 && cat !== '★' && searching && <div className="empty small">{t('No match')}</div>}
     {f.length > shown && <><div style={{ height: 8 }} /><Button onClick={() => setShown(s => s + 50)}>{t('Show more')}</Button></>}
+    {/* After the matches while searching: what you typed, as an exercise of your own, is the
+        answer when nothing above it is. */}
+    {searching && <div className="list" style={{ marginTop: 8 }}>{create}</div>}
   </>
 }
-export const exercisePicker = (onPick, { query } = {}) => ui().openSheet(close => <ExercisePicker onPick={onPick} close={close} query={query} />)
+export const exercisePicker = (onPick, { query } = {}) => ui().openSheet(close => <ExercisePicker onPick={onPick} close={close} query={query} />, { tall: true })
 
 /* ============================ exercise config ============================ */
 // Progression settings for one exercise (issue #17). Shown inside the config sheet because

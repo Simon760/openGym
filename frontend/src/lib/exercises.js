@@ -89,6 +89,47 @@ export const exMatches = (ex, ql) => {
 }
 
 /**
+ * The categories exercises are browsed by: the dataset's body parts, in the order a gym is
+ * walked — push, pull, arms, legs, core — rather than alphabetically in English, with "upper
+ * arms" split the way a gym splits it. Biceps and triceps are different days on different
+ * machines, and one "bras" list of 292 put the curl you wanted behind a hundred extensions.
+ *
+ * An exercise of your own carries no target muscle unless you gave it one; it is read off its
+ * name ("extension nuque", "barre au front", "dips") and otherwise counts as biceps. An arm
+ * exercise that extends the elbow is a triceps exercise, whatever else its name says.
+ */
+const TRICEPS_WORDS = /\b(triceps?|push.?downs?|kick.?backs?|skull.?crushers?|extensions?|dips?|barre au front|french press|presse francaise|prise serree|close.?grip|jm press)\b/
+const isTriceps = e => e.tg === 'triceps' || (!e.tg && TRICEPS_WORDS.test(foldS(exName(e) + ' ' + (e.n || ''))))
+export const CATEGORIES = [
+  { key: 'chest', bp: 'chest', has: e => e.bp === 'chest' },
+  { key: 'back', bp: 'back', has: e => e.bp === 'back' },
+  { key: 'shoulders', bp: 'shoulders', has: e => e.bp === 'shoulders' },
+  { key: 'biceps', bp: 'upper arms', tg: 'biceps', has: e => e.bp === 'upper arms' && !isTriceps(e) },
+  { key: 'triceps', bp: 'upper arms', tg: 'triceps', has: e => e.bp === 'upper arms' && isTriceps(e) },
+  { key: 'lower arms', bp: 'lower arms', has: e => e.bp === 'lower arms' },
+  { key: 'upper legs', bp: 'upper legs', has: e => e.bp === 'upper legs' },
+  { key: 'lower legs', bp: 'lower legs', has: e => e.bp === 'lower legs' },
+  { key: 'waist', bp: 'waist', has: e => e.bp === 'waist' },
+  { key: 'cardio', bp: 'cardio', has: e => e.bp === 'cardio' },
+  { key: 'neck', bp: 'neck', has: e => e.bp === 'neck' },
+]
+/** Is an exercise in a category? An empty key is every exercise. */
+export const inCategory = (e, key) => {
+  if (!key) return true
+  const c = CATEGORIES.find(x => x.key === key)
+  return !!(c && e && c.has(e))
+}
+/** The category an exercise is browsed under. */
+export const categoryOf = e => (e && CATEGORIES.find(c => c.has(e))) || null
+
+/**
+ * A term of the dataset — body part, muscle, equipment — as a label, with a capital on its
+ * first word only: "Avant-bras", "Machine à levier". The CSS capitalisation that suits the
+ * English terms made "Avant-Bras" and "Machine À Levier" of the French ones.
+ */
+export const termLabel = k => { const s = k ? t(k) : ''; return s ? s[0].toUpperCase() + s.slice(1) : '' }
+
+/**
  * What a complete exercise record looks like, for anything that builds one.
  *
  * Every caller is making a user-side exercise — created by hand, or by an import that found

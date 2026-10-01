@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useRef } from 'react'
 import { useUI } from '../store/useUI.js'
 import { registerDismiss } from '../lib/dismiss.js'
 import { onControl, dragBy } from '../lib/sheetdrag.js'
+import { watchKeyboard } from '../lib/keyboard.js'
 
 // Which sheet a component is drawn in, so it can say what dismissing that sheet means.
 const SheetId = createContext(null)
@@ -94,7 +95,7 @@ function Sheet({ sheet }) {
   return (
     <div>
       <div className="mback" onClick={() => { if (!sheet.locked) dismiss() }} />
-      <div className="sheet" ref={ref} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+      <div className={'sheet' + (sheet.tall ? ' tall' : '')} ref={ref} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
         <div className="grab" />
         {body}
       </div>
@@ -116,6 +117,9 @@ export default function Modals() {
       window.scrollTo(0, y)
     }
   }, [sheets.length > 0])
+
+  // Sheets sit on top of the on-screen keyboard rather than under it — see lib/keyboard.js.
+  useEffect(() => (sheets.length ? watchKeyboard() : undefined), [sheets.length > 0])
 
   if (!sheets.length) return null
   return (
