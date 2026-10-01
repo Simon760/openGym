@@ -1184,8 +1184,6 @@ export default {
   'Only if your watch measured it — leave it at 0 otherwise.': 'Seulement si ta montre l’a mesurée — sinon laisse 0.',
   'Estimated recovery: about {0} — most loaded: {1}.': 'Récup estimée : environ {0} — le plus sollicité : {1}.',
   'Save the activity': 'Enregistrer l’activité',
-  'Padel, football, swimming…': 'Padel, foot, natation…',
-  'Add': 'Ajouter',
   'Add an activity (padel, football…)': 'Ajouter une activité (padel, foot…)',
   'Add a weights session': 'Ajouter une séance de muscu',
   'easy effort': 'Facile',

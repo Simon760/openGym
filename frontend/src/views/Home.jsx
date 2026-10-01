@@ -4,7 +4,7 @@ import { useStore } from '../store/useStore.js'
 import { effectiveRoutine, effectiveRoutineId, streakWeeks, lastBW, setsDoneActive } from '../lib/history.js'
 import { fmtNum, fmtDate, todayISO, isoOf, weekKey, DAYS, fmtKg } from '../lib/format.js'
 import { t, dateLocale } from '../lib/i18n.js'
-import { bwSheet, goalSheet, dayOverrideSheet, workoutDetailSheet, dayWorkoutsSheet, calendarSheet, startFlow, loadStarterPlan, bwDeltaColor, nutriSheet, nutriGoalSheet, digestSheet, openPendingProgram, discardPendingProgram, sleepSheet, tdeeSheet, watchSheet, projectionSheet, activitySheet } from '../sheets.jsx'
+import { bwSheet, goalSheet, dayOverrideSheet, workoutDetailSheet, dayWorkoutsSheet, calendarSheet, startFlow, loadStarterPlan, bwDeltaColor, nutriSheet, nutriGoalSheet, digestSheet, openPendingProgram, discardPendingProgram, sleepSheet, tdeeSheet, watchSheet, projectionSheet } from '../sheets.jsx'
 import { entryFor, kcalFromMacros, macroSplit, remainingOf, goalFor, isRefeed, MACROS, MACRO_NAME, MACRO_COLOR } from '../lib/nutrition.js'
 import { composition, sleepFor, lastSleep, sleepHours, whenOf, sinceStart, bwAsOf } from '../lib/body.js'
 import { dayBalance, projectedWeight, KCAL_PER_KG_FAT } from '../lib/energy.js'
@@ -177,19 +177,6 @@ export default function Home() {
         </div>
         {watchLine ? <Icon name="chevronRight" className="chev" /> : <span className="tag acc">{t('Log')}</span>}
       </div>
-
-      {/* A match, a swim, a run — added to the day on screen, no routine needed. Only for a day
-          that has happened: a padel match next Tuesday is a plan, not an activity. */}
-      {iso <= todayISO() && <div className="today-row wrap" onClick={() => activitySheet(iso)}>
-        <div className="row" style={{ gap: 9, minWidth: 0 }}>
-          <span className="lrow-i" style={{ background: 'var(--surface-3)' }}><Icon name="ball" /></span>
-          <div style={{ minWidth: 0 }}>
-            <div className="lbl2">{t('Activity')}</div>
-            <div className="ttl">{t('Padel, football, swimming…')}</div>
-          </div>
-        </div>
-        <span className="tag acc">{t('Add')}</span>
-      </div>}
     </div>
 
     {/* A program sent over MCP is waiting. Above everything else because it is the one

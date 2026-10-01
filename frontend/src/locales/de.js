@@ -1209,8 +1209,6 @@ export default {
   'Only if your watch measured it — leave it at 0 otherwise.': 'Only if your watch measured it — leave it at 0 otherwise.',
   'Estimated recovery: about {0} — most loaded: {1}.': 'Estimated recovery: about {0} — most loaded: {1}.',
   'Save the activity': 'Save the activity',
-  'Padel, football, swimming…': 'Padel, football, swimming…',
-  'Add': 'Add',
   'Add an activity (padel, football…)': 'Add an activity (padel, football…)',
   'Add a weights session': 'Add a weights session',
   'easy effort': 'easy effort',
