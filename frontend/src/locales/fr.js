@@ -1137,4 +1137,5 @@ export default {
   'Previous week': 'Semaine précédente',
   'Next week': 'Semaine suivante',
   'Weekly average': 'Moyenne hebdo',
+  'Not broken down': 'Non détaillé',
 }

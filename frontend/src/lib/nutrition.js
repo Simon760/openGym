@@ -72,6 +72,42 @@ export function macroSplit(e) {
 }
 
 /**
+ * One day as a stacked bar: how tall it stands, and what it is made of.
+ *
+ * For calories the bar stands at the figure that was logged — the one typed in, the one the
+ * target line and the weekly average are about — so a day reads the same on the chart as
+ * everywhere else. The macros fill it in their own calories (4/4/9), and whatever they leave
+ * unexplained is its own `rest` segment: alcohol, fibre, a macro never entered, a label's
+ * rounding. A day logged as calories alone is therefore all `rest`, a whole bar rather than a
+ * gap — it was eaten, it just was not broken down. Macros adding up to more than the logged
+ * figure are scaled down to fit, proportions kept: the logged figure stays the height, and
+ * derivedMismatch is where that disagreement gets said out loud.
+ *
+ * A day with macros and no calorie figure stands at what its macros add up to. For a single
+ * macro the bar is just its grams. Null when the day has nothing to draw for this metric.
+ */
+export function dayStack(e, metric = 'kcal') {
+  if (!e) return null
+  if (metric !== 'kcal') {
+    const g = num(e[metric])
+    return g ? { total: g, segments: [{ key: metric, v: g }] } : null
+  }
+  const derived = kcalFromMacros(e)
+  const total = num(e.kcal) || derived
+  if (!total) return null
+  // Macros within a gram's rounding of the logged figure are the whole day, stretched to it
+  // rather than leaving a sliver nobody could name.
+  const fits = derived > 0 && (derived > total || total - derived <= GRAM_ROUNDING_KCAL)
+  const k = fits ? total / derived : 1
+  const segments = MACROS.filter(m => num(e[m])).map(m => ({ key: m, v: num(e[m]) * KCAL_PER_G[m] * k }))
+  if (!fits) segments.push({ key: 'rest', v: total - derived })
+  return { total, segments }
+}
+
+// The most whole-gram macros can be off by and still be right: half a gram of each, at 4/4/9.
+const GRAM_ROUNDING_KCAL = 0.5 * (KCAL_PER_G.p + KCAL_PER_G.c + KCAL_PER_G.f)
+
+/**
  * A day eaten at maintenance on purpose — a refeed, to put the glycogen and the batteries back.
  *
  * It changes no arithmetic anywhere. The deficit is the day's expenditure minus what was

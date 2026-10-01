@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   entryFor, lastEntry, hasMacros, kcalFromMacros, derivedMismatch, macroSplit,
-  remainingOf, avgOver, seriesOf, weekOf, putEntry, KCAL_PER_G, MISMATCH_TOL
+  remainingOf, avgOver, seriesOf, weekOf, dayStack, putEntry, KCAL_PER_G, MISMATCH_TOL
 } from './nutrition.js'
 import { isoOf } from './format.js'
 
@@ -233,5 +233,61 @@ describe('weekOf', () => {
     const st = S({ d: '2026-07-06', kcal: 2200 })   // an earlier Monday
     expect(weekOf(st, '2026-07-06').avg.kcal).toBe(2200)
     expect(weekOf(st, MON).avg.kcal).toBe(null)
+  })
+})
+
+describe('dayStack', () => {
+  const sum = st => st.segments.reduce((n, x) => n + x.v, 0)
+  const keys = st => st.segments.map(x => x.key)
+
+  it('is null for a day nobody logged — drawn as a gap, not a zero', () => {
+    expect(dayStack(null)).toBe(null)
+    expect(dayStack(null, 'p')).toBe(null)
+  })
+
+  it('draws a calories-only day as a whole bar of unbroken-down intake, not as nothing', () => {
+    const st = dayStack({ d: '2026-09-30', kcal: 2458 })
+    expect(st.total).toBe(2458)
+    expect(keys(st)).toEqual(['rest'])
+    expect(sum(st)).toBe(2458)
+  })
+
+  it('stands at the logged figure when the macros explain less of it, the remainder kept apart', () => {
+    // 150*4 + 220*4 + 70*9 = 2110 of a logged 2228
+    const st = dayStack({ kcal: 2228, p: 150, c: 220, f: 70 })
+    expect(st.total).toBe(2228)
+    expect(keys(st)).toEqual(['p', 'c', 'f', 'rest'])
+    expect(st.segments[0].v).toBe(600)
+    expect(st.segments[3].v).toBeCloseTo(118)
+    expect(sum(st)).toBeCloseTo(2228)
+  })
+
+  it('scales macros down to the logged figure when they add up to more, proportions kept', () => {
+    // 2110 of macros against 1900 logged
+    const st = dayStack({ kcal: 1900, p: 150, c: 220, f: 70 })
+    expect(st.total).toBe(1900)
+    expect(keys(st)).toEqual(['p', 'c', 'f'])
+    expect(sum(st)).toBeCloseTo(1900)
+    expect(st.segments[0].v / st.segments[1].v).toBeCloseTo(600 / 880)
+  })
+
+  it('leaves out a remainder that is only the rounding of whole grams, and still stands at the logged figure', () => {
+    // 1221 logged against 1220 of macros — half a gram of each is up to 8.5 kcal either way
+    const st = dayStack({ kcal: 1221, p: 107, c: 108, f: 40 })
+    expect(keys(st)).toEqual(['p', 'c', 'f'])
+    expect(sum(st)).toBeCloseTo(1221)
+    expect(keys(dayStack({ kcal: 2118, p: 150, c: 220, f: 70 }))).toEqual(['p', 'c', 'f'])
+    expect(keys(dayStack({ kcal: 2120, p: 150, c: 220, f: 70 }))).toEqual(['p', 'c', 'f', 'rest'])
+  })
+
+  it('a macros-only day stands at what its macros add up to', () => {
+    const st = dayStack({ p: 100, c: 100 })
+    expect(st.total).toBe(800)
+    expect(keys(st)).toEqual(['p', 'c'])
+  })
+
+  it('a single macro is just its grams — and nothing for a day that never logged it', () => {
+    expect(dayStack({ kcal: 2000, p: 140 }, 'p')).toEqual({ total: 140, segments: [{ key: 'p', v: 140 }] })
+    expect(dayStack({ kcal: 2000 }, 'p')).toBe(null)
   })
 })

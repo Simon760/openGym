@@ -1162,4 +1162,5 @@ export default {
   'Previous week': 'Previous week',
   'Next week': 'Next week',
   'Weekly average': 'Weekly average',
+  'Not broken down': 'Not broken down',
 }
