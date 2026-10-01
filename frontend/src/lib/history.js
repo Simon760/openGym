@@ -131,6 +131,8 @@ export const effortOf = S => {
 }
 // The "(RIR 2)" / "(RPE 8)" tail on a set summary, empty when nothing was logged.
 const effortTail = s => {
+  // A sport is rated for the whole session, out of ten (sports.js), not by reps in reserve.
+  if (s.srpe > 0) return ` (${t('effort {0}/10', fmtNum(s.srpe))})`
   const k = s.rir != null ? 'rir' : s.rpe != null ? 'rpe' : null
   return k ? ` (${EFFORT[k].hd} ${fmtNum(s[k])})` : ''
 }
@@ -518,6 +520,30 @@ export function setFigures(w, { kcal = 0, mins = 0, ask = true, keepClock = fals
   }
   if (Object.keys(watch).length) w.watch = watch
   else delete w.watch
+  return w
+}
+
+/**
+ * A sport — or any timed activity — written straight onto a day as a finished session: no
+ * routine to build first, no session screen to start and finish. A padel match logged this way
+ * is the same record a session ending in one cardio block would have been, so history, the
+ * calendar, the energy balance and the recovery map all read it with nothing new to learn.
+ *
+ * Today's is taken as just played — it ends now. Another day's is put where the app puts every
+ * session that carries no clock, ending at 18:00 (setFigures). `kcal` is what a watch counted,
+ * filed exactly as on any session; absent when nothing measured it.
+ */
+export function activityWorkout({ wid, id, name, d, min, srpe, km = 0, kcal = 0, bw = null, now = Date.now() }) {
+  const m = Math.max(1, Math.round(min || 0))
+  const set = { min: m, ...(srpe > 0 ? { srpe } : {}), ...(km > 0 ? { km } : {}), done: true }
+  const w = {
+    id: wid, d, routineId: null, name, bw,
+    entries: [{ id, sets: [set], topW: null, target: { id, sets: 1, min: m } }],
+    prs: [], activity: true,
+  }
+  if (d === isoOf(new Date(now))) w.start = now - m * 60000
+  setFigures(w, { kcal, mins: m, ask: true })
+  w.vol = workoutVolume(w)
   return w
 }
 

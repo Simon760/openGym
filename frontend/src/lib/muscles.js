@@ -9,6 +9,7 @@
 
 import { EXIDX, isCardio } from './exercises.js'
 import { isWorking } from './history.js'
+import { sportOf } from './sports.js'
 
 // The muscles a map can shade, in head-to-toe order — also the order of any list
 // built from them, so "what am I neglecting" reads top-down like a body.
@@ -128,6 +129,10 @@ export const muscleSlug = name => ALIAS[key(name)] || null
 /** Muscles one exercise trains: { slug: 0…1 }. */
 export function musclesOf(ex) {
   if (!ex) return {}
+  // A sport carries its own profile, read off the studies in sports.js rather than off the
+  // dataset's flat "primary 1, everything else 0.4" — which is not what a football match is.
+  const sp = sportOf(ex.id)
+  if (sp) return { ...sp.muscles }
   const out = {}
   const add = (name, w) => {
     const slug = ALIAS[key(name)]

@@ -4,7 +4,7 @@ import { useUI } from './store/useUI.js'
 import { EXIDX, CATEGORIES, inCategory, categoryOf, isCardio, isBodyweightEq, allExercises, equipmentOf, exName, exNameEn, exMatches, termLabel } from './lib/exercises.js'
 import { CategoryChips, EquipmentChips } from './components/ExerciseFilters.jsx'
 import { fmtDate, fmtNum, fmtNum2, fmtKg, fmtVol, fmtDur, durPart, todayISO, isoOf, uid, exCount, DAYN, MONTHS_LONG, ACCENTS } from './lib/format.js'
-import { lastEntryFor, bestWeightFor, buildSets, effectiveRoutineId, effectiveRoutine, weekDays, swapDays, workoutVolume, durMs, setFigures, asksDuration, setsDone, setsDoneActive, lastBW, usageOf, setLabel, defaultConfig, warmEntry, cleanupSg, modeOf, effortOf, isBw, isOnce, readoutOf, isPerSide, sideReps, isWorking, setTop } from './lib/history.js'
+import { lastEntryFor, bestWeightFor, buildSets, effectiveRoutineId, effectiveRoutine, weekDays, swapDays, workoutVolume, durMs, setFigures, asksDuration, setsDone, setsDoneActive, lastBW, usageOf, setLabel, defaultConfig, warmEntry, cleanupSg, modeOf, effortOf, isBw, isOnce, readoutOf, isPerSide, sideReps, isWorking, setTop, hasDist, activityWorkout } from './lib/history.js'
 import { beep, vibrate } from './lib/sound.js'
 import { t, instrFor, getLang, INSTR_LANGS } from './lib/i18n.js'
 import { nav } from './lib/nav.js'
@@ -16,7 +16,9 @@ import { Button, Slider, Switch, Segmented, SelectRow, Row, TextArea, NumberFiel
 import { useSaveOnDismiss } from './components/Modals.jsx'
 import { glyphOf, GLYPH_GROUPS, DEFAULT_GLYPH } from './lib/glyphs.js'
 import BodyMap from './components/BodyMap.jsx'
-import { loadOfWorkouts, musclesOf, MUSCLE_NAME } from './lib/muscles.js'
+import { loadOfWorkouts, musclesOf, MUSCLE_NAME, sharesOf } from './lib/muscles.js'
+import { sportOf, EFFORT_LEVELS } from './lib/sports.js'
+import { sportRecovery } from './lib/recovery.js'
 import MuscleShare from './components/MuscleShare.jsx'
 import { parseImport, mergeImport } from './lib/import-csv.js'
 import { buildPlanBundle, parsePlan, mergePlan, printPlan, importProgramme } from './lib/plan-share.js'
@@ -948,7 +950,7 @@ function CustomExForm({ existing, prefill, onDone, close }) {
     <div className="muted small" style={{ marginBottom: 12 }}>{t('Name it and pick a body part — it behaves like any other exercise, just without an animation.')}</div>
     <input className="input" placeholder={t('Exercise name')} value={n} onChange={e => setN(e.target.value)} />
     <div className="chips" style={{ margin: '12px 0' }}>
-      {CATEGORIES.map(c => <button key={c.key} className={'chip nocap' + (cat === c.key ? ' on' : '')} onClick={() => setCat(c.key)}>{termLabel(c.key)}</button>)}
+      {CATEGORIES.filter(c => c.key !== 'sports').map(c => <button key={c.key} className={'chip nocap' + (cat === c.key ? ' on' : '')} onClick={() => setCat(c.key)}>{termLabel(c.key)}</button>)}
     </div>
     {bp === 'cardio' && <div className="small dim row" style={{ marginBottom: 10, gap: 5 }}><Icon name="figureRun" style={{ fontSize: 13 }} />{t('Cardio exercises log time + speed instead of weight × reps.')}</div>}
     <textarea className="input" rows={4} maxLength={1000} placeholder={t('Description (optional) — setup, cues, anything you want to remember')}
@@ -1010,7 +1012,7 @@ function ExercisePicker({ onPick, close, query }) {
   // `close` goes with it: most callers open a config sheet on top and dismiss this one
   // themselves, but a caller that is done the moment you tap a row needs a way to say so.
   const row = e => <div key={e.id} className="item" onClick={() => onPick(e, close)}>
-    <Thumb ex={e} /><div className="grow"><div className="tt exn">{exName(e)}</div><div className="ss">{termLabel(e.tg || e.bp)} · {termLabel(e.eq)}{exNameEn(e) && <span className="dim"> · {exNameEn(e)}</span>}</div></div>
+    <Thumb ex={e} /><div className="grow"><div className="tt exn">{exName(e)}</div><div className="ss">{sportOf(e.id) ? t('Sport · duration and effort') : <>{termLabel(e.tg || e.bp)} · {termLabel(e.eq)}</>}{exNameEn(e) && <span className="dim"> · {exNameEn(e)}</span>}</div></div>
     {used(e) > 0 && <span className="tag acc"><Icon name="starFill" /></span>}<Icon name="plus" className="chev" />
   </div>
   const create = <div className="item" onClick={() => customExSheet(null, ex => onPick(ex), q.trim())}>
@@ -1074,7 +1076,7 @@ function ProgressionFields({ ex, mode, c, setC, routine, unit }) {
   </>
 }
 
-function ExConfig({ ex, existing, onSave, onDelete, close, routine }) {
+function ExConfig({ ex, existing, onSave, onDelete, close, routine, cta }) {
   const st = useStore(s => s.S)
   const cardio = isCardio(ex.id)
   const [c, setC] = useState(existing || defaultConfig(ex.id))
@@ -1206,12 +1208,13 @@ function ExConfig({ ex, existing, onSave, onDelete, close, routine }) {
         : t('Reps climb by one whenever every set was clean. Set a ceiling to add sets instead of reps forever.')}
     </div>}
     <ProgressionFields ex={ex} mode={mode} c={c} setC={setC} routine={routine} unit={st.unit} />
-    <Button variant="primary" onClick={save}>{existing ? t('Save') : t('Add to routine')}</Button>
+    <Button variant="primary" onClick={save}>{existing ? t('Save') : cta || t('Add to routine')}</Button>
     {ex.custom && <><div style={{ height: 8 }} /><Button icon="pencil" onClick={() => { close(); customExSheet(ex) }}>{t('Edit or delete this exercise')}</Button></>}
     {onDelete && <><div style={{ height: 8 }} /><Button variant="danger" onClick={() => { close(); onDelete() }}>{t('Remove from routine')}</Button></>}
   </>
 }
-export const exConfigSheet = (ex, existing, onSave, onDelete, routine) => ui().openSheet(close => <ExConfig ex={ex} existing={existing} onSave={onSave} onDelete={onDelete} routine={routine} close={close} />)
+// `cta` names what the button does where that is not a routine — adding to a session.
+export const exConfigSheet = (ex, existing, onSave, onDelete, routine, { cta } = {}) => ui().openSheet(close => <ExConfig ex={ex} existing={existing} onSave={onSave} onDelete={onDelete} routine={routine} cta={cta} close={close} />)
 
 /* ============================ glyph picker ============================ */
 // Grouped by what the glyph means for a training day, so picking one is a scan
@@ -2584,13 +2587,16 @@ export function startFlow(routineId) {
  * `opts.warm` is a config for the movement the session opened with. It goes in front of the
  * routine, because that is the order it happened in and the order you will type it in.
  */
-export function beginWorkout(routineId, bw, { log = false, d = todayISO(), warm = null } = {}) {
+export function beginWorkout(routineId, bw, { log = false, d = todayISO(), warm = null, first = null } = {}) {
   const st = S()
   const r = routineId ? st.routines.find(x => x.id === routineId) : null
+  // `first` is one exercise and its config: a session of that alone, opened from "add an
+  // activity" with something that is not a sport — the pull-ups done at home, no routine.
+  const cfgs = r ? r.ex : first && first.id ? [first] : []
   // The prescription is applied as the session is built, so you walk up to the bar with the
   // right weight already on the screen instead of being told about it afterwards. `plan` is
   // kept on the entry purely so the workout can explain the number it chose.
-  const entries = (r ? r.ex : []).map(cfg => {
+  const entries = cfgs.map(cfg => {
     const plan = nextPrescription(st, cfg, r)
     return { id: cfg.id, sg: cfg.sg, target: { ...cfg }, plan, sets: applyPrescription(buildSets(st, cfg), plan) }
   })
@@ -2602,7 +2608,7 @@ export function beginWorkout(routineId, bw, { log = false, d = todayISO(), warm 
     // asked for at the door any more. The summary shows it and nothing computes from it.
     const last = lastBW(st)
     s.active = { id: uid(), d: log ? d : todayISO(), start: Date.now(), routineId,
-      name: r ? r.name : t('Freestyle'), bw: bw ?? (last ? last.w : null), cur: 0, entries,
+      name: r ? r.name : first && first.id ? capFirst(exName(EXIDX[first.id])) : t('Freestyle'), bw: bw ?? (last ? last.w : null), cur: 0, entries,
       ...(log ? { log: true } : {}) }
   })
   useUI.getState().stopRest()
@@ -2708,6 +2714,120 @@ function LogPastSheet({ close, routineId }) {
 /** `routineId` preselects the session — pass null for freestyle, omit to be asked. */
 export const logPastSheet = routineId =>
   ui().openSheet(close => <LogPastSheet close={close} {...(routineId !== undefined ? { routineId } : {})} />)
+
+/* ============================ one activity, straight onto a day ============================ */
+// A capital on the first letter: the catalogue's French names are lower case, a session's name
+// is a title.
+const capFirst = x => (x ? x[0].toUpperCase() + x.slice(1) : x)
+const recoveryLabel = h => (h < 48 ? t('{0} h', h) : t('{0} days', fmtNum(Math.round(h / 12) / 2)))
+
+/**
+ * A padel match, a game of football, a swim — written onto the day it happened in one sheet.
+ *
+ * It used to take a routine. The only way to log a session was to start one, and the only
+ * thing "add a session" did once the day already had one was to create a routine with nothing
+ * in it and open the editor: to say "I played padel" you built a padel routine first. A sport
+ * is not a routine, it is a duration and how hard it was (sports.js), so that is all this asks
+ * — plus the distance where a sport has one and the energy if a watch measured it — and the
+ * record it writes is an ordinary finished session (activityWorkout).
+ *
+ * Anything that is not a sport opens the ordinary session screen with that one exercise in it,
+ * for the day chosen: three sets of pull-ups are sets and reps, and that screen is where those
+ * are typed.
+ */
+function ActivitySheet({ close, d: given }) {
+  const st = useStore(s => s.S)
+  const today = todayISO()
+  const days = Array.from({ length: 8 }, (_, i) => isoOf(new Date(Date.now() - i * 86400000)))
+  const [d, setD] = useState(given && given <= today && days.includes(given) ? given : today)
+  // What you logged last time for a sport is what you will most likely log again.
+  const lastOf = id => {
+    const ws = st.workouts || []
+    for (let i = ws.length - 1; i >= 0; i--) {
+      const e = (ws[i].entries || []).find(x => x.id === id)
+      const s = e && (e.sets || []).find(x => x.done && x.min > 0)
+      if (s) return s
+    }
+    return null
+  }
+  const recent = (() => {
+    const ws = st.workouts || []
+    for (let i = ws.length - 1; i >= 0; i--) {
+      const e = (ws[i].entries || []).find(x => SPORT_IDS.includes(x.id))
+      if (e) return e.id
+    }
+    return null
+  })()
+  const startOf = id => {
+    const p = lastOf(id)
+    return { min: p ? p.min : id === 'x004' ? 90 : 60, srpe: p && p.srpe > 0 ? p.srpe : sportOf(id).rpe, km: 0, kcal: 0 }
+  }
+  const [id, setId] = useState(recent || SPORT_IDS[0])
+  const [f, setF] = useState(() => startOf(recent || SPORT_IDS[0]))
+  const pick = x => { setId(x); setF(startOf(x)) }
+  const ex = EXIDX[id]
+  const name = capFirst(exName(ex))
+  const dist = hasDist({ id })
+  const rec = f.min > 0 ? sportRecovery(id, f.min, f.srpe) : null
+
+  const save = () => {
+    if (!(f.min > 0)) { toast(t('How long did it last?')); return false }
+    const last = lastBW(S())
+    const w = activityWorkout({ wid: uid(), id, name, d, min: f.min, srpe: f.srpe, km: dist ? f.km : 0, kcal: f.kcal, bw: last ? last.w : null })
+    update(s => { s.workouts.push(w) })
+    close()
+    toast(t('{0} logged — {1}', name, d === today ? t('today') : fmtDate(d, true)))
+  }
+  useSaveOnDismiss({ d, id, f }, save)
+
+  // Not a sport: the session screen, with that exercise in it, for the day picked here.
+  const other = () => exercisePicker((x, done) => {
+    if (sportOf(x.id)) { pick(x.id); done(); return }
+    if (S().active) { toast(t('Finish your current workout first')); return }
+    exConfigSheet(x, null, cfg => { done(); close(); beginWorkout(null, undefined, { log: true, d, first: { ...cfg, id: x.id } }) }, null, null, { cta: t('Add to the session') })
+  })
+
+  return <>
+    <h3>{t('Add an activity')}</h3>
+    <div className="muted small" style={{ marginBottom: 4, lineHeight: 1.45 }}>
+      {t('Straight onto the day, no routine needed. It counts in your recovery and your energy.')}
+    </div>
+    <h4 className="sec">{t('Which day')}</h4>
+    <div className="chips">
+      {days.map(x => <button key={x} className={'chip nocap' + (x === d ? ' on' : '')} onClick={() => setD(x)}>
+        {x === today ? t('Today') : fmtDate(x, true)}</button>)}
+    </div>
+    <h4 className="sec">{t('Activity')}</h4>
+    <div className="chips" style={{ flexWrap: 'wrap', overflow: 'visible' }}>
+      {SPORT_IDS.map(x => <button key={x} className={'chip nocap' + (x === id ? ' on' : '')} onClick={() => pick(x)}>
+        <Icon name={sportOf(x).icon} style={{ fontSize: 14, display: 'inline-block', marginRight: 5, verticalAlign: '-2px' }} />{capFirst(exName(EXIDX[x]))}</button>)}
+      <button className="chip nocap" onClick={other}>{t('Another exercise…')}</button>
+    </div>
+    <div style={{ height: 14 }} />
+    <Stepper label={t('Duration (min)')} unit="min" value={f.min} step={5} decimal={false} onChange={n => setF(x => ({ ...x, min: n || 0 }))} />
+    <h4 className="sec" style={{ marginTop: 14 }}>{t('How hard was it?')}</h4>
+    <div className="chips" style={{ flexWrap: 'wrap', overflow: 'visible' }}>
+      {EFFORT_LEVELS.map(l => <button key={l.v} className={'chip nocap' + (f.srpe === l.v ? ' on' : '')} onClick={() => setF(x => ({ ...x, srpe: l.v }))}>
+        {t(l.label)}</button>)}
+    </div>
+    <div className="dim small" style={{ margin: '6px 2px 0', lineHeight: 1.45 }}>{t('Effort {0}/10 for the whole session — the scale sport scientists use.', f.srpe)}</div>
+    <div style={{ height: 12 }} />
+    {dist && <Stepper label={t('Distance (km)')} unit="km" value={f.km} step={0.5} onChange={n => setF(x => ({ ...x, km: n || 0 }))} />}
+    <Stepper label={t('Session energy')} unit="kcal" value={f.kcal} step={10} decimal={false} onChange={n => setF(x => ({ ...x, kcal: n || 0 }))} />
+    <div className="dim small" style={{ margin: '6px 2px 14px', lineHeight: 1.45 }}>{t('Only if your watch measured it — leave it at 0 otherwise.')}</div>
+    {rec && rec.hours > 0 && <div className="card" style={{ padding: '10px 12px', marginBottom: 12 }}>
+      <div className="small" style={{ lineHeight: 1.45 }}>
+        <Icon name="heart" style={{ fontSize: 13, marginRight: 6, verticalAlign: '-2px', color: 'var(--acc)' }} />
+        {t('Estimated recovery: about {0} — most loaded: {1}.', recoveryLabel(rec.hours), t(MUSCLE_NAME[rec.slug]))}
+      </div>
+      <div className="dim small" style={{ marginTop: 4 }}>{(sharesOf(sportOf(id).muscles).slice(0, 4).map(x => t(MUSCLE_NAME[x.slug]) + ' ' + x.pct + ' %')).join(' · ')}</div>
+    </div>}
+    <Button variant="primary" icon="plus" onClick={save}>{t('Save the activity')}</Button>
+  </>
+}
+// The sports, in the order they are offered: the three asked for first.
+const SPORT_IDS = ['x003', 'x004', 'x005', 'x006', 'x007', 'x008']
+export const activitySheet = d => ui().openSheet(close => <ActivitySheet close={close} d={typeof d === 'string' ? d : undefined} />, { tall: true })
 
 function FinishSummary({ w: given, prs, e1prs = [], close }) {
   const st = useStore(s => s.S)

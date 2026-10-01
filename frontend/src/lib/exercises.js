@@ -2,6 +2,7 @@ import { EXDB as UPSTREAM } from './exercises-data.js'
 import { EX_EXTRA } from './exercises-extra.js'
 import { t, ONLY_LANG } from './i18n.js'
 import EX_FR from '../names/fr.js'
+import { sportOf } from './sports.js'
 
 // The catalogue is the vendored dataset plus the movements this app adds to it (see
 // exercises-extra.js). One list from here on: every lookup, filter, search and body-map
@@ -110,7 +111,10 @@ export const CATEGORIES = [
   { key: 'upper legs', bp: 'upper legs', has: e => e.bp === 'upper legs' },
   { key: 'lower legs', bp: 'lower legs', has: e => e.bp === 'lower legs' },
   { key: 'waist', bp: 'waist', has: e => e.bp === 'waist' },
-  { key: 'cardio', bp: 'cardio', has: e => e.bp === 'cardio' },
+  // Football, padel, swimming… are cardio in the catalogue's terms — a duration and an effort —
+  // but nobody looks for a padel match among the treadmills and burpees.
+  { key: 'sports', bp: 'cardio', has: e => e.bp === 'cardio' && !!sportOf(e.id) },
+  { key: 'cardio', bp: 'cardio', has: e => e.bp === 'cardio' && !sportOf(e.id) },
   { key: 'neck', bp: 'neck', has: e => e.bp === 'neck' },
 ]
 /** Is an exercise in a category? An empty key is every exercise. */

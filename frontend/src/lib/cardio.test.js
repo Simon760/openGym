@@ -3,6 +3,7 @@ import { isPaced, hasDist, readoutOf, isOnce, cardioEffort, setLabel, buildSets,
 import { loadOfWorkouts, loadOfRoutine, loadOfActive, setWorth, CARDIO_MIN_PER_SET } from './muscles.js'
 import { EXIDX } from './exercises.js'
 import { sessionLoad } from './recovery.js'
+import { SPORTS } from './sports.js'
 
 const BIKE = 'x002'            // assault bike — a console that counts metres, not km/h
 const PADEL = 'x003'           // a court, with no console on it at all
@@ -81,7 +82,9 @@ describe('an activity that happens once rather than in sets', () => {
 
   it('still weighs its minutes on the map, one block or not', () => {
     const load = loadOfWorkouts([{ entries: [{ id: PADEL, sets: [{ min: 60, done: true }] }] }])
-    expect(load.quadriceps).toBeCloseTo(0.4 * 60 / CARDIO_MIN_PER_SET, 5)
+    // Padel is a sport now and carries its own muscle profile (sports.js) — the minutes still
+    // count the same way, by that profile's weight instead of the dataset's flat 0.4.
+    expect(load.quadriceps).toBeCloseTo(SPORTS[PADEL].muscles.quadriceps * 60 / CARDIO_MIN_PER_SET, 5)
   })
 })
 

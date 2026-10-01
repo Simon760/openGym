@@ -44,6 +44,7 @@
 
 import { EXIDX } from './exercises.js'
 import { musclesOf } from './muscles.js'
+import { sportOf, sportLoad } from './sports.js'
 import { rirOf } from './effort.js'
 import { entryFor } from './nutrition.js'
 import { sleepFor, sleepHours } from './body.js'
@@ -89,6 +90,8 @@ export function sessionLoad(w) {
   const load = {}
   let sum = 0, n = 0
   ;(w.entries || []).forEach(e => {
+    // A sport is not sets: it is counted by its session load, on its own decay (sportParts).
+    if (sportOf(e.id)) return
     const done = (e.sets || []).filter(s => s.done)
     if (!done.length) return
     const m = musclesOf(EXIDX[e.id])
@@ -101,8 +104,31 @@ export function sessionLoad(w) {
   return { load, intensity: n ? sum / n : 0, sets: n }
 }
 
+/**
+ * The sports in a session — a match, a swim — each with what it left on the muscles and how
+ * fast that fades. See sports.js: minutes × session RPE, spread by the sport's own profile, on
+ * a decay set by how much eccentric work the sport does.
+ */
+export function sportParts(w) {
+  return (w.entries || []).map(e => sportLoad(e.id, e.sets)).filter(Boolean)
+}
+
 /** Fatigue one session left on a muscle, 0…1. Saturating: the tenth set adds less than the first. */
 export const fatigueFrom = effectiveSets => 1 - Math.exp(-Math.max(0, effectiveSets) / SATURATION)
+
+/**
+ * What a sport session will cost before it is logged: the muscle it loads most, and the hours
+ * until that muscle is back to "recovered" — on a good night's sleep and enough food, since
+ * neither has happened yet. The figure the activity sheet shows as you set the minutes.
+ */
+export function sportRecovery(id, min, srpe) {
+  const p = sportLoad(id, [{ min, srpe, done: true }])
+  if (!p) return null
+  let top = null
+  for (const slug in p.load) if (top == null || p.load[slug] > p.load[top]) top = slug
+  const f = fatigueFrom(p.load[top])
+  return { slug: top, hours: f <= RECOVERED_AT ? 0 : Math.round(p.tau * Math.log(f / RECOVERED_AT)) }
+}
 
 /**
  * How long that fatigue takes to fade, in hours. Interpolated on how hard the session was,
@@ -168,23 +194,33 @@ export function recoveryNow(S, now = Date.now()) {
 
   recent.forEach(w => {
     const { load, intensity, sets } = sessionLoad(w)
-    if (!sets) return
+    const sports = sportParts(w)
+    if (!sets && !sports.length) return
     const cond = conditionsSince(S, startOf(w), now)
     // The most recent session's conditions are the ones reported, since it dominates what is
     // still decaying.
     sleepFactor = cond.sleepFactor; energyFactor = cond.energyFactor; known = known || cond.known
-    const tau = tauFor(intensity, cond)
     const hours = (now - startOf(w)) / 3600000
-    ;(w.entries || []).forEach(e => (e.sets || []).forEach(s => { if (s.done) { total++; if (rirOf(s) != null) rated++ } }))
+    ;(w.entries || []).forEach(e => (e.sets || []).forEach(s => {
+      if (s.done) { total++; if (rirOf(s) != null || s.srpe > 0) rated++ }
+    }))
 
-    for (const slug in load) {
-      const residual = fatigueFrom(load[slug]) * Math.exp(-hours / tau)
-      if (residual < 0.005) continue
-      const m = muscles[slug] || (muscles[slug] = { fatigue: 0, tau, sets: 0 })
-      m.fatigue += residual
-      m.sets += load[slug]
-      m.tau = Math.max(m.tau, tau)   // the slowest contributor sets how long the muscle waits
-    }
+    // The lifting, on the decay its sets' effort sets; then each sport on its own, stretched
+    // by the same sleep and food.
+    const parts = sets ? [{ load, tau: tauFor(intensity, cond) }] : []
+    const slow = Math.min(MAX_MULTIPLIER, cond.sleepFactor * cond.energyFactor)
+    sports.forEach(p => parts.push({ load: p.load, tau: p.tau * slow }))
+
+    parts.forEach(({ load, tau }) => {
+      for (const slug in load) {
+        const residual = fatigueFrom(load[slug]) * Math.exp(-hours / tau)
+        if (residual < 0.005) continue
+        const m = muscles[slug] || (muscles[slug] = { fatigue: 0, tau, sets: 0 })
+        m.fatigue += residual
+        m.sets += load[slug]
+        m.tau = Math.max(m.tau, tau)   // the slowest contributor sets how long the muscle waits
+      }
+    })
   })
 
   const out = {}

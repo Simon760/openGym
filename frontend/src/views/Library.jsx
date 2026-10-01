@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useStore } from '../store/useStore.js'
 import { EXDB, allExercises, equipmentOf, exName, exNameEn, exMatches, inCategory, termLabel } from '../lib/exercises.js'
 import { bestWeightFor, usageOf } from '../lib/history.js'
+import { sportOf } from '../lib/sports.js'
 import { CategoryChips, EquipmentChips } from '../components/ExerciseFilters.jsx'
 import { fmtNum } from '../lib/format.js'
 import { t } from '../lib/i18n.js'
@@ -36,7 +37,7 @@ export default function Library() {
     const best = bestWeightFor(S, e.id)
     return <div key={e.id} className="item" onClick={() => exerciseDetailSheet(e)}>
       <Thumb ex={e} />
-      <div className="grow"><div className="tt exn">{exName(e)}</div><div className="ss">{termLabel(e.tg || e.bp)} · {termLabel(e.eq)}{exNameEn(e) && <span className="dim"> · {exNameEn(e)}</span>}</div></div>
+      <div className="grow"><div className="tt exn">{exName(e)}</div><div className="ss">{sportOf(e.id) ? t('Sport · duration and effort') : <>{termLabel(e.tg || e.bp)} · {termLabel(e.eq)}</>}{exNameEn(e) && <span className="dim"> · {exNameEn(e)}</span>}</div></div>
       {best > 0 && <span className="tag acc">{fmtNum(best)}</span>}
       <Button size="sm" variant="tinted" icon="plus" onClick={ev => { ev.stopPropagation(); addToRoutineSheet(e) }}>{t('Plan')}</Button>
     </div>

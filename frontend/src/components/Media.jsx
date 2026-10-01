@@ -3,6 +3,7 @@ import { imgSrc, gifSrc, exName } from '../lib/exercises.js'
 import { useStore } from '../store/useStore.js'
 import { t } from '../lib/i18n.js'
 import Icon from './Icon.jsx'
+import { sportOf } from '../lib/sports.js'
 
 // Big autoplaying animation; tap toggles to the still frame. `compact` shrinks it (superset cards).
 // Custom exercises have no media — the animation stays blank by design (issue #11).
@@ -40,6 +41,6 @@ export default function Media({ ex, id, compact, minimizable }) {
 
 export function Thumb({ ex }) {
   const [failed, setFailed] = useState(false)
-  if (!ex.img || failed) return <div className="thumb thumb-x"><Icon name="dumbbell" /></div>
+  if (!ex.img || failed) return <div className="thumb thumb-x"><Icon name={(sportOf(ex.id) || {}).icon || 'dumbbell'} /></div>
   return <img className="thumb" loading="lazy" decoding="async" src={imgSrc(ex)} alt="" onError={() => setFailed(true)} />
 }

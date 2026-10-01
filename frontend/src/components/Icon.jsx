@@ -65,6 +65,10 @@ const P = {
   swim: <><circle cx="8.8" cy="8.2" r="1.8" /><path d="m10.9 10 4.6-2.2 3.3 3.4" /><path d="M3.5 15.6c1.6-1.3 3.1-1.3 4.7 0s3.1 1.3 4.7 0 3.1-1.3 4.7 0c.9.7 1.7.9 2.6.5" /></>,
   boxing: <><path d="M7.6 8.6A4.6 4.6 0 0 1 12.2 4h1.6a5.4 5.4 0 0 1 5.4 5.4v2.4a3 3 0 0 1-3 3H7.6Z" /><path d="M7.6 14.8v2.3a2.6 2.6 0 0 0 2.6 2.6h5.2a2.6 2.6 0 0 0 2.6-2.6v-2.3" /><path d="M7.6 9.8H6.3a1.8 1.8 0 0 0 0 3.6h1.3" /></>,
   stretch: <><circle cx="14.4" cy="5.4" r="1.9" /><path d="M14.4 8.2c-3 1.4-5 4-5.8 7.4" /><path d="M8.6 15.6 6.2 20M8.6 15.6l4.6 4.4" /><path d="M12.6 9.6 18 12" /></>,
+  // A football: the centre pentagon and the five seams running out of it.
+  ball: <><circle cx="12" cy="12" r="8.6" /><path d="m12 8.4 3.3 2.4-1.3 3.9h-4l-1.3-3.9Z" /><path d="M12 8.4V3.5M15.3 10.8l4.6-1.5M14 14.7l2.8 4M10 14.7l-2.8 4M8.7 10.8 4.1 9.3" /></>,
+  // A padel or tennis racket, head up and to the right, and the ball beside it.
+  racket: <><ellipse cx="14.2" cy="9.8" rx="5" ry="6.2" transform="rotate(45 14.2 9.8)" /><path d="m10.1 13.9-6 6M11.6 7.4l5 5M9.9 9.6l4.5 4.5" /><circle cx="5.4" cy="6" r="1.7" /></>,
 
   /* ---- actions ---- */
   plus: <path d="M12 5.2v13.6M5.2 12h13.6" />,

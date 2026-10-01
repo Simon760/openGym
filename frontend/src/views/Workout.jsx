@@ -9,7 +9,7 @@ import { beep, vibrate } from '../lib/sound.js'
 import { t } from '../lib/i18n.js'
 import { api } from '../lib/api.js'
 import Media from '../components/Media.jsx'
-import { startFlow, logPastSheet, exercisePicker, exConfigSheet, exerciseDetailSheet, finishWorkout, workoutCompleteSheet, confirmSheet, workoutDetailSheet } from '../sheets.jsx'
+import { startFlow, logPastSheet, exercisePicker, exConfigSheet, exerciseDetailSheet, finishWorkout, workoutCompleteSheet, confirmSheet, workoutDetailSheet, activitySheet } from '../sheets.jsx'
 import Icon from '../components/Icon.jsx'
 import { Button, Check, NumberField } from '../components/ui.jsx'
 import { nextPrescription, applyPrescription } from '../lib/progression.js'
@@ -95,7 +95,11 @@ function StartChooser() {
           </div>)}
         </div>}
       </div>
-      <Button icon="plus" onClick={newSession}>{t('Add a session')}</Button>
+      {/* A match or a swim on top of the day's lifting is an activity, not a second routine:
+          this used to be the only button here, and it built an empty routine to put padel in. */}
+      <Button icon="figureRun" onClick={() => activitySheet()}>{t('Add an activity (padel, football…)')}</Button>
+      <div style={{ height: 8 }} />
+      <Button icon="plus" onClick={newSession}>{t('Add a weights session')}</Button>
       <div style={{ height: 6 }} />
     </> : todayR && <div className="card" style={{ borderColor: 'var(--acc)' }}>
       <h2 className="accent">{t("Today's plan")}{todayOvr ? ' · ' + t('rescheduled') : ''}</h2>
@@ -134,6 +138,8 @@ function StartChooser() {
         </div>}
       </div></>}
     <div style={{ height: 14 }} />
+    {!doneToday.length && <><Button icon="figureRun" onClick={() => activitySheet()}>{t('Add an activity (padel, football…)')}</Button>
+      <div style={{ height: 8 }} /></>}
     <Button icon="shuffle" onClick={() => startFlow(null)}>{t('Freestyle workout (pick as you go)')}</Button>
     <div style={{ height: 8 }} />
     {/* And the one that answers none of the above: a day other than today, or a session that
@@ -595,7 +601,7 @@ function ActiveWorkout() {
       const plan = nextPrescription(s, full, s.routines.find(r => r.id === s.active.routineId))
       s.active.entries.push({ id: ex.id, target: { ...cfg }, plan, sets: applyPrescription(buildSets(s, full), plan) })
       s.active.cur = s.active.entries.length - 1
-    }), null, S.routines.find(r => r.id === A.routineId)))} icon="plus">{t('Add exercise')}</Button>
+    }), null, S.routines.find(r => r.id === A.routineId), { cta: t('Add to the session') }))} icon="plus">{t('Add exercise')}</Button>
     <div style={{ height: 8 }} />
     {/* The same picker, filed in front of the lifting rather than after it, with every set
         flagged. A live session that opened with ten minutes on the bike gets it typed where
