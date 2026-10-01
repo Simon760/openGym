@@ -590,6 +590,12 @@ export function toFrench(name) {
     if (obj in PROPS) { prop = PREP[prep[1]] + ' ' + PROPS[obj]; s = s.slice(0, prep.index).trim() }
   }
 
+  // "sled 45° leg press" — the angle of the machine. A number, not a word, so the modifier
+  // table never knew it, and its one unknown token kept the whole name in English.
+  let angle = ''
+  const deg = s.match(/(^|\s)(\d+)\s*°(?=\s|$)/)
+  if (deg) { angle = 'à ' + deg[2] + '°'; s = (s.slice(0, deg.index) + ' ' + s.slice(deg.index + deg[0].length)).replace(/\s+/g, ' ').trim() }
+
   const list = words(s)
 
   // Equipment first: it is almost always the leading word, and taking it out early stops
@@ -638,7 +644,7 @@ export function toFrench(name) {
   const so_far = [head, ...adj, ...phrases].join(' ')
   const eq = equip && !so_far.includes(equip) ? equip : ''
 
-  return [head, ...adj, ...phrases, eq, ...posture, prop, note, variant]
+  return [head, ...adj, ...phrases, eq, angle, ...posture, prop, note, variant]
     .filter(Boolean).join(' ').replace(/\s+/g, ' ').trim()
 }
 
