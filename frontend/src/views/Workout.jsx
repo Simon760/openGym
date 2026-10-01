@@ -14,6 +14,7 @@ import Icon from '../components/Icon.jsx'
 import { Button, Check, NumberField } from '../components/ui.jsx'
 import { nextPrescription, applyPrescription } from '../lib/progression.js'
 import { glyphOf, DEFAULT_GLYPH } from '../lib/glyphs.js'
+import { routinesFor, programmeOf, blockAt } from '../lib/blocks.js'
 
 /* ---------- start chooser (no active workout) ---------- */
 function StartChooser() {
@@ -22,7 +23,12 @@ function StartChooser() {
   const update = useStore(s => s.update)
   const todayR = effectiveRoutine(S, todayISO())
   const todayOvr = S.dayPlan[todayISO()] !== undefined
-  const others = S.routines.filter(r => r !== todayR)
+  // The programme in force today first; the routines of the others are a tap further, under
+  // their programme's name — after a new programme, the old Push is not today's Push.
+  const offer = routinesFor(S, todayISO())
+  const others = offer.mine.filter(r => r !== todayR)
+  const elsewhere = offer.others.filter(r => r !== todayR)
+  const [more, setMore] = useState(false)
   const doneToday = (S.workouts || []).filter(w => w.d === todayISO())
   // Summed over the day, and each figure absent rather than zero when nothing carried it —
   // a session typed up without a duration has none, and "0 min" would claim it did.
@@ -45,7 +51,8 @@ function StartChooser() {
   // Named for the day it belongs to, so a week of second sessions does not become a list of
   // "New routine" with nothing to tell them apart. Renamed like any other in the editor.
   const newSession = () => {
-    const r = { id: uid(), name: t('Session {0}', doneToday.length + 1), emoji: DEFAULT_GLYPH, ex: [] }
+    const at = blockAt(S, todayISO())
+    const r = { id: uid(), name: t('Session {0}', doneToday.length + 1), emoji: DEFAULT_GLYPH, ex: [], ...(at ? { block: at.block.id } : {}) }
     update(s => { s.routines.push(r) })
     nav('/plan/r/' + r.id)
   }
@@ -111,13 +118,21 @@ function StartChooser() {
       <div style={{ height: 8 }} />
       <Button icon="history" onClick={() => logPastSheet(todayR.id)}>{t('Already did it — write it up')}</Button>
     </div>}
-    {others.length > 0 && <><h4 className="sec">{t('Other routines')}</h4>
-      <div className="list">{others.map(r => <div key={r.id} className="item" onClick={() => startFlow(r.id)}>
+    {(others.length > 0 || elsewhere.length > 0) && <><h4 className="sec">{t('Other routines')}</h4>
+      <div className="list">{[...others, ...(more ? elsewhere : [])].map(r => <div key={r.id} className="item" onClick={() => startFlow(r.id)}>
         <span className="lrow-i"><Icon name={glyphOf(r.emoji)} /></span>
-        <div className="grow"><div className="tt">{r.name}</div><div className="ss">{exCount(r.ex.length)}</div></div>
+        <div className="grow"><div className="tt">{r.name}</div>
+          <div className="ss">{[elsewhere.includes(r) ? (programmeOf(S, r) || {}).name : null, exCount(r.ex.length)].filter(Boolean).join(' · ')}</div></div>
         <button className="iconbtn" aria-label={t('Already did it — write it up')}
           onClick={e => { e.stopPropagation(); logPastSheet(r.id) }}><Icon name="history" /></button>
-        <span className="tag acc">{t('Start')}</span></div>)}</div></>}
+        <span className="tag acc">{t('Start')}</span></div>)}
+        {elsewhere.length > 0 && !more && <div className="item" onClick={() => setMore(true)}>
+          <span className="lrow-i" style={{ background: 'var(--surface-3)' }}><Icon name="calendar" /></span>
+          <div className="grow"><div className="tt">{t('Other programmes')}</div>
+            <div className="ss">{t(elsewhere.length === 1 ? '{0} routine' : '{0} routines', elsewhere.length)}</div></div>
+          <Icon name="chevronDown" className="chev" />
+        </div>}
+      </div></>}
     <div style={{ height: 14 }} />
     <Button icon="shuffle" onClick={() => startFlow(null)}>{t('Freestyle workout (pick as you go)')}</Button>
     <div style={{ height: 8 }} />

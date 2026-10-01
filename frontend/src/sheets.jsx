@@ -3,7 +3,7 @@ import { useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
 import { EXDB, EXIDX, BODYPARTS, isCardio, isBodyweightEq, allExercises, equipmentOf, exName, exNameEn, exSearchText, exMatches } from './lib/exercises.js'
 import { fmtDate, fmtNum, fmtNum2, fmtKg, fmtVol, fmtDur, durPart, todayISO, isoOf, uid, exCount, DAYN, MONTHS_LONG, ACCENTS } from './lib/format.js'
-import { lastEntryFor, bestWeightFor, buildSets, effectiveRoutineId, effectiveRoutine, weekDays, swapDays, workoutVolume, durMs, setFigures, asksDuration, setsDone, setsDoneActive, lastBW, setLabel, defaultConfig, warmEntry, cleanupSg, modeOf, effortOf, isBw, isOnce, readoutOf, isPerSide, sideReps, isWorking, setTop } from './lib/history.js'
+import { lastEntryFor, bestWeightFor, buildSets, effectiveRoutineId, effectiveRoutine, weekDays, swapDays, workoutVolume, durMs, setFigures, asksDuration, setsDone, setsDoneActive, lastBW, usageOf, setLabel, defaultConfig, warmEntry, cleanupSg, modeOf, effortOf, isBw, isOnce, readoutOf, isPerSide, sideReps, isWorking, setTop } from './lib/history.js'
 import { beep, vibrate } from './lib/sound.js'
 import { t, instrFor, getLang, INSTR_LANGS } from './lib/i18n.js'
 import { nav } from './lib/nav.js'
@@ -18,8 +18,8 @@ import BodyMap from './components/BodyMap.jsx'
 import { loadOfWorkouts, musclesOf, MUSCLE_NAME } from './lib/muscles.js'
 import MuscleShare from './components/MuscleShare.jsx'
 import { parseImport, mergeImport } from './lib/import-csv.js'
-import { buildPlanBundle, parsePlan, mergePlan, printPlan } from './lib/plan-share.js'
-import { parseProgram, PROGRAM_SPEC } from './lib/plan-import.js'
+import { buildPlanBundle, parsePlan, mergePlan, printPlan, importProgramme } from './lib/plan-share.js'
+import { parseProgram, applyPicks, PROGRAM_SPEC, programCsvSpec } from './lib/plan-import.js'
 import { dailyDigest, trainingDigest } from './lib/digest.js'
 import { estimate1RM, best1RM, is1RMRecord, REP_CAP } from './lib/onerm.js'
 import { nextPrescription, applyPrescription, policyFor, defaultIncrement, POLICIES_FOR, POLICY_NAME, POLICY_DESC, MAX_BW_SETS } from './lib/progression.js'
@@ -29,7 +29,7 @@ import { validBodyFat, composition, sleepFor, putSleep, validSleep, sleepHours, 
 import { parseHealth, applyHealth, parseHealthCSV, applyHealthDays, shortcutRecipe, shortcutLink, historySpec, watchTarget, healthFor } from './lib/health.js'
 import { currentProgrammeStart, earliestLoggedDay, sportExportCSV, sportExportSummary } from './lib/sport-export.js'
 import { suppOn, suppName, tookOn, setTook, suppStreak, suppRate } from './lib/supp.js'
-import { weekFor, weekOfBlock, setWeekDay, duplicateBlock, emptyBlock, blocksOf, activeBlock, blockFromCurrent, startBlock, cancelSwitch, upcoming, daysUntil, removeBlock, sessionsIn, weekIndexAt, MAX_WEEKS, WEEKDAYS } from './lib/blocks.js'
+import { weekFor, weekOfBlock, setWeekDay, duplicateBlock, emptyBlock, blocksOf, activeBlock, blockFromCurrent, startBlock, cancelSwitch, upcoming, daysUntil, removeBlock, sessionsIn, weekIndexAt, MAX_WEEKS, WEEKDAYS, sameNamed, nextMonday, routinesFor, routinesForBlock, programmeOf } from './lib/blocks.js'
 import { impliedTDEE, tdeeParts, trimOf, stepBaseOf, restStrictOf, countsToday, projectedWeight, recordCalibration, calibration, dayBalance, KCAL_PER_KG_FAT, BIG_EFFORT, TDEE_PARTS, TDEE_MIN, TDEE_MAX, TRIM_MAX, IMPLIED_MIN_SPAN, IMPLIED_MIN_DAYS, IMPLIED_MIN_WEIGHINS } from './lib/energy.js'
 import { APP_NAME, FILE_PREFIX } from './lib/brand.js'
 
@@ -981,10 +981,10 @@ function usageMap(st) {
   st.workouts.forEach(w => w.entries.forEach(e => { u[e.id] = (u[e.id] || 0) + 1 }))
   return u
 }
-function ExercisePicker({ onPick, close }) {
+function ExercisePicker({ onPick, close, query }) {
   const st = useStore(s => s.S)
   const usage = usageMap(st)
-  const [q, setQ] = useState('')
+  const [q, setQ] = useState(query || '')
   const [bp, setBp] = useState('')          // '' = all, '★' = chosen, else a body part
   const [eq, setEq] = useState('')          // '' = any equipment
   const [shown, setShown] = useState(50)
@@ -1026,7 +1026,7 @@ function ExercisePicker({ onPick, close }) {
     {f.length > shown && <><div style={{ height: 8 }} /><Button onClick={() => setShown(s => s + 50)}>{t('Show more')}</Button></>}
   </>
 }
-export const exercisePicker = onPick => ui().openSheet(close => <ExercisePicker onPick={onPick} close={close} />)
+export const exercisePicker = (onPick, { query } = {}) => ui().openSheet(close => <ExercisePicker onPick={onPick} close={close} query={query} />)
 
 /* ============================ exercise config ============================ */
 // Progression settings for one exercise (issue #17). Shown inside the config sheet because
@@ -1249,7 +1249,7 @@ function PlanTools({ close }) {
     rd.onload = () => {
       const text = String(rd.result || '')
       try { const bundle = parsePlan(text); close(); return planImportSheet(bundle) } catch { /* not an export */ }
-      try { const { bundle, report } = parseProgram(text); close(); planImportSheet(bundle, report) }
+      try { const { bundle, report } = parseProgram(text, { used: usageOf(st), name: fileTitle(f.name) }); close(); planImportSheet(bundle, report) }
       // The program reader's complaint is the useful one: it says what the file is missing,
       // where the plan reader can only say the file is not the one file it knows.
       catch (e) { toast(t('Import failed: {0}', e.message)) }
@@ -1270,69 +1270,156 @@ function PlanTools({ close }) {
     {!hasRoutines && <div className="dim small" style={{ margin: '12px 2px 0' }}>{t('Add an exercise to a routine first — an empty plan has nothing to share.')}</div>}
     <h4 className="sec">{t('Got a plan from a friend?')}</h4>
     <Button variant="ghost" icon="folder" onClick={() => fileRef.current?.click()}>{t('Import a plan file')}</Button>
-    <input ref={fileRef} type="file" accept="application/json,.json" onChange={pickFile} hidden />
+    <input ref={fileRef} type="file" accept="application/json,.json,.csv,text/csv,.txt,text/plain" onChange={pickFile} hidden />
     <div style={{ height: 10 }} />
     <Button variant="ghost" icon="sparkles" onClick={() => { close(); programImportSheet() }}>{t('Paste a program')}</Button>
     <div className="dim small" style={{ margin: '7px 2px 0', lineHeight: 1.4 }}>{t('A program written somewhere else, in ordinary exercise names.')}</div>
   </>
 }
 
+// "programme-octobre_v2.csv" → "Programme octobre v2": a file's name, read as the programme's.
+const fileTitle = n => {
+  const s = String(n || '').replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim()
+  return s ? s[0].toUpperCase() + s.slice(1) : ''
+}
+
 export const planImportSheet = (bundle, report, onApplied) => ui().openSheet(close => <PlanImport bundle={bundle} report={report} onApplied={onApplied} close={close} />)
 
 function PlanImport({ bundle, report, onApplied, close }) {
-  const [schedule, setSchedule] = useState(false)
+  const st = useStore(s => s.S)
+  const today = todayISO()
+  const monday = nextMonday(today)
+  // A programme arrives as a programme by default: its own name, its own date, filed beside
+  // the one it replaces rather than poured into the same list — two routines called Push and
+  // no way to tell which is which was what importing used to leave behind. Adding the routines
+  // alone stays one tap away, for the friend's plan you want to try one session of.
+  const [mode, setMode] = useState('programme')
+  const [name, setName] = useState(() => bundle.name || t('Programme {0}', fmtDate(today, true)))
+  const [when, setWhen] = useState(() => (new Date(today + 'T12:00:00').getDay() === 1 ? 'today' : 'monday'))
+  const from = when === 'today' ? today : when === 'monday' ? monday : null
+  // What the review decided for each name the import could not settle: a stand-in's id → the
+  // catalogue exercise chosen for it. Unpicked, the name stays your own exercise.
+  const [picks, setPicks] = useState({})
+  const [detail, setDetail] = useState(false)
+  const created = (report && report.created) || []
+  const matched = (report && report.matched) || []
+  const known = matched.filter(m => m.known).length
+  const pick = (stand, id) => setPicks(p => ({ ...p, [stand]: id }))
+
+  // The week this programme will run, before anything is written: the programme's own days,
+  // or the days the current week gives the sessions of the same name.
+  const base = weekFor(st, from || today)
+  const plannedWeek = WEEKDAYS.map(d => {
+    let r = null
+    if (Object.keys(bundle.week || {}).length) r = bundle.routines.find(x => x.id === bundle.week[d])
+    else { const was = st.routines.find(x => x.id === base[d]); r = was ? sameNamed(bundle.routines, was.name) : null }
+    return r ? { d, name: r.name } : null
+  }).filter(Boolean)
+
   const apply = () => {
-    update(s => { mergePlan(s, bundle, { schedule }); if (onApplied) onApplied(s) })
+    const b = applyPicks(bundle, picks)
+    let res = null
+    update(s => {
+      if (mode === 'programme') res = importProgramme(s, b, { name: name.trim(), from })
+      else mergePlan(s, b)
+      if (onApplied) onApplied(s)
+    })
     close()
-    toast(t('Added {0} routines to your plan', bundle.routineCount))
+    if (mode === 'programme') {
+      ui().editBlock(null)
+      toast(!from ? t('{0} is saved — switch to it from Programmes when you are ready', res.block.name)
+        : from === today ? t('{0} is running from today', res.block.name)
+          : t('{0} starts {1}', res.block.name, fmtDate(from, true)))
+    } else toast(t('Added {0} routines to your plan', b.routineCount))
     nav('/plan')
   }
+
   return <>
     <h3>{bundle.name ? t('Import “{0}”', bundle.name) : t('Import this plan')}</h3>
     <div className="muted small" style={{ marginBottom: 14 }}>
       {t(bundle.routineCount === 1 ? '{0} routine' : '{0} routines', bundle.routineCount)}
       {' · ' + exCount(bundle.exerciseCount)}
-      {bundle.scheduledDays > 0
-        ? ' · ' + t(bundle.scheduledDays === 1 ? 'scheduled on {0} day' : 'scheduled on {0} days', bundle.scheduledDays)
-        : ''}
+      {' · ' + bundle.routines.map(r => r.name).join(', ')}
     </div>
-    <div className="dim small" style={{ marginBottom: 14, lineHeight: 1.4 }}>{t('These are added as new routines — nothing you already have is changed.')}</div>
-    {/* How every name resolved, before anything is written. A program from outside the app
-        speaks in names, and which exercise each one became is the thing worth checking —
-        an unrecognised lift is kept as your own rather than dropped, so the count that
-        matters is how many need pointing at the right exercise afterwards. */}
-    {report && <div className="small" style={{ marginBottom: 14, lineHeight: 1.5 }}>
-      <div className="muted">{t('{0} exercises matched your library', report.matched.length)}</div>
-      {report.created.length > 0 && <div style={{ color: 'var(--yellow)', marginTop: 4 }}>
-        {t(report.created.length === 1
-          ? '{0} name wasn’t recognised and is kept as your own exercise:'
-          : '{0} names weren’t recognised and are kept as your own exercises:', report.created.length)}
-        {/* With the body part it filed each one under. That guess is not cosmetic — it is
-            what the muscle map colours and what the recovery model counts — and an
-            unrecognised name defaults to the catch-all, so it is worth seeing before it
-            silently paints the wrong half of the body. */}
-        {/* With the muscles each one will actually fatigue. That is not cosmetic — it is
-            what the muscle map colours and what the recovery model counts — and a name the
-            catalogue does not know gets them from its body part alone, so it is worth
-            seeing before it silently paints the wrong half of the body. */}
-        <div style={{ marginTop: 4 }}>{report.created.map((c, i) => <div key={i} className="dim">
-          {c.name} — {Object.keys(c.muscles || {}).length
-            ? Object.keys(c.muscles).map(m => t(MUSCLE_NAME[m])).join(', ')
-            : t(c.bp)}
-        </div>)}</div>
+
+    {/* How every name resolved, before anything is written. A name the import could not settle
+        is offered its closest catalogue entries, or the whole library, rather than kept as an
+        exercise of your own with no history behind it and a body part guessed at. */}
+    {report && <div style={{ marginBottom: 14 }}>
+      <div className="small muted" style={{ lineHeight: 1.5 }}>
+        {t('{0} exercises matched your library', matched.length)}
+        {known > 0 && <> · <span style={{ color: 'var(--acc)' }}>{t('{0} already in your history', known)}</span></>}
+        {matched.length > 0 && <button className="btn plain xs dim" style={{ padding: '0 0 0 8px', display: 'inline' }}
+          onClick={() => setDetail(v => !v)}>{detail ? t('Hide') : t('Show')}</button>}
+      </div>
+      {detail && <div className="small" style={{ margin: '6px 0 0', lineHeight: 1.5 }}>
+        {matched.map((m, i) => <div key={i} className="row between" style={{ gap: 8, padding: '3px 0', borderBottom: '1px solid var(--sep-op)' }}>
+          <span className="dim" style={{ minWidth: 0 }}>{m.from}</span>
+          <span className="exn" style={{ textAlign: 'right', minWidth: 0 }}>{exName(EXIDX[m.id])}
+            <span style={{ color: m.known ? 'var(--acc)' : 'var(--label-3)' }}> · {m.known ? t('history') : t('new')}</span></span>
+        </div>)}
       </div>}
-      {report.warnings.map((w, i) => <div key={i} className="dim" style={{ marginTop: 4 }}>{w}</div>)}
+      {created.length > 0 && <div style={{ marginTop: 10 }}>
+        <div className="small" style={{ color: 'var(--yellow)', lineHeight: 1.45, marginBottom: 6 }}>
+          {t(created.length === 1 ? '{0} name to check — pick the exercise it means, or keep it as your own:' : '{0} names to check — pick the exercise each means, or keep it as your own:', created.length)}
+        </div>
+        {created.map(c => {
+          const chosen = picks[c.id] ? EXIDX[picks[c.id]] : null
+          return <div key={c.id} className="card" style={{ padding: '10px 12px', marginBottom: 8 }}>
+            <div className="row between" style={{ gap: 8 }}>
+              <b style={{ minWidth: 0 }}>{c.name}</b>
+              {chosen && <button className="btn plain xs dim" style={{ padding: 0 }} onClick={() => pick(c.id, null)}>{t('Keep mine')}</button>}
+            </div>
+            <div className="small dim" style={{ margin: '2px 0 8px' }}>
+              {chosen ? <span className="exn" style={{ color: 'var(--acc)' }}>→ {exName(chosen)}</span>
+                : t('kept as your own exercise · {0}', Object.keys(c.muscles || {}).length
+                  ? Object.keys(c.muscles).map(m => t(MUSCLE_NAME[m])).join(', ') : t(c.bp))}
+            </div>
+            <div className="chips" style={{ margin: 0, flexWrap: 'wrap', overflow: 'visible' }}>
+              {(c.candidates || []).slice(0, 3).map(id => <button key={id} className={'chip nocap exn' + (picks[c.id] === id ? ' on' : '')}
+                style={{ whiteSpace: 'normal', textAlign: 'left', ...(picks[c.id] === id ? {} : { background: 'var(--surface-3)' }) }}
+                onClick={() => pick(c.id, id)}>{exName(EXIDX[id])}</button>)}
+              {/* On the card's own surface a chip is invisible: one step lighter, so it reads as a button. */}
+              <button className="chip nocap" style={{ background: 'var(--surface-3)' }} onClick={() => exercisePicker((ex, done) => { pick(c.id, ex.id); if (done) done() }, { query: c.name })}>
+                <Icon name="magnifier" style={{ fontSize: 12, marginRight: 4, display: 'inline-block', verticalAlign: '-1px' }} />{t('Search…')}</button>
+            </div>
+          </div>
+        })}
+      </div>}
+      {report.warnings.map((w, i) => <div key={i} className="small dim" style={{ marginTop: 4 }}>{w}</div>)}
     </div>}
     {bundle.dropped > 0 && <div className="small" style={{ color: 'var(--yellow)', marginBottom: 14, lineHeight: 1.4 }}>
       {t(bundle.dropped === 1
         ? '{0} exercise in the file isn’t in your library and was left out.'
         : '{0} exercises in the file aren’t in your library and were left out.', bundle.dropped)}
     </div>}
-    {bundle.scheduledDays > 0 && <div className="row between" style={{ padding: '10px 2px', borderTop: '1px solid var(--sep)', borderBottom: '1px solid var(--sep)', marginBottom: 16, gap: 12 }}>
-      <div><div className="tt" style={{ fontSize: 15 }}>{t('Use this weekly schedule')}</div><div className="small dim">{t('Replaces your current Mon–Sun assignments.')}</div></div>
-      <Switch checked={schedule} onChange={setSchedule} />
+
+    <Segmented value={mode} onChange={setMode}
+      options={[{ value: 'programme', label: t('New programme') }, { value: 'add', label: t('Just add the routines') }]} />
+    {mode === 'programme' ? <>
+      <div className="dim small" style={{ margin: '8px 2px 12px', lineHeight: 1.45 }}>
+        {t('Filed apart from the programme you follow now, which is kept as it is. Every day before the start keeps its plan.')}
+      </div>
+      <div className="stp-w"><span className="stp-l">{t('Name')}</span>
+        <input className="numf" style={{ width: '62%', textAlign: 'left', padding: '9px 11px' }} maxLength={40}
+          value={name} onChange={e => setName(e.target.value)} /></div>
+      <h4 className="sec">{t('Starts')}</h4>
+      <div className="chips">
+        <button className={'chip nocap' + (when === 'monday' ? ' on' : '')} onClick={() => setWhen('monday')}>{t('Monday {0}', fmtDate(monday))}</button>
+        <button className={'chip nocap' + (when === 'today' ? ' on' : '')} onClick={() => setWhen('today')}>{t('Today')}</button>
+        <button className={'chip nocap' + (when === 'later' ? ' on' : '')} onClick={() => setWhen('later')}>{t('Later')}</button>
+      </div>
+      <div className="small" style={{ margin: '10px 2px 14px', lineHeight: 1.5 }}>
+        {plannedWeek.length
+          ? <><span className="dim">{Object.keys(bundle.week || {}).length ? t('Its week:') : t('Same days as now:')} </span>
+            {plannedWeek.map(x => t(DAYN[x.d]).slice(0, 3) + ' ' + x.name).join(' · ')}</>
+          : <span style={{ color: 'var(--yellow)' }}>{t('No days set yet — put its sessions on the week from the Plan screen.')}</span>}
+        {!from && <div className="dim" style={{ marginTop: 4 }}>{t('Nothing changes until you switch to it in Programmes.')}</div>}
+      </div>
+    </> : <div className="dim small" style={{ margin: '8px 2px 14px', lineHeight: 1.45 }}>
+      {t('These are added as new routines — nothing you already have is changed.')}
     </div>}
-    <Button variant="primary" onClick={apply}>{t('Add to my plan')}</Button>
+    <Button variant="primary" onClick={apply}>{mode === 'programme' ? t('Import the programme') : t('Add to my plan')}</Button>
     <div style={{ height: 8 }} />
     <Button variant="ghost" className="dim" onClick={close}>{t('Cancel')}</Button>
   </>
@@ -1952,6 +2039,7 @@ function ProgramImport({ close }) {
   const [text, setText] = useState('')
   const [err, setErr] = useState(null)
   const [spec, setSpec] = useState(false)
+  const [file, setFile] = useState('')
   const fileRef = useRef(null)
 
   // A program that arrived as a file rather than a reply — a coach sends a .json, and asking
@@ -1959,20 +2047,21 @@ function ProgramImport({ close }) {
   const pickFile = ev => {
     const f = ev.target.files[0]; ev.target.value = ''; if (!f) return
     const rd = new FileReader()
-    rd.onload = () => { setErr(null); setText(String(rd.result || '').slice(0, 1_000_000)) }
+    rd.onload = () => { setErr(null); setFile(fileTitle(f.name)); setText(String(rd.result || '').slice(0, 1_000_000)) }
     rd.readAsText(f)
   }
 
   const run = () => {
     try {
-      const { bundle, report } = parseProgram(text)
+      const { bundle, report } = parseProgram(text, { used: usageOf(S()), name: file })
       close()
       planImportSheet(bundle, report)
     } catch (e) { setErr(e.message) }
   }
-  const copySpec = async () => {
-    try { await navigator.clipboard.writeText(PROGRAM_SPEC); toast(t('Format copied — paste it into your conversation')) }
-    catch (e) { setSpec(true) }   // clipboard blocked: show it to select by hand instead
+  const copySpec = async which => {
+    const txt = which === 'csv' ? programCsvSpec() : PROGRAM_SPEC
+    try { await navigator.clipboard.writeText(txt); toast(t('Format copied — paste it into your conversation')) }
+    catch (e) { setSpec(which) }   // clipboard blocked: show it to select by hand instead
   }
 
   return <>
@@ -1980,20 +2069,22 @@ function ProgramImport({ close }) {
     <div className="muted small" style={{ marginBottom: 12, lineHeight: 1.45 }}>
       {t('Paste the whole reply — BodyEvolve finds the program inside it and matches every exercise name against your library.')}
     </div>
-    <TextArea rows={8} value={text} placeholder={'{ "routines": [ … ] }'}
+    <TextArea rows={8} value={text} placeholder={t('A table — Session;Exercise;Sets;Reps — or a program in JSON')}
       onChange={e => { setText(e.target.value); setErr(null) }} />
     {err && <div className="small" style={{ color: 'var(--red)', margin: '8px 2px 0', lineHeight: 1.4 }}>{err}</div>}
     <div style={{ height: 12 }} />
     <Button variant="primary" icon="download" disabled={!text.trim()} onClick={run}>{t('Read the program')}</Button>
     <div style={{ height: 8 }} />
     <Button variant="ghost" icon="folder" onClick={() => fileRef.current?.click()}>{t('Open a file')}</Button>
-    <input ref={fileRef} type="file" accept="application/json,.json,.txt,text/plain" onChange={pickFile} hidden />
+    <input ref={fileRef} type="file" accept="application/json,.json,.csv,text/csv,.txt,text/plain" onChange={pickFile} hidden />
     <h4 className="sec">{t('Writing the program')}</h4>
     <div className="dim small" style={{ marginBottom: 10, lineHeight: 1.45 }}>
       {t('Hand this format to whatever writes your programs, and its answers will import straight in.')}
     </div>
-    <Button variant="ghost" icon="clipboard" onClick={copySpec}>{t('Copy the format')}</Button>
-    {spec && <TextArea rows={10} readOnly value={PROGRAM_SPEC} style={{ marginTop: 10 }} />}
+    <Button variant="ghost" icon="clipboard" onClick={() => copySpec('csv')}>{t('Copy the table format (CSV / Excel)')}</Button>
+    <div style={{ height: 8 }} />
+    <Button variant="ghost" className="dim" icon="clipboard" onClick={() => copySpec('json')}>{t('Copy the JSON format')}</Button>
+    {spec && <TextArea rows={10} readOnly value={spec === 'csv' ? programCsvSpec() : PROGRAM_SPEC} style={{ marginTop: 10 }} />}
   </>
 }
 export const programImportSheet = () => ui().openSheet(close => <ProgramImport close={close} />)
@@ -2006,7 +2097,7 @@ export function openPendingProgram() {
   const pending = S().pendingProgram
   if (!pending) return
   try {
-    const { bundle, report } = parseProgram(pending.program)
+    const { bundle, report } = parseProgram(pending.program, { used: usageOf(S()) })
     planImportSheet(bundle, report, s => { delete s.pendingProgram })
   } catch (e) {
     confirmSheet({
@@ -2024,6 +2115,34 @@ export const discardPendingProgram = () => confirmSheet({
   onConfirm: () => update(s => { delete s.pendingProgram })
 })
 
+
+/**
+ * The routines on offer for one question — which session, that day — the programme in force
+ * first. An older programme's routines are a tap away under its own name rather than mixed
+ * into one list beside the new ones, where two of them called Push could not be told apart.
+ * Rows only: the caller's own list holds them, around whatever else it offers.
+ */
+function RoutineChoices({ mine, others, onPick, current, chevron }) {
+  const st = useStore(s => s.S)
+  const [open, setOpen] = useState(() => !!(current && others.some(r => r.id === current)))
+  const row = (r, prog) => <div key={r.id} className="item" onClick={() => onPick(r.id)}>
+    <span className="lrow-i"><Icon name={glyphOf(r.emoji)} /></span>
+    <div className="grow"><div className="tt">{r.name}</div>
+      <div className="ss">{[prog, exCount(r.ex.length)].filter(Boolean).join(' · ')}</div></div>
+    {current === r.id ? <Icon name="check" className="accent" /> : chevron ? <Icon name="chevronRight" className="chev" /> : null}
+  </div>
+  return <>
+    {mine.map(r => row(r))}
+    {others.length > 0 && (open
+      ? others.map(r => row(r, (programmeOf(st, r) || {}).name))
+      : <div className="item" onClick={() => setOpen(true)}>
+        <span className="lrow-i" style={{ background: 'var(--surface-3)' }}><Icon name="calendar" /></span>
+        <div className="grow"><div className="tt">{t('Other programmes')}</div>
+          <div className="ss">{t(others.length === 1 ? '{0} routine' : '{0} routines', others.length)}</div></div>
+        <Icon name="chevronDown" className="chev" />
+      </div>)}
+  </>
+}
 
 function DayOverride({ iso, close }) {
   const st = useStore(s => s.S)
@@ -2056,10 +2175,7 @@ function DayOverride({ iso, close }) {
     <h3>{fmtDate(iso, true)}</h3>
     <div className="muted small" style={{ marginBottom: 12 }}>{t('Weekly plan:')} {weeklyR ? weeklyR.name : t('Rest')}{hasOvr && <span style={{ color: 'var(--orange)' }}> · {t('changed for this day')}</span>}<br />{t('Sick, missed a day or want a different session? Pick what to train instead.')}</div>
     <div className="list">
-      {st.routines.map(r => <div key={r.id} className="item" onClick={() => set(r.id)}>
-        <span className="lrow-i"><Icon name={glyphOf(r.emoji)} /></span>
-        <div className="grow"><div className="tt">{r.name}</div><div className="ss">{exCount(r.ex.length)}</div></div>
-        {effId === r.id && <Icon name="check" className="accent" />}</div>)}
+      <RoutineChoices {...routinesFor(st, iso)} current={effId} onPick={set} />
       <div className="item" onClick={() => set('rest')}><span className="lrow-i" style={{ background: 'var(--surface-3)' }}><Icon name="moon" /></span><div className="grow"><div className="tt">{t('Rest / skip this day')}</div></div>{effId === null && <Icon name="check" className="accent" />}</div>
       {hasOvr && <div className="item" onClick={() => set('')}><span className="lrow-i" style={{ background: 'var(--surface-3)' }}><Icon name="reset" /></span><div className="grow"><div className="tt">{t('Back to weekly plan')}</div></div></div>}
     </div>
@@ -2259,10 +2375,7 @@ function DayAssign({ day, weekIdx = null, blockId = null, close }) {
     <h3>{t(DAYN[day])}</h3>
     <div className="list">
       <div className="item" onClick={() => set('')}><span className="lrow-i" style={{ background: 'var(--surface-3)' }}><Icon name="moon" /></span><div className="grow"><div className="tt">{t('Rest day')}</div></div>{!cur[day] && <Icon name="check" className="accent" />}</div>
-      {st.routines.map(r => <div key={r.id} className="item" onClick={() => set(r.id)}>
-        <span className="lrow-i"><Icon name={glyphOf(r.emoji)} /></span>
-        <div className="grow"><div className="tt">{r.name}</div><div className="ss">{exCount(r.ex.length)}</div></div>
-        {cur[day] === r.id && <Icon name="check" className="accent" />}</div>)}
+      <RoutineChoices {...routinesForBlock(st, blockId)} current={cur[day]} onPick={set} />
     </div>
   </>
 }
@@ -2508,7 +2621,11 @@ function LogPastSheet({ close, routineId }) {
   const days = Array.from({ length: 8 }, (_, i) => isoOf(new Date(Date.now() - i * 86400000)))
   const taken = new Set((st.workouts || []).map(w => w.d))
   const planned = effectiveRoutine(st, d)
-  const others = (st.routines || []).filter(r => !planned || r.id !== planned.id)
+  // The routines of the programme that was running on the day being written up — last week's
+  // session belongs to last week's programme, whatever runs now.
+  const offer = routinesFor(st, d)
+  const mine = offer.mine.filter(r => !planned || r.id !== planned.id)
+  const otherRoutines = offer.others.filter(r => !planned || r.id !== planned.id)
 
   const go = id => { close(); beginWorkout(id, undefined, { log: true, d, warm }) }
 
@@ -2557,11 +2674,7 @@ function LogPastSheet({ close, routineId }) {
         <div className="grow"><div className="tt">{planned.name}</div><div className="ss">{t('planned that day')} · {exCount(planned.ex.length)}</div></div>
         <Icon name="chevronRight" className="chev" />
       </div>}
-      {others.map(r => <div key={r.id} className="item" onClick={() => go(r.id)}>
-        <span className="lrow-i"><Icon name={glyphOf(r.emoji)} /></span>
-        <div className="grow"><div className="tt">{r.name}</div><div className="ss">{exCount(r.ex.length)}</div></div>
-        <Icon name="chevronRight" className="chev" />
-      </div>)}
+      <RoutineChoices key={d} mine={mine} others={otherRoutines} onPick={go} chevron />
       <div className="item" onClick={() => go(null)}>
         <span className="lrow-i" style={{ background: 'var(--surface-3)' }}><Icon name="shuffle" /></span>
         <div className="grow"><div className="tt">{t('Freestyle')}</div><div className="ss">{t('pick the exercises as you go')}</div></div>

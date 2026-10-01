@@ -22,6 +22,7 @@
 // without migrating anybody.
 
 import { isoOf, todayISO, uid } from './format.js'
+import { fold } from './import-csv.js'
 
 export const WEEKDAYS = [1, 2, 3, 4, 5, 6, 0]
 /* Two weeks is the alternation people actually run; beyond four it is a calendar, not a
@@ -194,3 +195,110 @@ export function removeBlock(S, id) {
 /** How many sessions a block's weeks hold, for a one-line summary. */
 export const sessionsIn = block =>
   ((block && block.weeks) || []).reduce((a, w) => a + Object.keys(cleanWeek(w)).length, 0)
+
+/* --------------------------------------------------- routines by programme ---- */
+// A routine belongs to a programme when it was filed under it (`block` on the routine — an
+// imported programme files every routine it brings), or when one of the programme's weeks
+// puts it on a day. Both, because a programme's routines are not always all on the calendar:
+// a "Legs B" done when there is time is as much part of the programme as Monday's Push.
+
+/** The routines a programme holds. */
+export function routinesOf(S, block) {
+  if (!block) return []
+  const onDays = new Set()
+  ;(block.weeks || []).forEach(w => Object.values(w || {}).forEach(id => onDays.add(id)))
+  return ((S && S.routines) || []).filter(r => r.block === block.id || onDays.has(r.id))
+}
+
+// The routines the plain weekly schedule puts on a day — the programme of a profile that has
+// never made a block, and the one in force before the first switch of one that has.
+const routinesOfWeek = S => {
+  const ids = new Set(Object.values((S && S.week) || {}))
+  return ((S && S.routines) || []).filter(r => ids.has(r.id))
+}
+
+/**
+ * The routines as the Plan screen files them, in the order they matter: the programme in force,
+ * then any booked to start, then the other programmes, the most recently added first; then what
+ * belongs to none. A routine two programmes share is shown once, under the first.
+ *
+ * A profile with no programmes at all gets one group of everything — the screen it always had.
+ */
+export function routineGroups(S, iso = todayISO()) {
+  const all = (S && S.routines) || []
+  const blocks = blocksOf(S)
+  if (!blocks.length) return [{ block: null, status: 'running', routines: all }]
+  const seen = new Set()
+  const groups = []
+  const add = (block, status, from, routines) => {
+    const rs = routines.filter(r => !seen.has(r.id))
+    rs.forEach(r => seen.add(r.id))
+    groups.push({ block, status, from: from || null, routines: rs })
+  }
+  const at = blockAt(S, iso)
+  if (at) add(at.block, 'running', at.from, routinesOf(S, at.block))
+  else add(null, 'running', null, routinesOfWeek(S))
+  upcoming(S).forEach(e => {
+    if (!groups.some(g => g.block && g.block.id === e.blockId)) add(e.block, 'upcoming', e.from, routinesOf(S, e.block))
+  })
+  blocks.slice().reverse().forEach(b => {
+    if (!groups.some(g => g.block && g.block.id === b.id)) add(b, 'other', null, routinesOf(S, b))
+  })
+  const loose = all.filter(r => !seen.has(r.id))
+  if (loose.length) groups.push({ block: null, status: 'loose', from: null, routines: loose })
+  return groups.filter(g => g.routines.length || g.status === 'running')
+}
+
+/**
+ * The routines on offer for a day: those of the programme in force that day — plus any that
+ * belong to no programme at all — and, kept apart, the rest. Starting a session, moving one,
+ * writing one up afterwards: each asks "which session?", and after a new programme the honest
+ * answer is no longer every routine ever made, two of them called Push.
+ */
+export function routinesFor(S, iso = todayISO()) {
+  const all = (S && S.routines) || []
+  if (!blocksOf(S).length) return { mine: all, others: [] }
+  const at = blockAt(S, iso)
+  const mineSet = new Set((at ? routinesOf(S, at.block) : routinesOfWeek(S)).map(r => r.id))
+  const filed = new Set(blocksOf(S).flatMap(b => routinesOf(S, b).map(r => r.id)))
+  if (!at) routinesOfWeek(S).forEach(r => filed.add(r.id))
+  all.forEach(r => { if (!filed.has(r.id)) mineSet.add(r.id) })
+  return { mine: all.filter(r => mineSet.has(r.id)), others: all.filter(r => !mineSet.has(r.id)) }
+}
+
+/** The routine a name points at among a set of them — accents and case aside. */
+export const sameNamed = (routines, name) => {
+  const k = fold(String(name || '').trim())
+  return (routines || []).find(r => fold(String(r.name || '').trim()) === k) || null
+}
+
+/** The next Monday after a day — or the day itself, when `inclusive` and it is one. */
+export function nextMonday(iso = todayISO(), inclusive = false) {
+  const d = new Date(iso + 'T12:00:00')
+  const add = ((8 - d.getDay()) % 7) || (inclusive ? 0 : 7)
+  d.setDate(d.getDate() + add)
+  return isoOf(d)
+}
+
+/** The programme a routine is filed under — or, failing that, the first whose weeks use it. */
+export function programmeOf(S, routine) {
+  if (!routine) return null
+  const blocks = blocksOf(S)
+  return (routine.block && blocks.find(b => b.id === routine.block)) ||
+    blocks.find(b => (b.weeks || []).some(w => Object.values(w || {}).includes(routine.id))) || null
+}
+
+/**
+ * The routines on offer while setting up one programme's week: its own, plus any that belong
+ * to no programme, first — the rest kept apart. Without a programme named, the day's.
+ */
+export function routinesForBlock(S, blockId, iso = todayISO()) {
+  const all = (S && S.routines) || []
+  if (!blocksOf(S).length) return { mine: all, others: [] }
+  const block = blockId ? blockById(S, blockId) : null
+  if (!block) return routinesFor(S, iso)
+  const own = new Set(routinesOf(S, block).map(r => r.id))
+  const filed = new Set(blocksOf(S).flatMap(b => routinesOf(S, b).map(r => r.id)))
+  all.forEach(r => { if (!filed.has(r.id)) own.add(r.id) })
+  return { mine: all.filter(r => own.has(r.id)), others: all.filter(r => !own.has(r.id)) }
+}

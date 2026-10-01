@@ -5,7 +5,7 @@ import { useUI } from '../store/useUI.js'
 import { DAYN, uid, exCount } from '../lib/format.js'
 import { t } from '../lib/i18n.js'
 import { dayAssignSheet, loadStarterPlan, planToolsSheet, blocksSheet } from '../sheets.jsx'
-import { weekFor, weekOfBlock, activeBlock, blockById, upcoming, daysUntil, weekIndexAt } from '../lib/blocks.js'
+import { weekFor, weekOfBlock, activeBlock, blockById, upcoming, daysUntil, weekIndexAt, routineGroups } from '../lib/blocks.js'
 import { todayISO, fmtDate } from '../lib/format.js'
 import Icon from '../components/Icon.jsx'
 import { Button, Segmented } from '../components/ui.jsx'
@@ -16,11 +16,21 @@ export default function Plan() {
   const S = useStore(s => s.S)
   const update = useStore(s => s.update)
 
+  // A new routine joins the programme on screen, so it is filed where it was made.
   const addRoutine = () => {
-    const r = { id: uid(), name: t('New routine'), emoji: DEFAULT_GLYPH, ex: [] }
+    const r = { id: uid(), name: t('New routine'), emoji: DEFAULT_GLYPH, ex: [], ...(at && at.block ? { block: at.block.id } : {}) }
     update(s => { s.routines.push(r) })
     nav('/plan/r/' + r.id)
   }
+  // The routines filed by programme: the one in force open, the one booked next open and dated,
+  // the older ones folded — a new programme with the same session names sits beside the old
+  // one instead of interleaving with it.
+  const groups = routineGroups(S)
+  const [unfolded, setUnfolded] = useState({})
+  const routineRow = r => <div key={r.id} className="item" onClick={() => nav('/plan/r/' + r.id)}>
+    <span className="lrow-i"><Icon name={glyphOf(r.emoji)} /></span>
+    <div className="grow"><div className="tt">{r.name}</div><div className="ss">{exCount(r.ex.length)}</div></div>
+    <Icon name="chevronRight" className="chev" /></div>
 
   const running = activeBlock(S)
   const editingId = useUI(s => s.planBlock)
@@ -118,10 +128,27 @@ export default function Plan() {
         <h4 className="sec" style={{ margin: 0 }}>{t('Routines')}</h4>
         <Button size="sm" variant="tinted" icon="plus" onClick={addRoutine}>{t('New')}</Button>
       </div>
-      {S.routines.length ? <div className="list">{S.routines.map(r => <div key={r.id} className="item" onClick={() => nav('/plan/r/' + r.id)}>
-        <span className="lrow-i"><Icon name={glyphOf(r.emoji)} /></span>
-        <div className="grow"><div className="tt">{r.name}</div><div className="ss">{exCount(r.ex.length)}</div></div>
-        <Icon name="chevronRight" className="chev" /></div>)}</div> : <>
+      {S.routines.length ? (groups.length === 1 && !groups[0].block
+        ? <div className="list">{groups[0].routines.map(routineRow)}</div>
+        : groups.map(g => {
+          const key = g.block ? g.block.id : g.status
+          const folds = g.status === 'other' || g.status === 'loose'
+          const open = !folds || unfolded[key]
+          return <div key={key} style={{ marginBottom: 14 }}>
+            <div className="row between" style={{ margin: '0 2px 6px', cursor: folds ? 'pointer' : 'default' }}
+              onClick={() => folds && setUnfolded(u => ({ ...u, [key]: !u[key] }))}>
+              <div className="small" style={{ fontWeight: 600, minWidth: 0 }}>
+                {g.block ? g.block.name : g.status === 'running' ? t('Simple week') : t('In no programme')}
+                {g.status === 'running' && <span className="tag acc nocap" style={{ marginLeft: 6 }}>{t('running')}</span>}
+                {g.status === 'upcoming' && <span className="tag acc nocap" style={{ marginLeft: 6 }}>{t('from {0}', fmtDate(g.from, true))}</span>}
+              </div>
+              {folds && <span className="small dim row" style={{ gap: 4, flex: 'none' }}>
+                {t(g.routines.length === 1 ? '{0} routine' : '{0} routines', g.routines.length)}
+                <Icon name={open ? 'chevronUp' : 'chevronDown'} /></span>}
+            </div>
+            {open && <div className="list" style={{ marginBottom: 0 }}>{g.routines.map(routineRow)}</div>}
+          </div>
+        })) : <>
         <div className="empty"><div className="ico"><Icon name="clipboard" /></div>{t('No routines yet.')}<br />{t('Create one or load the starter plan.')}</div>
         <Button icon="sparkles" onClick={loadStarterPlan}>{t('Load starter plan (Push / Pull / Legs)')}</Button>
       </>}

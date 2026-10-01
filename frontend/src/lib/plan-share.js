@@ -10,10 +10,11 @@
 
 import { EXIDX, isBodyweightEq, fillEx } from './exercises.js'
 import { modeOf, fmtSec, isBw, isPerSide, sideReps } from './history.js'
-import { uid, todayISO, DAYN, fmtNum, exCount } from './format.js'
+import { uid, todayISO, isoOf, fmtDate, DAYN, fmtNum, exCount } from './format.js'
 import { t } from './i18n.js'
 import { APP_NAME } from './brand.js'
-import { weekFor } from './blocks.js'
+import { weekFor, blockAt, blocksOf, startBlock, routinesOf, sameNamed, WEEKDAYS } from './blocks.js'
+import { currentProgrammeStart } from './sport-export.js'
 
 const PLAN_FMT = 1
 const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0]   // Mon-first, matching the Plan screen
@@ -110,7 +111,7 @@ export function parsePlan(raw) {
  *  - schedule: optional; when on, the shared week REPLACES yours (days the shared plan
  *    leaves empty become rest days — a half-overwritten week would silently mix two plans)
  */
-export function mergePlan(s, bundle, { schedule } = {}) {
+export function mergePlan(s, bundle, { schedule, block } = {}) {
   s.customEx = s.customEx || []
   const exIdMap = {}
   bundle.customEx.forEach(c => {
@@ -121,16 +122,20 @@ export function mergePlan(s, bundle, { schedule } = {}) {
     s.customEx.push(fillEx({ id: nid, n: c.n, bp: c.bp, ...(c.desc ? { desc: c.desc } : {}) }))
   })
   const ridMap = {}
+  const added = []
   bundle.routines.forEach(r => {
     const nid = uid()
     ridMap[r.id] = nid
-    s.routines.push({
+    const nr = {
       id: nid,
       name: r.name || t('Shared routine'),
       emoji: r.emoji,
       ...(r.prog ? { prog: r.prog } : {}),
+      ...(block ? { block } : {}),
       ex: (r.ex || []).map(e => ({ ...e, id: exIdMap[e.id] || e.id }))
-    })
+    }
+    s.routines.push(nr)
+    added.push(nr)
   })
   if (schedule) {
     WEEK_ORDER.forEach(d => { delete s.week[d] })
@@ -138,7 +143,93 @@ export function mergePlan(s, bundle, { schedule } = {}) {
       if (ridMap[oldId]) s.week[d] = ridMap[oldId]
     })
   }
-  return { routines: bundle.routines.length }
+  return { routines: bundle.routines.length, ridMap, added }
+}
+
+const dayBefore = iso => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() - 1); return isoOf(d) }
+
+/**
+ * Import a programme as a programme: its routines filed under a block of its own, its week on
+ * that block, in force from a date — and the programme it replaces kept whole beside it.
+ * Call inside store.update.
+ *
+ * Nothing that has happened moves. Days before `from` keep the plan they had: a profile on the
+ * plain weekly schedule keeps it as the fallback for every day before the first switch, and
+ * gets that schedule saved as a block of its own, dated from when it actually started, so its
+ * routines are filed somewhere and it can be switched back to. Sessions already logged keep
+ * their own names and sets; they never pointed at a routine's contents in the first place.
+ *
+ * The week is the programme's own when it names days. When it does not — a coach's sheet that
+ * lists Push, Pull, Legs A and Legs B and leaves the days to you — it is the week already in
+ * force, read by name: Monday was Push, Monday is the new Push. Same for a day already moved
+ * on purpose from `from` onward: still that session, now the new programme's.
+ *
+ * `from` null files the programme without starting it — switched to later from Programmes.
+ */
+export function importProgramme(s, bundle, { name = '', from = null } = {}) {
+  const today = todayISO()
+  const start = from ? (from < today ? today : from) : null
+  s.blocks = blocksOf(s)
+  s.blockLog = s.blockLog || []
+  s.dayPlan = s.dayPlan || {}
+
+  // What is in force where the new one takes over — the programme being replaced.
+  const at = start ? blockAt(s, start) : blockAt(s, today)
+  let prev = at ? at.block : null
+  const baseWeek = { ...weekFor(s, start || today) }
+  if (start && !prev && Object.keys(s.week || {}).length) {
+    // A plain weekly schedule: saved as the programme it was, dated from its first session.
+    const began = currentProgrammeStart(s) || today
+    prev = { id: uid(), name: t('Programme until {0}', fmtDate(dayBefore(start), true)).slice(0, 40),
+      emoji: 'dumbbell', weeks: [{ ...s.week }] }
+    s.blocks.push(prev)
+    if (began < start) {
+      s.blockLog = [...s.blockLog.filter(e => e.from !== began), { from: began, blockId: prev.id }]
+        .sort((a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : 0))
+    }
+  }
+  // Its routines are filed under it for good, so a later edit to its week cannot orphan them.
+  if (prev) routinesOf(s, prev).forEach(r => { if (!r.block) r.block = prev.id })
+
+  const block = { id: uid(), name: String(name || bundle.name || t('Programme {0}', fmtDate(start || today, true))).trim().slice(0, 40),
+    emoji: 'dumbbell', weeks: [{}] }
+  s.blocks.push(block)
+  const { ridMap, added } = mergePlan(s, bundle, { block: block.id })
+  // The new Push wears the old Push's icon: same session, the one thing about it that should
+  // look the same from one programme to the next.
+  added.forEach(r => {
+    if (r.emoji) return
+    const twin = sameNamed((s.routines || []).filter(x => x.block !== block.id), r.name)
+    if (twin && twin.emoji) r.emoji = twin.emoji
+  })
+
+  const week = block.weeks[0]
+  const named = Object.keys(bundle.week || {}).length > 0
+  const unplaced = []
+  if (named) {
+    Object.entries(bundle.week).forEach(([d, oldId]) => { if (ridMap[oldId]) week[d] = ridMap[oldId] })
+  } else {
+    WEEKDAYS.forEach(d => {
+      const was = (s.routines || []).find(r => r.id === baseWeek[d])
+      if (!was) return
+      const twin = sameNamed(added, was.name)
+      if (twin) week[d] = twin.id; else unplaced.push(was.name)
+    })
+  }
+
+  let moved = 0
+  if (start) {
+    startBlock(s, block.id, start)
+    // Days moved on purpose from the switch onward: the same session, in the new programme.
+    const mine = new Set(added.map(r => r.id))
+    Object.entries(s.dayPlan).forEach(([iso, rid]) => {
+      if (iso < start || rid === 'rest' || mine.has(rid)) return
+      const was = (s.routines || []).find(r => r.id === rid)
+      const twin = was && sameNamed(added, was.name)
+      if (twin) { s.dayPlan[iso] = twin.id; moved++ }
+    })
+  }
+  return { block, prev, added, weekFromNames: !named, unplaced, moved, start }
 }
 
 /* ------------------------------- printable PDF ------------------------------- */
