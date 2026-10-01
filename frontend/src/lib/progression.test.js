@@ -450,3 +450,77 @@ describe('applyPrescription', () => {
     expect(applyPrescription(sets, { kind: 'up', weight: 60, sets: 1 })).toHaveLength(sets.length)
   })
 })
+
+describe('a new programme for the same lift', () => {
+  // Four sessions of 4×8 at 75 under the last programme; this one says 3×12.
+  const old = (rows) => hist(LIFT, rows, { sets: 4, reps: 8 })
+  const cfg12 = { id: LIFT, sets: 3, reps: 12 }
+
+  it('starts on the new reps, with a weight worked out from the last session — not old weight + a step', () => {
+    const p = nextPrescription(old([[75, 8, 8, 8, 8]]), cfg12)
+    expect(p.kind).toBe('rescheme')
+    expect(p.reps).toBe(12)
+    // 75 × (1 + 8/30) ≈ 95 estimated 1RM → 95 / (1 + 12/30) ≈ 67.9 → down to 67.5
+    expect(p.weight).toBe(67.5)
+    expect(p.why[0]).toMatch(/New scheme/)
+  })
+
+  it('does not hand down the old programme’s misses as a deload', () => {
+    const rows = [[75, 8, 8, 8, 6], [75, 8, 8, 7, 6], [75, 8, 7, 7, 6]]
+    expect(nextPrescription(old(rows), cfg12).kind).toBe('rescheme')
+  })
+
+  it('never estimates heavier than what was actually on the bar', () => {
+    // fewer reps than before: the estimate says more, but the first session stays at last time's load
+    const p = nextPrescription(old([[75, 8, 8, 8, 8]]), { id: LIFT, sets: 5, reps: 5 })
+    expect(p.reps).toBe(5)
+    expect(p.weight).toBe(75)
+  })
+
+  it('carries a lift into a new range that starts where it already was — same load, one rep more', () => {
+    // 4×8 before, 8–12 now: eight is the bottom of the new range, so this is double progression
+    // picking up at its first step, not a new scheme starting over
+    const p = nextPrescription(old([[75, 8, 8, 8, 8]]), { id: LIFT, sets: 3, reps: 12, repsMin: 8, prog: 'double' })
+    expect(p).toMatchObject({ kind: 'hold', weight: 75, reps: 9 })
+  })
+
+  it('starts a new range above the old reps at its bottom, with the load worked out for it', () => {
+    const p = nextPrescription(old([[75, 8, 8, 8, 8]]), { id: LIFT, sets: 3, reps: 15, repsMin: 12, prog: 'double' })
+    expect(p.kind).toBe('rescheme')
+    expect(p.reps).toBe(12)
+    expect(p.weight).toBe(67.5)
+  })
+
+  it('once the new scheme has a session of its own, progresses on it as usual', () => {
+    const S = old([[75, 8, 8, 8, 8]])
+    S.workouts.push({ d: '2026-01-09', entries: [{ id: LIFT, target: { sets: 3, reps: 12 },
+      sets: [{ w: 67.5, r: 12, done: true }, { w: 67.5, r: 12, done: true }, { w: 67.5, r: 12, done: true }] }] })
+    const p = nextPrescription(S, cfg12)
+    expect(p.kind).toBe('up')
+    expect(p.weight).toBe(70)
+  })
+
+  it('counts stalls under the scheme being followed only', () => {
+    // three misses at 8 reps, then one at 12: one stall, not four — hold, no deload
+    const S = old([[75, 8, 8, 7, 6], [75, 8, 8, 7, 6], [75, 8, 8, 7, 6]])
+    S.workouts.push({ d: '2026-01-09', entries: [{ id: LIFT, target: { sets: 3, reps: 12 },
+      sets: [{ w: 67.5, r: 12, done: true }, { w: 67.5, r: 11, done: true }, { w: 67.5, r: 10, done: true }] }] })
+    expect(nextPrescription(S, cfg12).kind).toBe('hold')
+  })
+})
+
+describe('the first session of a double-progression range', () => {
+  it('opens at the bottom of the range when nothing is logged yet', () => {
+    const p = nextPrescription({ unit: 'kg', workouts: [] }, { id: LIFT, sets: 3, reps: 12, repsMin: 8, prog: 'double' })
+    expect(p).toMatchObject({ kind: 'first', reps: 8 })
+    expect(applyPrescription([{ w: 0, r: 12, done: false }], p)).toEqual([{ w: 0, r: 8, done: false }])
+  })
+})
+
+describe('a new range the last sessions already sit inside', () => {
+  it('carries on: same weight, one rep more — not a "new scheme" of twelve instead of twelve', () => {
+    const S = hist(LIFT, [[150, 12, 12, 12]], { sets: 3, reps: 12 })
+    const p = nextPrescription(S, { id: LIFT, sets: 3, reps: 15, repsMin: 12, prog: 'double' })
+    expect(p).toMatchObject({ kind: 'hold', weight: 150, reps: 13 })
+  })
+})

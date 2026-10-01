@@ -345,6 +345,18 @@ export function lastEntryFor(S, exId) {
   }
   return null
 }
+/**
+ * How much each exercise is part of this profile's training: one count per routine it sits in
+ * and per session it was logged in. What a programme import leans on to read an ambiguous name
+ * as the lift you already do, rather than as a stranger with no history.
+ */
+export function usageOf(S) {
+  const u = new Map()
+  const add = id => { if (id) u.set(id, (u.get(id) || 0) + 1) }
+  ;((S && S.routines) || []).forEach(r => (r.ex || []).forEach(e => add(e && e.id)))
+  ;((S && S.workouts) || []).forEach(w => (w.entries || []).forEach(e => add(e && e.id)))
+  return u
+}
 export function bestWeightFor(S, exId) {
   let best = 0
   S.workouts.forEach(w => w.entries.forEach(e => {
@@ -432,11 +444,14 @@ export function buildSets(S, cfg) {
     return sets
   }
   const conf = S.exWeights[cfg.id]
+  // Last time's reps only stand in for this time's when it aimed at the same number. Under a
+  // new programme — 3×12 where the last one said 4×8 — they are a different exercise's reps.
+  const sameScheme = !last || !last.target || !(last.target.reps > 0) || !(cfg.reps > 0) || last.target.reps === cfg.reps
   for (let i = 0; i < n; i++) {
     const prev = prevAt(i)
     const usable = prev && prev.r > 0 ? prev : null
     const w = conf && conf.w > 0 ? conf.w : (usable ? usable.w : cfg.weight)
-    sets.push({ w, r: usable ? usable.r : cfg.reps, done: false })
+    sets.push({ w: w || 0, r: usable && sameScheme ? usable.r : cfg.reps, done: false })
   }
   return sets
 }

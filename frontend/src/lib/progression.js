@@ -74,6 +74,25 @@ export function policyFor(cfg, routine, mode) {
 }
 
 const round1 = v => Math.round(v * 10) / 10
+// Down to a loadable multiple of the step — a weight worked out from an estimate errs light.
+const floorTo = (v, step) => (step > 0 ? round1(Math.floor(v / step + 1e-9) * step) : round1(v))
+
+// The best one-rep estimate in the most recent session of a lift (Epley, the app's default),
+// from sets of at most fifteen reps — past that the formula stops meaning anything.
+function bestEstimate(S, exId) {
+  const ws = (S && S.workouts) || []
+  for (let i = ws.length - 1; i >= 0; i--) {
+    const en = exEntryOf(ws[i], exId)
+    if (!en || !en.sets.some(isWorking)) continue
+    let best = 0
+    en.sets.filter(isWorking).forEach(st => {
+      const w = setTop(st), r = setTopReps(st)
+      if (w > 0 && r > 0 && r <= 15) best = Math.max(best, r === 1 ? w : w * (1 + r / 30))
+    })
+    return best || null
+  }
+  return null
+}
 // Snap to a loadable multiple of the step.
 function snap(v, step) {
   if (!(step > 0)) return round1(v)
@@ -164,9 +183,39 @@ export function nextPrescription(S, cfg, routine) {
 
   const sessions = sessionsFor(S, cfg.id, cfg).filter(s => s.mode === mode)
   const last = sessions[sessions.length - 1]
-  if (!last) return { policy, kind: 'first', why: ['Nothing logged yet — this session sets the baseline.'] }
+  // Double progression starts a range at its bottom: it works up to the top, then adds load.
+  const bottom = policy === 'double' && cfg.repsMin > 0 && cfg.repsMin < (cfg.reps || 0) ? cfg.repsMin : null
+  if (!last) return { policy, kind: 'first', ...(bottom ? { reps: bottom } : {}), why: ['Nothing logged yet — this session sets the baseline.'] }
 
-  const stalls = stallCount(sessions)
+  // A new scheme for the same lift — 4×8 in the last programme, 3×12 in this one. The last
+  // session measures nothing about this one: judged against eight reps it read as "hit, add
+  // weight" or "missed, deload" for sessions that never aimed at twelve, and the first new
+  // session opened on the old reps. So the reps are the new ones, and the weight is what the
+  // last session's best set says can be lifted for that many.
+  // Loaded work only: on bodyweight work the rep target is what climbs from one session to the
+  // next (#33), so a different number there is the progression itself, not a new programme.
+  if (mode === 'reps' && last.weight > 0 && cfg.reps > 0 && last.goal > 0 && last.goal !== cfg.reps) {
+    // A new range the last sessions already sit inside — 12 reps before, 12–15 now — is the
+    // same work carried on: same weight, one rep more, and the load goes up at the new top.
+    if (bottom && last.goal >= bottom && last.goal < cfg.reps) {
+      if (last.count > 0 && last.reps.every(r => r >= cfg.reps)) {
+        return { policy, kind: 'up', weight: snap(last.weight + inc, inc), reps: bottom, why: ['Top of the rep range in every set — {0} {1} more, back to {2} reps.', inc, unit, bottom] }
+      }
+      const aimIn = Math.min(cfg.reps, Math.max(bottom, last.low + repStep(cfg)))
+      return { policy, kind: 'hold', weight: last.weight, reps: aimIn, why: ['Same weight — aim for {0} reps this time.', aimIn] }
+    }
+    const aim = bottom || cfg.reps
+    const est = bestEstimate(S, cfg.id)
+    const w = est ? Math.min(last.weight, floorTo(est / (1 + aim / 30), inc)) : last.weight
+    return { policy, kind: 'rescheme', weight: w > 0 ? w : last.weight, reps: aim,
+      why: ['New scheme — {0} reps instead of {1}, so {2} {3}, worked out from your last session.', aim, last.goal, w > 0 ? w : last.weight, unit] }
+  }
+
+  // Misses only count against the scheme being followed: a run of them under the last
+  // programme's eight reps is no reason to deload this programme's twelve.
+  let from = sessions.length
+  while (from > 0 && sessions[from - 1].goal === last.goal) from--
+  const stalls = stallCount(sessions.slice(from))
   const deloadAt = DELOAD_AFTER[policy] || 3
 
   if (mode === 'time') {
@@ -248,7 +297,7 @@ export function nextPrescription(S, cfg, routine) {
  * are touched, and only on sets that have not been logged yet.
  */
 export function applyPrescription(sets, p) {
-  if (!p || p.kind === 'off' || p.kind === 'first') return sets
+  if (!p || p.kind === 'off' || (p.kind === 'first' && p.reps == null)) return sets
   const out = sets.map(s => {
     if (s.done) return s
     const o = { ...s }

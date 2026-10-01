@@ -569,3 +569,21 @@ describe('carryForward', () => {
     expect('rir' in s[0]).toBe(false)
   })
 })
+
+describe('buildSets across programmes', () => {
+  const LIFT = EXDB.find(e => e.bp === 'chest' && e.eq === 'barbell').id
+  const S = { exWeights: {}, workouts: [{ d: '2026-09-01', entries: [{ id: LIFT, target: { sets: 2, reps: 8 },
+    sets: [{ w: 75, r: 8, done: true }, { w: 75, r: 7, done: true }] }] }] }
+
+  it('keeps last time’s reps when the routine still aims at the same number', () => {
+    expect(buildSets(S, { id: LIFT, sets: 2, reps: 8 }).map(s => s.r)).toEqual([8, 7])
+  })
+
+  it('takes the routine’s reps when the programme changed them', () => {
+    expect(buildSets(S, { id: LIFT, sets: 3, reps: 12 }).map(s => s.r)).toEqual([12, 12, 12])
+  })
+
+  it('starts a lift with no weight anywhere at zero, not at nothing', () => {
+    expect(buildSets({ exWeights: {}, workouts: [] }, { id: LIFT, sets: 1, reps: 10 })[0].w).toBe(0)
+  })
+})
