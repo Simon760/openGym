@@ -1171,4 +1171,5 @@ export default {
   'All the others': 'Tous les autres',
   'Create “{0}”': 'Créer « {0} »',
   'Sport': 'Sport',
+  'OK': 'OK',
 }

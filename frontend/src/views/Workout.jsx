@@ -483,6 +483,9 @@ function ActiveWorkout() {
         if (!A.log) startRest(S.restSec); else stopRest()
       } else if (isLastExInUnit && !A.log) startRest(S.restSec)
     }, true)
+    // A rest that was over and still on screen goes with the set that ended it — unless that
+    // set started a new one, which has already taken its place.
+    if (ticked) { const tm = useUI.getState().timer; if (tm && tm.over != null) stopRest() }
     if (workoutDone) workoutCompleteSheet()
     else if (next) useUI.getState().toast(t('Next: {0}', next.map(k => exName(exOr(A.entries[k].id))).join(' + ')))
     else if (exJustDone && m === 'cardio') useUI.getState().toast(t('Cardio logged'))

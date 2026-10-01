@@ -7,6 +7,7 @@ import { ACCENTS } from './lib/format.js'
 import { setLang, useLang } from './lib/i18n.js'
 import { setNav } from './lib/nav.js'
 import { useWakeLock } from './lib/wakelock.js'
+import { wakeAudio } from './lib/sound.js'
 import Icon from './components/Icon.jsx'
 import TabBar from './components/TabBar.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
@@ -51,6 +52,19 @@ function Shell() {
   useEffect(() => { window.scrollTo(0, 0) }, [loc.pathname])
   // bound to the workout, not to the route — checking Stats mid-session keeps the screen on
   useWakeLock(!!S.active && S.keepAwake !== false)
+  // A rest that was running when iOS reloaded the app picks up where it is (lib/rest.js).
+  useEffect(() => { if (S.active) useUI.getState().resumeRest() }, [S.active && S.active.id])
+  // Every tap of a session keeps the sound awake for the beep that ends the next rest, which a
+  // timer cannot wake on its own on an iPhone (lib/sound.js).
+  useEffect(() => {
+    if (!S.active || S.sound === false) return
+    document.addEventListener('touchend', wakeAudio, { capture: true, passive: true })
+    document.addEventListener('click', wakeAudio, { capture: true, passive: true })
+    return () => {
+      document.removeEventListener('touchend', wakeAudio, { capture: true })
+      document.removeEventListener('click', wakeAudio, { capture: true })
+    }
+  }, [!!S.active, S.sound])
 
   const authed = user || isGuest
   if (!ready && !authed) return (

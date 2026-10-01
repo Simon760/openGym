@@ -2,14 +2,27 @@ import { create } from 'zustand'
 import { uid } from '../lib/format.js'
 import { beep, vibrate } from '../lib/sound.js'
 import { api } from '../lib/api.js'
-import { t } from '../lib/i18n.js'
 import { useStore } from './useStore.js'
 import { forgetDismiss, runDismiss, runAllDismiss } from '../lib/dismiss.js'
+import { restAt, restorable, REST_KEY } from '../lib/rest.js'
 
 // Fire-and-forget: lets the server push a "rest over" alert if this tab gets suspended
 // before the local timer completes. No-ops for guests / offline.
 const pushRestTimer = sec => { if (useStore.getState().user) api('/api/push/rest-timer', { method: 'POST', body: JSON.stringify({ seconds: sec }) }).catch(() => {}) }
 const cancelPushRestTimer = () => { if (useStore.getState().user) api('/api/push/rest-timer/cancel', { method: 'POST', body: '{}' }).catch(() => {}) }
+
+// The running rest, kept across a reload — see lib/rest.js.
+const saveRest = tm => {
+  try {
+    if (tm) localStorage.setItem(REST_KEY, JSON.stringify({ endsAt: tm.endsAt, total: tm.total, w: tm.w || null }))
+    else localStorage.removeItem(REST_KEY)
+  } catch (e) { /* private mode, or no storage: the rest just does not survive a reload */ }
+}
+const restEndSignal = () => {
+  const snd = useStore.getState().S.sound
+  beep(snd, 880, 0.15); beep(snd, 880, 0.15, 0.25); beep(snd, 1320, 0.4, 0.5)
+  vibrate([200, 100, 200])
+}
 
 let toastTm = null
 let timerInt = null
@@ -26,7 +39,7 @@ export const useUI = create((set, get) => ({
   // looking, not a fact about your training — it should not sync to another device or come
   // back tomorrow.
   planBlock: null,
-  timer: null,         // rest countdown between sets — { left, total, endsAt }
+  timer: null,         // rest between sets — { left, total, endsAt, w, over } (over: seconds since it ended)
   work: null,          // work countdown DURING a timed set (issue #16) — { left, total, endsAt, label }
 
   // `tall` keeps a sheet at its full height whatever it holds: a search whose results shrink as
@@ -65,39 +78,64 @@ export const useUI = create((set, get) => ({
 
   startRest(sec) {
     get().stopRest()
-    const endsAt = Date.now() + sec * 1000
-    set({ timer: { left: sec, total: sec, endsAt } })
+    const A = useStore.getState().S.active
+    get().runRest({ left: sec, total: sec, endsAt: Date.now() + sec * 1000, w: A ? A.id : null, over: null })
     pushRestTimer(sec)
+  },
+  // The countdown, then what follows it: at zero the bar stays, turned into "go" and counting
+  // the seconds since — see lib/rest.js for why it no longer simply goes away. `quiet` is a
+  // rest that ended while the app was closed: shown as over, not announced as ending now.
+  runRest(tm, { quiet = false } = {}) {
+    saveRest(tm)
+    set({ timer: tm })
     timerTick = () => {
-      const tm = get().timer
-      if (!tm) return
-      const left = Math.max(0, Math.round((tm.endsAt - Date.now()) / 1000))
-      if (left === tm.left) return
-      const snd = useStore.getState().S.sound
-      if (left <= 0) {
-        beep(snd, 880, 0.15); beep(snd, 880, 0.15, 0.25); beep(snd, 1320, 0.4, 0.5)
-        vibrate([200, 100, 200]); get().toast(t('Rest over — next set!')); get().stopRest(); return
+      const cur = get().timer
+      if (!cur) return
+      const at = restAt(cur)
+      if (at.expired) { get().stopRest(); return }
+      if (at.over == null) {
+        if (at.left === cur.left) return
+        if (at.left <= 3) beep(useStore.getState().S.sound, 660, 0.1)
+        set({ timer: { ...cur, left: at.left } })
+        return
       }
-      if (left <= 3) beep(snd, 660, 0.1)
-      set({ timer: { ...tm, left } })
+      if (cur.over == null && !quiet) restEndSignal()
+      if (at.over === cur.over) return
+      set({ timer: { ...cur, left: 0, over: at.over } })
     }
     timerInt = setInterval(timerTick, 1000)
     document.addEventListener('visibilitychange', timerTick)
+    timerTick()
+  },
+  // A rest saved before iOS reloaded the app comes back where it is: still running, or over
+  // and counting since. Only for the session it was started in.
+  resumeRest() {
+    if (get().timer) return
+    let saved = null
+    try { saved = JSON.parse(localStorage.getItem(REST_KEY) || 'null') } catch (e) { /* */ }
+    const tm = restorable(saved, useStore.getState().S.active)
+    if (!tm) { if (saved) saveRest(null); return }
+    get().runRest(tm, { quiet: tm.over != null })
   },
   addRest(sec) {
     const tm = get().timer
-    if (!tm) return
+    if (!tm || tm.over != null) return
     const left = tm.left + sec
     // taking off more than is left means "I'm ready now" — same as skipping, and it keeps a
     // negative duration out of both the progress bar and the server-side push schedule
     if (left <= 0) { get().stopRest(); return }
-    set({ timer: { ...tm, left, total: tm.total + sec, endsAt: tm.endsAt + sec * 1000 } })
+    const next = { ...tm, left, total: tm.total + sec, endsAt: tm.endsAt + sec * 1000 }
+    saveRest(next)
+    set({ timer: next })
     pushRestTimer(left)
   },
   stopRest() {
     if (timerInt) clearInterval(timerInt); timerInt = null
     if (timerTick) document.removeEventListener('visibilitychange', timerTick); timerTick = null
-    if (get().timer) cancelPushRestTimer()
+    // A rest already over has had its push; there is nothing left on the server to cancel.
+    const tm = get().timer
+    if (tm && tm.over == null) cancelPushRestTimer()
+    saveRest(null)
     set({ timer: null })
   },
 

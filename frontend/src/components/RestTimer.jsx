@@ -34,6 +34,17 @@ export default function RestTimer() {
       <Button size="sm" variant="primary" icon="check" onClick={finishWorkEarly}>{t('Done')}</Button>
     </div>
   )
+  // The rest is over and the bar says so instead of leaving — see lib/rest.js. The accent
+  // colour fills it, which is the part that reaches a glance from across the bench; the clock
+  // counts the time since, so a look a minute later still tells how late the next set is.
+  // Anywhere on it puts it away; ticking the next set does too.
+  if (timer.over != null) return (
+    <div id="timer" className="rest over" role="status" onClick={stopRest}>
+      <div className="t">+{clock(timer.over)}</div>
+      <div className="go">{t('Rest over — next set!')}</div>
+      <span className="ok">{t('OK')}</span>
+    </div>
+  )
   // Three controls plus the clock don't fit one line on a phone — at 360px the bar is left
   // with about 30px and stops saying anything. So the rest variant stacks: clock and bar
   // read at a glance, controls get their own row. −15 and +15 sit together in number-line
