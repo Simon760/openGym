@@ -78,3 +78,14 @@ describe('records already sitting in the database', () => {
     expect(hydrate({ customEx: [{ n: 'orphan' }, imported] }).customEx).toHaveLength(1)
   })
 })
+
+describe('exMatches — accents and word order', () => {
+  it('finds "développé" typed without its accents, and the words in any order', async () => {
+    const { EXIDX, exMatches } = await import('./exercises.js')
+    const bench = EXIDX['0025']   // développé couché barre
+    expect(exMatches(bench, 'developpe')).toBe(true)
+    expect(exMatches(bench, 'couche developpe')).toBe(true)
+    expect(exMatches(bench, 'DÉVELOPPÉ COUCHÉ')).toBe(true)
+    expect(exMatches(bench, 'developpe incline')).toBe(false)
+  })
+})

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseProgram, extractJSON, dayIndex } from './plan-import.js'
+import { parseProgram, extractJSON, dayIndex, programFromCSV, guessBodyPart } from './plan-import.js'
 import { parsePlan, buildPlanBundle } from './plan-share.js'
 import { EXIDX } from './exercises.js'
 
@@ -57,7 +57,7 @@ describe('parseProgram — resolving names', () => {
     const { bundle, report } = parseProgram(one({ name: 'Bench Press', sets: 4, reps: 8, weight: 75 }))
     expect(bundle.routines[0].ex[0].id).toBe('0025')
     expect(EXIDX['0025'].n).toBe('barbell bench press')
-    expect(report.matched).toEqual([{ from: 'Bench Press', to: 'barbell bench press', id: '0025' }])
+    expect(report.matched).toEqual([{ from: 'Bench Press', to: 'barbell bench press', id: '0025', how: 'alias', known: false }])
     expect(report.created).toEqual([])
     expect(bundle.customEx).toEqual([])
   })
@@ -72,7 +72,7 @@ describe('parseProgram — resolving names', () => {
     expect(bundle.customEx[0]).toMatchObject({ n: 'Coach special press', bp: 'chest' })
     // the routine still points at it, in place
     expect(bundle.routines[0].ex[0].id).toBe(bundle.customEx[0].id)
-    expect(report.created).toEqual([{ name: 'Coach special press', bp: 'chest', muscles: { chest: 1 } }])
+    expect(report.created).toEqual([{ name: 'Coach special press', id: bundle.customEx[0].id, bp: 'chest', muscles: { chest: 1 }, candidates: [] }])
   })
 
   it('reads minutes alone as cardio — a zone-2 ride names no pace', () => {
@@ -83,14 +83,20 @@ describe('parseProgram — resolving names', () => {
     expect('reps' in e).toBe(false)
   })
 
-  it('starts a rep range at its bottom, not at the default ten', () => {
-    // double progression works up through the range and only then adds weight, so a 6–10
-    // starting at 10 is already at the top and asks for more load in session one
+  it('stores a loaded rep range the way double progression reads it — top as reps, bottom as repsMin', () => {
+    // Stored as reps 6 / repsMin 6 / repsMax 10, as it once was, the policy took 6 as the top
+    // and the 10 was never asked for: the range collapsed into a fixed six. The first session
+    // still starts at the bottom — nextPrescription sees to that.
     expect(parseProgram(one({ name: 'Cable Curl', repsMin: 6, repsMax: 10 })).bundle.routines[0].ex[0])
-      .toMatchObject({ reps: 6, repsMin: 6, repsMax: 10 })
-    // an explicit reps still wins, and a plain exercise still gets the default
-    expect(parseProgram(one({ name: 'Cable Curl', reps: 8, repsMin: 6, repsMax: 10 })).bundle.routines[0].ex[0].reps).toBe(8)
+      .toMatchObject({ reps: 10, repsMin: 6, prog: 'double' })
+    // a rule the programme names is kept, and a plain exercise still gets the default
+    expect(parseProgram(one({ name: 'Cable Curl', repsMin: 6, repsMax: 10, progression: 'linear' })).bundle.routines[0].ex[0].prog).toBe('linear')
     expect(parseProgram(one({ name: 'Cable Curl' })).bundle.routines[0].ex[0].reps).toBe(10)
+  })
+
+  it('keeps a bodyweight range as the ceiling that turns "+1 rep" into "add a set"', () => {
+    expect(parseProgram(one({ name: 'Push-up', repsMin: 10, repsMax: 20 })).bundle.routines[0].ex[0])
+      .toMatchObject({ reps: 10, repsMax: 20 })
   })
 
   it('carries the muscles a program names, so a compound is not read as one muscle', () => {
@@ -141,7 +147,7 @@ describe('parseProgram — how an exercise is logged', () => {
   })
 
   it('carries a rep range only when both ends are there', () => {
-    expect(cfgOf(one({ name: 'Bench Press', repsMin: 8, repsMax: 12 }))).toMatchObject({ repsMin: 8, repsMax: 12 })
+    expect(cfgOf(one({ name: 'Bench Press', repsMin: 8, repsMax: 12 }))).toMatchObject({ reps: 12, repsMin: 8 })
     const half = cfgOf(one({ name: 'Bench Press', repsMin: 8 }))
     expect('repsMin' in half).toBe(false)
   })
@@ -268,5 +274,146 @@ describe('parseProgram — the bundle it hands to mergePlan', () => {
     const fromText = parseProgram('Voici :\n```json\n' + JSON.stringify(obj) + '\n```\nBon courage !')
     expect(fromText.bundle.name).toBe('Bloc 1')
     expect(fromText.bundle.exerciseCount).toBe(1)
+  })
+})
+
+describe('parseProgram — French names and what you already train', () => {
+  it('reads a programme written in French against the catalogue’s French names', () => {
+    const { bundle, report } = parseProgram(prog([{ name: 'Push', exercises: [
+      { name: 'Développé couché', sets: 4, reps: 8 },
+      { name: 'Développé incliné haltères', sets: 3, reps: 10 },
+      { name: 'Élévations latérales', sets: 3, reps: 15 }
+    ] }]))
+    expect(bundle.routines[0].ex.map(e => e.id)).toEqual(['0025', '0314', '0334'])
+    expect(report.created).toEqual([])
+  })
+
+  it('settles an ambiguous name on the exercise this profile already trains', () => {
+    // fourteen pulldowns say "tirage vertical"; the one with months of history is the one meant
+    const used = new Map([['0198', 9]])
+    const { bundle, report } = parseProgram(one({ name: 'Tirage vertical', sets: 3, reps: 10 }), { used })
+    expect(bundle.routines[0].ex[0].id).toBe('0198')
+    expect(report.matched[0]).toMatchObject({ how: 'used', known: true })
+  })
+
+  it('keeps the closest few catalogue entries for a name it cannot settle', () => {
+    const { report } = parseProgram(one({ name: 'Hip thrust', sets: 3, reps: 10 }))
+    expect(report.created).toHaveLength(1)
+    expect(report.created[0].candidates.length).toBeGreaterThan(0)
+  })
+
+  it('files an unrecognised name by what its own words say, not in the legs by default', () => {
+    const { bundle } = parseProgram(one({ name: 'Face pull corde', sets: 3, reps: 15 }))
+    expect(bundle.customEx[0]).toMatchObject({ bp: 'shoulders', tg: 'delts' })
+  })
+})
+
+describe('guessBodyPart', () => {
+  it('reads French and English, specific before general', () => {
+    expect(guessBodyPart('Hip thrust')).toEqual({ bp: 'upper legs', tg: 'glutes' })
+    expect(guessBodyPart('Leg curl assis')).toEqual({ bp: 'upper legs', tg: 'hamstrings' })
+    expect(guessBodyPart('Fentes bulgares')).toMatchObject({ bp: 'upper legs' })
+    expect(guessBodyPart('Curl incliné')).toEqual({ bp: 'upper arms', tg: 'biceps' })
+    expect(guessBodyPart('Extension triceps nuque')).toEqual({ bp: 'upper arms', tg: 'triceps' })
+    expect(guessBodyPart('Développé militaire')).toEqual({ bp: 'shoulders', tg: 'delts' })
+    expect(guessBodyPart('Rowing T-bar')).toMatchObject({ bp: 'back' })
+    expect(guessBodyPart('Crunch poulie')).toEqual({ bp: 'waist', tg: 'abs' })
+    expect(guessBodyPart('Mystère')).toBe(null)
+  })
+})
+
+describe('programFromCSV', () => {
+  const FR = [
+    'Séance;Exercice;Séries;Reps;Poids (kg);Repos',
+    'Push;Développé couché;4;8-10;80;2 min',
+    ';Développé incliné haltères;3;10-12;30;90s',
+    ';Élévations latérales;3;15;;60s',
+    'Pull;Tirage vertical;4;10;65;',
+    ';Rowing barre;3;8;70;',
+    'Legs A;Squat;5;5;100;',
+    ';Presse à cuisses;3;12-15;;',
+    'Legs B;Soulevé de terre roumain;4;8;90;',
+    ';Leg curl;3;12;;',
+  ].join('\n')
+
+  it('reads a French Excel export: semicolons, merged session cells, ranges', () => {
+    const p = programFromCSV(FR)
+    expect(p.routines.map(r => r.name)).toEqual(['Push', 'Pull', 'Legs A', 'Legs B'])
+    expect(p.routines[0].exercises[0]).toMatchObject({ name: 'Développé couché', sets: 4, repsMin: 8, repsMax: 10, weight: 80 })
+    expect(p.routines[0].exercises[2]).toMatchObject({ name: 'Élévations latérales', sets: 3, reps: 15 })
+    expect(p.routines[3].exercises).toHaveLength(2)
+  })
+
+  it('goes all the way through parseProgram to a bundle', () => {
+    const { bundle, report } = parseProgram(FR)
+    expect(bundle.routineCount).toBe(4)
+    expect(bundle.exerciseCount).toBe(9)
+    expect(bundle.routines[0].ex[0]).toMatchObject({ id: '0025', sets: 4, reps: 10, repsMin: 8, prog: 'double', weight: 80 })
+    expect(report.created).toEqual([])
+  })
+
+  it('reads sets×reps in one cell, holds, per-side work and bodyweight', () => {
+    const p = programFromCSV([
+      'Session,Exercise,Prescription,Load',
+      'Upper,Bench press,4x6-8,85',
+      'Upper,Plank,3x45s,',
+      'Upper,Lunge,3 x 10 par jambe,PDC',
+      'Upper,Dips,3x12,+10',
+    ].join('\n'))
+    const ex = p.routines[0].exercises
+    expect(ex[0]).toMatchObject({ sets: 4, repsMin: 6, repsMax: 8, weight: 85 })
+    expect(ex[1]).toMatchObject({ sets: 3, seconds: 45 })
+    expect(ex[2]).toMatchObject({ sets: 3, reps: 10, perSide: true, bodyweight: true })
+    expect(ex[3]).toMatchObject({ sets: 3, reps: 12, weight: 10, bodyweight: true })
+  })
+
+  it('takes a one-cell row as the title of the session below it', () => {
+    const p = programFromCSV([
+      'Exercice,Séries,Reps',
+      'PUSH,,',
+      'Développé couché,4,8',
+      'PULL,,',
+      'Tractions,4,6',
+    ].join('\n'))
+    expect(p.routines.map(r => r.name)).toEqual(['PUSH', 'PULL'])
+  })
+
+  it('reads a weekday column into the week, and a "Jour" column of weekdays as one', () => {
+    const p = programFromCSV([
+      'Jour,Séance,Exercice,Séries,Reps',
+      'Lundi,Push,Développé couché,4,8',
+      'Mercredi,Pull,Tractions,4,6',
+    ].join('\n'))
+    expect(p.week).toEqual({ 1: 'Push', 3: 'Pull' })
+    const q = programFromCSV(['Jour,Exercice,Séries', 'Lundi,Squat,5', 'Jeudi,Squat,5'].join('\n'))
+    expect(q.week).toEqual({ 1: 'Lundi', 4: 'Jeudi' })
+  })
+
+  it('pairs A1/A2 as a superset and leaves a lone letter alone', () => {
+    const p = programFromCSV([
+      'Ordre,Séance,Exercice,Séries,Reps',
+      'A,Push,Développé couché,4,8',
+      'B1,Push,Élévations latérales,3,15',
+      'B2,Push,Extension triceps poulie,3,12',
+    ].join('\n'))
+    const ex = p.routines[0].exercises
+    expect(ex[0].superset).toBeUndefined()
+    expect(ex[1].superset).toBe('B')
+    expect(ex[2].superset).toBe('B')
+  })
+
+  it('reads a Markdown table out of a conversation', () => {
+    const p = programFromCSV([
+      'Voici ton programme :',
+      '| Séance | Exercice | Séries | Reps |',
+      '|---|---|---|---|',
+      '| Push | Développé couché | 4 | 8 |',
+      '| Push | Dips | 3 | 10 |',
+    ].join('\n'))
+    expect(p.routines[0].exercises.map(e => e.name)).toEqual(['Développé couché', 'Dips'])
+  })
+
+  it('is null for a table without an exercise column', () => {
+    expect(programFromCSV('Date,Poids\n2026-10-01,78')).toBe(null)
   })
 })

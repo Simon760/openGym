@@ -75,11 +75,17 @@ export const exSearchText = ex => {
  * A search is the last place that should be brittle: it runs over records from the catalogue,
  * from imports, from other people's shared plans and from a text box. Everything is coerced.
  */
+// Accents off, lower case: a phone keyboard does not offer "é" to someone typing fast, and
+// "developpe" found nothing in a catalogue that spells it "développé".
+const foldS = v => String(v).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+
 export const exMatches = (ex, ql) => {
   if (!ql) return true
   if (!ex) return false
-  const has = v => typeof v === 'string' && v.toLowerCase().includes(ql)
-  return exSearchText(ex).includes(ql) || has(ex.tg) || has(ex.eq) || has(ex.desc)
+  // Every word, in any order: "incline developpe" is the same search as "développé incliné".
+  const words = foldS(ql).split(/\s+/).filter(Boolean)
+  const hay = [exSearchText(ex), ex.tg, ex.eq, ex.desc].filter(v => typeof v === 'string').map(foldS).join(' ')
+  return words.every(w => hay.includes(w))
 }
 
 /**

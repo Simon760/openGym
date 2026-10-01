@@ -19,6 +19,8 @@
 // building a DOM.
 
 import { EXDB, EXIDX } from './exercises.js'
+import { EX_EXTRA } from './exercises-extra.js'
+import EX_FR from '../names/fr.js'
 import { uid } from './format.js'
 
 /* ----------------------------------------------------------------- CSV ---- */
@@ -198,6 +200,9 @@ const ALIAS_EX = {
   'tricep pushdown': '0241', 'triceps pushdown': '0241', pushdown: '0241',
   skullcrusher: '0060', 'skull crusher': '0060', 'lying triceps extension': '0061',
   lunge: '0054', lunges: '0054', 'cable crossover': '1269', 'cable cross over': '1269',
+  'incline dumbbell press': '0314', 'incline dumbbell bench press': '0314',
+  'pec deck': '0596', 'chest press': '0577', 'machine chest press': '0577',
+  'machine shoulder press': '0603', 'hack squat': '0743', pullover: '0073', 'good morning': '0044',
 }
 
 let ALIAS_IDX = null
@@ -207,6 +212,130 @@ const aliasIndex = () => {
     for (const k in ALIAS_EX) ALIAS_IDX.set(wordsOf(k).sort().join(' '), ALIAS_EX[k])
   }
   return ALIAS_IDX
+}
+
+/* ------------------------------------------------------ French names ---- */
+// A programme written by a French coach says "Développé couché", not "bench press", and the
+// English-only matcher above turns every accented letter into a gap — "développé" reached it
+// as "d velopp" and matched nothing, so a whole French programme arrived as custom exercises
+// with no history behind them. The catalogue already carries French names (names/fr.js, and
+// the extras' own), so names are also compared against those: accents folded, the little
+// words that say nothing dropped, plurals cut back so "haltères" meets "haltère".
+const FR_FILLER = new Set(['de', 'du', 'des', 'd', 'la', 'le', 'les', 'l', 'a', 'au', 'aux', 'avec',
+  'en', 'sur', 'et', 'un', 'une', 'pour', 'par'])
+export const fold = s => String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+function frWordsOf(name) {
+  return fold(name).replace(/[’'()[\]]/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim()
+    .split(' ').filter(w => w && !FR_FILLER.has(w)).map(w => (w.length > 3 ? w.replace(/[sx]$/, '') : w))
+}
+
+let FR_INDEX = null
+function frIndex() {
+  if (FR_INDEX) return FR_INDEX
+  FR_INDEX = { exact: new Map(), all: [] }
+  const names = { ...EX_FR, ...Object.fromEntries(EX_EXTRA.filter(e => e.fr).map(e => [e.id, e.fr])) }
+  for (const id in names) {
+    if (!EXIDX[id]) continue
+    const w = frWordsOf(names[id])
+    const k = w.slice().sort().join(' ')
+    if (!FR_INDEX.exact.has(k)) FR_INDEX.exact.set(k, id)
+    FR_INDEX.all.push({ id, set: new Set(w), n: w.length })
+  }
+  return FR_INDEX
+}
+
+// What a French gym calls the common lifts, unqualified — the same convention as ALIAS_EX:
+// a bare name means the canonical version, and "tirage vertical" lands on the very pulldown
+// "lat pulldown" does, so the two languages file one lift under one history.
+const ALIAS_FR = {
+  'developpe couche': '0025', 'developpe incline': '0047', 'developpe decline': '0033',
+  'developpe militaire': '0091', 'developpe epaule': '0405', 'developpe epaules': '0405',
+  'developpe arnold': '2137', 'developpe couche machine': '0577', 'chest press': '0577',
+  'tirage vertical': '2330', 'tirage poitrine': '2330', 'tirage nuque': '1325',
+  'tirage horizontal': '0861', 'rowing assis': '0861', 'rowing poulie': '0861',
+  'rowing barre': '0027', 'rowing haltere': '0292', 'rowing un bras': '0292', 'rowing menton': '0120',
+  traction: '0652', tractions: '0652', pompe: '0662', pompes: '0662', dips: '0251', dip: '0251',
+  squat: '0043', 'squat barre': '0043', 'front squat': '0042', 'squat avant': '0042', 'hack squat': '0743',
+  presse: '0739', 'presse cuisse': '0739', 'presse jambe': '0739', 'leg press': '0739',
+  'souleve terre': '0032', sdt: '0032', 'souleve terre roumain': '0085', 'sdt roumain': '0085', rdl: '0085',
+  'leg extension': '0585', 'leg curl': '0586', 'leg curl allonge': '0586', 'leg curl assis': '0586',
+  mollet: '1372', 'mollet debout': '1372', 'extension mollet': '1372', 'mollet assis': '0088',
+  'elevation laterale': '0334', 'elevation laterale haltere': '0334', oiseau: '0348',
+  'elevation laterale arriere': '0348', 'curl biceps': '0294', 'curl haltere': '0294', curl: '0294',
+  'curl barre': '0031', 'curl marteau': '0313', 'curl pupitre': '0070',
+  'triceps poulie': '0241', 'pushdown triceps': '0241',
+  'barre front': '0060', fente: '0054', 'ecarte poulie': '0227', 'vis vis': '0227',
+  'pec deck': '0596', butterfly: '0596', 'haussement epaule': '0095', shrug: '0095',
+  pullover: '0073', 'pull over': '0073', 'good morning': '0044', 'releve jambe': '0472',
+  'releve jambe suspendu': '0472',
+}
+let FR_ALIAS_IDX = null
+const frAliasIndex = () => {
+  if (!FR_ALIAS_IDX) {
+    FR_ALIAS_IDX = new Map()
+    for (const k in ALIAS_FR) FR_ALIAS_IDX.set(frWordsOf(k).sort().join(' '), ALIAS_FR[k])
+  }
+  return FR_ALIAS_IDX
+}
+
+// Every catalogue entry holding all the words of a name, with how many words it has beyond
+// them — in either language.
+function near(enWords, frWords) {
+  const out = new Map()
+  const scan = (all, words) => {
+    if (!words.length) return
+    const q = new Set(words)
+    for (const c of all) {
+      let ok = true
+      for (const word of q) if (!c.set.has(word)) { ok = false; break }
+      if (!ok) continue
+      const extra = c.n - q.size
+      if (!out.has(c.id) || extra < out.get(c.id)) out.set(c.id, extra)
+    }
+  }
+  scan(buildIndex().all, enWords)
+  scan(frIndex().all, frWords)
+  return out
+}
+
+/**
+ * Which catalogue exercise a name in a programme means — or, when that is not clear, which few
+ * it could mean, for a person to choose from.
+ *
+ * `used` (id -> how often) is what this profile already trains, and it settles the ambiguous
+ * case the way the person would: "Tirage vertical" is the pulldown you have been logging for
+ * months, not one of the fourteen others that share those two words. That matters more than
+ * anything else here — the same lift under a second id starts its history from zero.
+ *
+ * After that, the same order as matchExercise: the gym's own word for a lift, then a name the
+ * catalogue spells exactly, then the single closest entry.
+ *
+ * Returns { id, how } — how: 'used' | 'alias' | 'exact' | 'near' — or { id: null, candidates }.
+ */
+export function resolveExercise(name, used = null) {
+  const en = wordsOf(name), fr = frWordsOf(name)
+  if (!en.length && !fr.length) return { id: null, candidates: [] }
+  const enKey = en.slice().sort().join(' '), frKey = fr.slice().sort().join(' ')
+  const close = near(en, fr)
+  if (used && close.size) {
+    // Three words of qualifier at most: "squat" is your barbell squat, but not your
+    // "lever lying leg curl" because both happen to say "curl".
+    const mine = [...close.keys()].filter(id => used.get(id) > 0 && close.get(id) <= 3)
+    if (mine.length) {
+      mine.sort((a, b) => used.get(b) - used.get(a) || close.get(a) - close.get(b))
+      return { id: mine[0], how: 'used' }
+    }
+  }
+  const alias = (en.length && aliasIndex().get(enKey)) || (fr.length && frAliasIndex().get(frKey))
+  if (alias && EXIDX[alias]) return { id: alias, how: 'alias' }
+  const exact = (en.length && buildIndex().exact.get(enKey)) || (fr.length && frIndex().exact.get(frKey))
+  if (exact) return { id: exact, how: 'exact' }
+  let best = Infinity
+  for (const x of close.values()) best = Math.min(best, x)
+  const closest = [...close].filter(([, x]) => x === best && x <= 2).map(([id]) => id)
+  if (closest.length === 1) return { id: closest[0], how: 'near' }
+  const candidates = [...close].sort((a, b) => a[1] - b[1]).slice(0, 6).map(([id]) => id)
+  return { id: null, candidates }
 }
 
 /**
@@ -240,7 +369,19 @@ export function matchExercise(name) {
     if (extra < bestExtra) { best = c.id; bestExtra = extra; ties = 1 }
     else if (extra === bestExtra) ties++
   }
-  return ties === 1 ? best : null
+  if (ties === 1) return best
+  // Nothing in English: the French names, by the same rules — exact, then the gym's own
+  // words, then a single closest entry.
+  const fr = frWordsOf(name)
+  if (!fr.length) return null
+  const frKey = fr.slice().sort().join(' ')
+  const hit = frIndex().exact.get(frKey) || frAliasIndex().get(frKey)
+  if (hit && EXIDX[hit]) return hit
+  const close = near([], fr)
+  let min = Infinity
+  for (const x of close.values()) min = Math.min(min, x)
+  const one = [...close].filter(([, x]) => x === min && x <= 2)
+  return one.length === 1 ? one[0][0] : null
 }
 
 // Categories the exporters use -> the dataset's body parts, for exercises we invent.
