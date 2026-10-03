@@ -116,10 +116,21 @@ export function mergePlan(s, bundle, { schedule, block } = {}) {
   const exIdMap = {}
   bundle.customEx.forEach(c => {
     const same = s.customEx.find(x => (x.n || '').toLowerCase() === (c.n || '').toLowerCase() && x.bp === c.bp)
-    if (same) { exIdMap[c.id] = same.id; return }
+    if (same) {
+      exIdMap[c.id] = same.id
+      // A newer programme's instructions for an exercise you already have replace the old
+      // ones — the programme is where they come from — and fill a muscle it never had.
+      if (c.desc && c.desc !== same.desc) same.desc = c.desc
+      if (c.tg && !same.tg) same.tg = c.tg
+      if (c.sm && c.sm.length && !(same.sm && same.sm.length)) same.sm = c.sm
+      return
+    }
     const nid = uid()
     exIdMap[c.id] = nid
-    s.customEx.push(fillEx({ id: nid, n: c.n, bp: c.bp, ...(c.desc ? { desc: c.desc } : {}) }))
+    // Everything the import worked out about it, muscles included. Only the name, body part and
+    // description used to be kept, so an imported exercise named with its muscles arrived with
+    // none, and the recovery map never showed it.
+    s.customEx.push(fillEx({ ...c, id: nid }))
   })
   const ridMap = {}
   const added = []

@@ -119,7 +119,7 @@ export default function Plan() {
           const r = S.routines.find(x => x.id === week[d])
           return <div key={d} className="item" onClick={() => dayAssignSheet(d, nWeeks > 1 ? (shown == null ? idx : shown) : null, at ? at.block.id : null)}>
             <div className="grow"><div className="tt">{t(DAYN[d])}</div></div>
-            {r ? <span className="tag acc"><Icon name={glyphOf(r.emoji)} />{r.name}</span> : <span className="tag">{t('Rest')}</span>}
+            {r ? <span className="tag acc nocap"><Icon name={glyphOf(r.emoji)} />{r.name}</span> : <span className="tag">{t('Rest')}</span>}
             <Icon name="chevronRight" className="chev" /></div>
         })}
       </div>

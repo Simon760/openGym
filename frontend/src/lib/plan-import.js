@@ -116,14 +116,53 @@ function bodyPartOf(raw, name) {
   return g ? g.bp : 'upper legs'
 }
 
+// A row's kind, when the programme says it is joint or mobility work rather than lifting.
+const MOBILITY_KIND = /^(mobilit|mobility|etirement|stretch|souplesse|echauffement|warm ?up|prehab|prevention|articulaire|joint)/
+export const isMobilityKind = v => !!v && MOBILITY_KIND.test(fold(String(v)).trim())
+
+// The progression rules in the words a French programme uses for them.
+const PROG_WORDS = {
+  aucune: 'off', aucun: 'off', non: 'off', none: 'off', fixe: 'off', manuelle: 'off', manuel: 'off',
+  lineaire: 'linear', 'double progression': 'double', temps: 'time', duree: 'time',
+}
+
+// "Ischios, fessiers" — a target cell naming more than one muscle: the first is the target,
+// the rest support it, as in the catalogue.
+const splitMuscles = v => (Array.isArray(v) ? v : String(v || '').split(/[,;/+·&]|\s+et\s+/))
+  .map(x => String(x).trim()).filter(Boolean)
+
+/**
+ * A rest as a coach writes it — "2–3 min", "1,5 min", "90 s", "0 s", "1:30" — in seconds. A
+ * range starts at its low end: the timer can always be given fifteen seconds more, and a rest
+ * that runs long by default is a session that does. A bare number is minutes up to ten
+ * ("2") and seconds above ("90").
+ */
+export function readRest(v) {
+  if (typeof v === 'number') return isFinite(v) && v >= 0 ? Math.min(600, Math.round(v)) : null
+  const s = String(v || '').toLowerCase().replace(/,/g, '.').trim()
+  if (!s) return null
+  const mmss = s.match(/(\d+):(\d{2})/)
+  if (mmss) return Math.min(600, +mmss[1] * 60 + +mmss[2])
+  const m = s.match(/\d+(?:\.\d+)?/)
+  if (!m) return null
+  const n = +m[0]
+  const sec = /min|mn|'/.test(s) ? n * 60 : /\d\s*(s|sec|secondes?|seconds?)\b|"/.test(s) ? n : n <= 10 ? n * 60 : n
+  return Math.min(600, Math.round(sec))
+}
+
 /**
  * One planned exercise. The mode is read from which fields are present rather than declared:
  * a program that says "45 seconds" means a hold whether or not it also says "time", and
  * demanding the word would turn a correct program into a rejected one.
  */
-function readExercise(raw, report, used) {
+function readExercise(raw, report, used, made = new Map()) {
   const name = String(pick(raw, 'name', 'n', 'nom', 'exercise', 'exercice') || '').trim()
   if (!name) return null
+  // Joint and mobility work, by the programme's own say-so: it becomes an exercise of yours in
+  // the Mobilité category carrying the programme's instructions, instead of being matched to a
+  // catalogue movement that would file it under abs and leave the instructions behind.
+  const mobility = isMobilityKind(pick(raw, 'kind', 'category', 'categorie', 'type'))
+  const notes = String(pick(raw, 'notes', 'note', 'instructions', 'consignes', 'description', 'desc') || '').trim()
 
   const sec = num(pick(raw, 'seconds', 'sec', 'secondes', 'hold', 'duration'))
   const min = num(pick(raw, 'minutes', 'min'))
@@ -135,38 +174,58 @@ function readExercise(raw, report, used) {
   // Resolve the name. A hit keeps the catalogue's animation, muscles and equipment; a miss
   // becomes a custom exercise carried in the same bundle — with the few catalogue entries it
   // could have meant, so the review can offer them instead of guessing between them.
-  const res = resolveExercise(name, used)
+  const res = mobility ? {} : resolveExercise(name, used)
   let id = res.id && EXIDX[res.id] ? res.id : null
+  // A programme that says which muscle a row works can veto a match that works another. Its
+  // "Kickback poulie" with a strap on the ankle is a glute kickback; the catalogue's is for the
+  // triceps, and filing one under the other puts the fatigue and the whole history on the wrong
+  // muscle. The vetoed entry stays first among the candidates, in case it was right after all.
+  let vetoed = null
+  const said = splitMuscles(pick(raw, 'target', 'primary', 'primaryMuscle', 'cible')).map(muscleSlug).filter(Boolean)
+  const worksSaid = c => { const works = musclesOf(EXIDX[c]); return !said.length || !Object.keys(works).length || said.some(m => works[m] > 0) }
+  if (id && !worksSaid(id)) { vetoed = id; id = null }
   let created = null
+  // The same invented exercise on several rows — a joint routine closing every session — is
+  // one exercise, created once.
+  const madeKey = fold(name) + '|' + (mobility ? 'mobility' : '')
   if (id) {
     report.matched.push({ from: name, to: EXIDX[id].n, id, how: res.how, known: !!(used && used.get(id) > 0) })
+  } else if (made.has(madeKey)) {
+    const prev = made.get(madeKey)
+    if (notes && !prev.desc) prev.desc = notes
+    id = prev.id
   } else {
     // Complete, not just named: a record missing tg or eq used to blow up every search
     // that touched it, from the first letter typed.
     const said = pick(raw, 'bodyPart', 'bp', 'muscle', 'group', 'groupe')
-    created = fillEx({ id: uid(), n: name, bp: bodyPartOf(said, name) })
-    if (!said) { const g = guessBodyPart(name); if (g && g.tg) created.tg = g.tg }
+    created = fillEx({ id: uid(), n: name, bp: mobility ? 'mobility' : bodyPartOf(said, name) })
+    if (!said && !mobility) { const g = guessBodyPart(name); if (g && g.tg) created.tg = g.tg }
     // A body part alone spreads a flat, invented share over the muscles in it, which for a
     // compound is wrong in the direction that matters: "chest" fatigues the chest and
     // nothing else, so an imported bench press leaves the triceps and shoulders reading as
     // fresh. A program that names the muscles gets them stored the way the catalogue stores
     // its own — target plus supporting — and from there every map and the recovery estimate
-    // treat the exercise exactly like a catalogue one.
-    const tg = pick(raw, 'target', 'primary', 'primaryMuscle', 'cible')
-    const sm = pick(raw, 'secondary', 'secondaryMuscles', 'support', 'secondaires')
+    // treat the exercise exactly like a catalogue one. A target cell naming several muscles
+    // ("Ischios, fessiers") gives the first as the target and the rest as support.
+    const named = splitMuscles(pick(raw, 'target', 'primary', 'primaryMuscle', 'cible'))
+    const tg = named[0] || null
+    const list = [...named.slice(1), ...splitMuscles(pick(raw, 'secondary', 'secondaryMuscles', 'support', 'secondaires'))]
     if (tg && muscleSlug(tg)) created.tg = String(tg).toLowerCase().trim()
-    const list = (Array.isArray(sm) ? sm : String(sm || '').split(',')).map(x => String(x).trim()).filter(Boolean)
     const keep = list.filter(m => muscleSlug(m))
-    if (keep.length) created.sm = keep.map(m => m.toLowerCase())
-    // Named but undrawable is worth saying: it looks like it was taken and it was not.
+    if (keep.length && !mobility) created.sm = keep.map(m => m.toLowerCase())
+    // Named but undrawable is worth saying: it looks like it was taken and it was not. Not for
+    // mobility, whose "target" is as often a joint or a quality (ankle, balance) as a muscle.
     const dropped = [tg && !muscleSlug(tg) ? tg : null, ...list.filter(m => !muscleSlug(m))].filter(Boolean)
-    if (dropped.length) {
+    if (dropped.length && !mobility) {
       report.warnings.push(t('“{0}”: {1} is not a muscle the body map draws, so it was left out.', name, dropped.join(', ')))
     }
-    if (raw.description || raw.desc) created.desc = String(raw.description || raw.desc)
+    if (notes) created.desc = notes
     id = created.id
+    made.set(madeKey, created)
     report.created.push({ name, id: created.id, bp: created.bp, muscles: musclesOf(created),
-      candidates: (res.candidates || []).filter(c => EXIDX[c]) })
+      // Candidates that work another muscle than the programme says are no help in choosing.
+      candidates: [...(vetoed ? [vetoed] : []), ...(res.candidates || []).filter(c => c !== vetoed && EXIDX[c] && worksSaid(c))].filter(c => EXIDX[c]),
+      ...(mobility ? { mobility: true } : {}) })
   }
 
   const cfg = { id, sets: Math.max(1, Math.round(sets)) }
@@ -206,7 +265,15 @@ function readExercise(raw, report, used) {
     else { cfg.reps = Math.round(hi); cfg.repsMin = Math.round(lo); cfg.rangeFrom = true }
   } else if (range) { cfg.repsMin = Math.round(lo); cfg.repsMax = Math.round(hi) }
 
-  const prog = String(pick(raw, 'progression', 'prog') || '').trim().toLowerCase()
+  // "8–10 par jambe", "10/jbe": the number is each side's. The app counts a unilateral set by
+  // its total — you log 16, it shows "8 per side" — so it is doubled here. Taken as written,
+  // "10 par jambe" arrived as 10 in all and the session asked for five a side.
+  if (raw.repsPerSide && cfg.mode === 'reps') {
+    for (const k of ['reps', 'repsMin', 'repsMax']) if (cfg[k] > 0) cfg[k] *= 2
+  }
+
+  const progRaw = fold(String(pick(raw, 'progression', 'prog') || '')).trim()
+  const prog = PROG_WORDS[progRaw] || progRaw
   if (prog) {
     if (POLICIES.includes(prog)) cfg.prog = prog
     else report.warnings.push(t('“{0}” is not a progression rule BodyEvolve knows — left on the routine’s default.', prog))
@@ -227,6 +294,17 @@ function readExercise(raw, report, used) {
   // Supersets travel as a shared group label; the ids only have to agree within a routine.
   const sg = pick(raw, 'superset', 'sg', 'group')
   if (sg != null && sg !== '') cfg.sg = String(sg)
+
+  // The rest after this exercise's sets, when the programme gives one — the rest timer starts
+  // on it instead of the app-wide default. Zero is a value: "enchaîne", the first half of a
+  // superset or a routine done without pauses.
+  const rest = readRest(pick(raw, 'rest', 'repos', 'restSec'))
+  if (rest != null) cfg.rest = rest
+  // The coach's words for this exercise in this programme — setup, effort target, cues — shown
+  // during the session. A mobility exercise carries its instructions itself (its desc above).
+  if (notes && !mobility) cfg.note = notes
+  // Mobility work progresses by phase, on criteria the programme sets, not by the engine.
+  if (mobility && !cfg.prog) cfg.prog = 'off'
 
   return { cfg, created }
 }
@@ -266,10 +344,17 @@ const PROG_COLS = [
   ['minutes', ['minutes', 'min', 'duree', 'duration', 'temps']],
   ['superset', ['superset', 'super set', 'bi set', 'biset', 'groupe', 'circuit']],
   ['order', ['ordre', 'order', 'numero', 'no', 'n', 'index', 'position']],
-  ['bodyPart', ['groupe musculaire', 'muscle', 'muscles', 'body part', 'partie du corps', 'zone', 'cible', 'target']],
+  // What kind of work a row is: "Mobilité" files it with the joint and mobility work.
+  ['kind', ['categorie', 'category', 'type', 'famille']],
+  // The muscle a row works, in its own column — ahead of the body part, which also answers to
+  // "muscle".
+  ['target', ['muscle cible', 'muscles cibles', 'muscle principal', 'cible', 'target', 'primary muscle']],
+  ['bodyPart', ['groupe musculaire', 'muscle', 'muscles', 'body part', 'partie du corps', 'zone']],
   ['perSide', ['par cote', 'unilateral', 'unilaterale', 'per side', 'cote']],
   ['progression', ['progression']],
   ['rest', ['repos', 'rest', 'recup', 'recuperation']],
+  // The coach's words for the row: setup, cues, the phases of a mobility drill.
+  ['notes', ['consignes', 'instructions', 'indications', 'notes', 'note', 'description', 'details', 'conseils', 'commentaires', 'commentaire', 'remarques']],
 ]
 const headKey = h => fold(h).replace(/[^a-z0-9]+/g, ' ').trim()
 function mapProgHeader(row) {
@@ -289,7 +374,7 @@ function mapProgHeader(row) {
 // "4x8-10", "3 × 12", "4 séries de 8", "3x30s" — the sets and what each set is, in one cell.
 const SETS_X = /^(\d+)\s*(?:x|×|\*|séries? de|series? de|sets? of)\s*(.+)$/i
 const RANGE = /^(\d+)\s*(?:-|–|—|à|a|to)\s*(\d+)$/i
-const SIDE = /(par|chaque|each|per|\/)\s*(jambe|bras|cote|côté|side|leg|arm)/i
+const SIDE = /(par|chaque|each|per|\/)\s*(jambe|jbe|jb|bras|cote|côté|side|leg|arm)/i
 // What one set is: reps, a range, a hold, minutes — and whether it is per side.
 function readSet(cell) {
   let s = String(cell || '').trim().toLowerCase().replace(',', '.')
@@ -297,6 +382,12 @@ function readSet(cell) {
   const out = {}
   if (SIDE.test(s)) { out.perSide = true; s = s.replace(SIDE, '').trim() }
   if (/^(amrap|max|echec|échec|failure)\b/.test(s)) { out.amrap = true; return out }
+  // A hold given as a range — "20–30 s" — starts at its low end and is worked up from there.
+  const span = s.match(/^(\d+(?:\.\d+)?)\s*(?:-|–|—|à|a|to)\s*\d+(?:\.\d+)?\s*(s|sec|secs|secondes?|seconds?|"|min|mins|minutes?|')$/)
+  if (span) {
+    if (/^(min|mins|minutes?|')$/.test(span[2])) out.minutes = +span[1]; else out.seconds = +span[1]
+    return out
+  }
   const time = s.match(/^(\d+(?:\.\d+)?)\s*(s|sec|secs|secondes?|seconds?|"|'|min|mins|minutes?)$/)
   if (time) {
     const v = +time[1]
@@ -409,6 +500,12 @@ export function programFromCSV(text) {
     if (ex.repsMin != null) { ex.repsMin = Math.min(ex.repsMin, ex.repsMax); ex.repsMax = Math.max(ex.repsMin, ex.repsMax) }
     if (cell(r, 'perSide') && !/^(non|no|0|false)$/i.test(cell(r, 'perSide'))) ex.perSide = true
     if (cell(r, 'bodyPart')) ex.bodyPart = cell(r, 'bodyPart')
+    if (cell(r, 'target')) ex.target = cell(r, 'target')
+    if (cell(r, 'kind')) ex.kind = cell(r, 'kind')
+    if (cell(r, 'rest')) ex.rest = cell(r, 'rest')
+    if (cell(r, 'notes')) ex.notes = cell(r, 'notes')
+    // A side named in the reps cell or in its own column means the number is each side's.
+    if (ex.perSide) ex.repsPerSide = true
     if (cell(r, 'progression')) ex.progression = cell(r, 'progression')
     if (cell(r, 'superset')) ex.superset = cell(r, 'superset')
     if (ex.amrap) delete ex.amrap
@@ -456,6 +553,7 @@ export function parseProgram(raw, { used = null, name = '' } = {}) {
 
   const report = { matched: [], created: [], warnings: [] }
   const customEx = []
+  const made = new Map()            // invented exercises by name, so one is created once
   const byName = new Map()          // routine name (lowercased) -> generated id, for the week
 
   const routines = rawRoutines.map((r, i) => {
@@ -463,7 +561,7 @@ export function parseProgram(raw, { used = null, name = '' } = {}) {
     const list = (r && (r.exercises || r.ex || r.exercices)) || []
     const ex = []
     ;(Array.isArray(list) ? list : []).forEach(item => {
-      const read = readExercise(typeof item === 'string' ? { name: item } : (item || {}), report, used)
+      const read = readExercise(typeof item === 'string' ? { name: item } : (item || {}), report, used, made)
       if (!read) return
       if (read.created) customEx.push(read.created)
       ex.push(read.cfg)

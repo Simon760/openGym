@@ -426,6 +426,11 @@ h4.sec{
   background:var(--surface);border-radius:var(--r);padding:13px 15px;
   line-height:1.45;white-space:pre-wrap;font-size:15px;margin-bottom:10px;color:var(--label-2);
 }
+/* The programme's note on an exercise, in the session: two lines, the rest on a tap. */
+.coachnote{display:flex;gap:7px;align-items:flex-start;font-size:13px;line-height:1.4;color:var(--label-2);margin:2px 0 8px;cursor:pointer}
+.coachnote svg{flex:none;margin-top:2px;font-size:13px;color:var(--acc)}
+.coachnote span{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-line}
+.coachnote.open span{display:block;-webkit-line-clamp:unset}
 
 /* --- search field --- */
 .searchf{position:relative;display:flex;align-items:center}

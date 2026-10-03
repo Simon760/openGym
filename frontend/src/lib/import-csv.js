@@ -224,9 +224,15 @@ const aliasIndex = () => {
 const FR_FILLER = new Set(['de', 'du', 'des', 'd', 'la', 'le', 'les', 'l', 'a', 'au', 'aux', 'avec',
   'en', 'sur', 'et', 'un', 'une', 'pour', 'par'])
 export const fold = s => String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+// French words, folded and stemmed just enough to compare names. Plurals go (haltères →
+// haltère), and so does the feminine (allongée → allongé): a programme writing "extension
+// triceps allongé" meant the catalogue's "extension triceps haltères allongée". One arm, one
+// leg and "unilatéral" are one idea said three ways, so all three become the token "uni".
 function frWordsOf(name) {
-  return fold(name).replace(/[’'()[\]]/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim()
-    .split(' ').filter(w => w && !FR_FILLER.has(w)).map(w => (w.length > 3 ? w.replace(/[sx]$/, '') : w))
+  return fold(name).replace(/[’'()[\]]/g, ' ').replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\b(?:a )?(?:un|une) (?:bras|jambe)\b/g, ' uni ').replace(/\bunilateral(?:e|es|s)?\b/g, ' uni ')
+    .trim().split(/\s+/).filter(w => w && !FR_FILLER.has(w))
+    .map(w => (w.length > 3 ? w.replace(/[sx]$/, '').replace(/ee$/, 'e') : w))
 }
 
 let FR_INDEX = null
@@ -237,7 +243,7 @@ function frIndex() {
   for (const id in names) {
     if (!EXIDX[id]) continue
     const w = frWordsOf(names[id])
-    const k = w.slice().sort().join(' ')
+    const k = [...new Set(w)].sort().join(' ')
     if (!FR_INDEX.exact.has(k)) FR_INDEX.exact.set(k, id)
     FR_INDEX.all.push({ id, set: new Set(w), n: w.length })
   }
@@ -268,6 +274,12 @@ const ALIAS_FR = {
   'pec deck': '0596', butterfly: '0596', 'haussement epaule': '0095', shrug: '0095',
   pullover: '0073', 'pull over': '0073', 'good morning': '0044', 'releve jambe': '0472',
   'releve jambe suspendu': '0472',
+  // Cable work the catalogue only names in English, under the name a French gym gives it.
+  'pull through': '0196', 'pull through poulie': '0196',
+  'pull over poulie': '0238', 'pullover poulie': '0238', 'pull over poulie haute': '0238', 'pullover poulie haute': '0238',
+  'oiseau poulie': '0225', 'oiseau poulie croisee': '0225',
+  'face pull': '0203', 'face pull poulie': '0203', 'face pull poulie haute': '0203', 'face pull corde': '0203',
+  'mollet debout smith': '0773', 'mollet smith': '0773',
 }
 let FR_ALIAS_IDX = null
 const frAliasIndex = () => {
@@ -276,6 +288,38 @@ const frAliasIndex = () => {
     for (const k in ALIAS_FR) FR_ALIAS_IDX.set(frWordsOf(k).sort().join(' '), ALIAS_FR[k])
   }
   return FR_ALIAS_IDX
+}
+
+// A catalogue entry's own words, French where it has a French name and English otherwise; or,
+// for an exercise of your own, the words of the name you gave it.
+let WORDS_BY_ID = null
+function wordsById(id) {
+  if (!WORDS_BY_ID) {
+    WORDS_BY_ID = new Map()
+    for (const c of buildIndex().all) WORDS_BY_ID.set(c.id, { en: c.set })
+    for (const c of frIndex().all) WORDS_BY_ID.set(c.id, { ...(WORDS_BY_ID.get(c.id) || {}), fr: c.set })
+  }
+  const hit = WORDS_BY_ID.get(id)
+  if (hit) return hit
+  const ex = EXIDX[id]
+  return ex && ex.custom ? { fr: new Set(frWordsOf(ex.n)), en: new Set(wordsOf(ex.n)) } : {}
+}
+
+// What makes an entry a different movement from the one asked for, rather than a more precise
+// name for it: a reverse grip, alternating arms, one arm, a numbered variant. "Spider curl" is
+// not the reverse spider curl, which is the only spider curl the catalogue has.
+const VARIANT = new Set(['inverse', 'reverse', 'alterne', 'alternate', 'alternating', 'variante', 'prise', 'grip', 'uni', 'one', 'arm'])
+// Equipment, in both languages. An entry naming equipment the name asked for something else
+// with — "développé incliné machine" against the Smith-machine version — is not that lift.
+const EQUIP = new Set(['smith', 'barre', 'haltere', 'poulie', 'elastique', 'kettlebell', 'machine', 'traineau',
+  'barbell', 'dumbbell', 'cable', 'band', 'lever', 'sled'])
+// The words an entry has beyond a name it contains, in whichever language it contains it.
+function extrasOf(id, en, fr) {
+  const w = wordsById(id)
+  const within = (set, q) => set && q.length && q.every(x => set.has(x))
+  if (within(w.fr, fr)) return [...w.fr].filter(x => !fr.includes(x))
+  if (within(w.en, en)) return [...w.en].filter(x => !en.includes(x))
+  return null
 }
 
 // Every catalogue entry holding all the words of a name, with how many words it has beyond
@@ -289,13 +333,31 @@ function near(enWords, frWords) {
       let ok = true
       for (const word of q) if (!c.set.has(word)) { ok = false; break }
       if (!ok) continue
-      const extra = c.n - q.size
+      // Distinct words: a generated name that says "triceps" twice is not one word longer.
+      const extra = c.set.size - q.size
       if (!out.has(c.id) || extra < out.get(c.id)) out.set(c.id, extra)
     }
   }
   scan(buildIndex().all, enWords)
   scan(frIndex().all, frWords)
   return out
+}
+
+// The curated names of two words or more found whole inside a longer name, the longest first.
+// One word alone ("curl", "presse") says too little to offer anything for a "Nordic curl".
+function aliasInside(en, fr) {
+  const found = []
+  const scan = (idx, words) => {
+    if (!words.length) return
+    const q = new Set(words)
+    for (const [key, id] of idx) {
+      const w = [...new Set(key.split(' '))]
+      if (w.length >= 2 && w.length < q.size && w.every(x => q.has(x)) && EXIDX[id]) found.push([id, w.length])
+    }
+  }
+  scan(aliasIndex(), en)
+  scan(frAliasIndex(), fr)
+  return [...new Set(found.sort((a, b) => b[1] - a[1]).map(([id]) => id))]
 }
 
 /**
@@ -315,12 +377,26 @@ function near(enWords, frWords) {
 export function resolveExercise(name, used = null) {
   const en = wordsOf(name), fr = frWordsOf(name)
   if (!en.length && !fr.length) return { id: null, candidates: [] }
-  const enKey = en.slice().sort().join(' '), frKey = fr.slice().sort().join(' ')
+  const enKey = en.slice().sort().join(' '), frKey = [...new Set(fr)].sort().join(' ')
   const close = near(en, fr)
-  if (used && close.size) {
+  if (used && used.size) {
     // Three words of qualifier at most: "squat" is your barbell squat, but not your
     // "lever lying leg curl" because both happen to say "curl".
     const mine = [...close.keys()].filter(id => used.get(id) > 0 && close.get(id) <= 3)
+    // And the other way round: a programme naming one of your exercises with a qualifier yours
+    // does not carry — "Écarté bas poulie vers le haut" is the "écarté bas poulie" you log,
+    // "Presse à cuisses, pieds bas" the "Presse à cuisses" you made. Every word of yours in it,
+    // two at least, three of qualifier at most, none of them a different variant. Your own
+    // exercises count here too, not only the catalogue's: a programme after a programme names
+    // the same lifts.
+    const q = new Set(fr)
+    for (const [id, n] of used) {
+      if (!(n > 0) || mine.includes(id) || !EXIDX[id]) continue
+      const w = wordsById(id).fr
+      if (!w || w.size < 2 || ![...w].every(x => q.has(x))) continue
+      const extra = [...q].filter(x => !w.has(x))
+      if (extra.length <= 3 && !extra.some(x => VARIANT.has(x))) { mine.push(id); close.set(id, close.has(id) ? close.get(id) : extra.length) }
+    }
     if (mine.length) {
       mine.sort((a, b) => used.get(b) - used.get(a) || close.get(a) - close.get(b))
       return { id: mine[0], how: 'used' }
@@ -330,11 +406,36 @@ export function resolveExercise(name, used = null) {
   if (alias && EXIDX[alias]) return { id: alias, how: 'alias' }
   const exact = (en.length && buildIndex().exact.get(enKey)) || (fr.length && frIndex().exact.get(frKey))
   if (exact) return { id: exact, how: 'exact' }
+  // The single closest entry — among those whose extra words only make the name more precise.
+  // An extra that makes it another movement (a reverse grip, one arm) or names other equipment
+  // than the name did leaves the entry a candidate to choose, never an answer.
+  const saysEquip = [...en, ...fr].some(x => EQUIP.has(x))
+  const sound = id => {
+    const extra = extrasOf(id, en, fr)
+    return !extra || !extra.some(x => VARIANT.has(x) || (saysEquip && EQUIP.has(x)))
+  }
   let best = Infinity
-  for (const x of close.values()) best = Math.min(best, x)
-  const closest = [...close].filter(([, x]) => x === best && x <= 2).map(([id]) => id)
+  for (const [id, x] of close) if (sound(id)) best = Math.min(best, x)
+  const closest = [...close].filter(([id, x]) => x === best && x <= 2 && sound(id)).map(([id]) => id)
   if (closest.length === 1) return { id: closest[0], how: 'near' }
-  const candidates = [...close].sort((a, b) => a[1] - b[1]).slice(0, 6).map(([id]) => id)
+  // Two kinds of candidate, interleaved so the review's first chips show both: the entries
+  // that say everything the name says and more, and the gym's own words for a lift found
+  // inside a longer name — "Tirage horizontal unilatéral à la poulie" says "tirage
+  // horizontal", the seated cable row. Offered, never taken: the rest of the name may make it
+  // another lift (one arm, here).
+  const wider = [...close].sort((a, b) => a[1] - b[1]).map(([id]) => id)
+  const inside = aliasInside(en, fr)
+  const candidates = [...new Set([...wider.slice(0, 2), ...inside.slice(0, 2), ...wider.slice(2), ...inside.slice(2)])].slice(0, 6)
+  if (!candidates.length) {
+    // "Presse à cuisses, pieds bas": what a coach adds after a comma, a dash or a bracket is
+    // usually how the lift is done. What the name before it means is worth offering — never
+    // taking: "Squat, barre devant" is a front squat.
+    const head = String(name).split(/\s*[,(:–—]\s*|\s+-\s+/)[0].trim()
+    if (head && head !== String(name).trim()) {
+      const r = resolveExercise(head, used)
+      return { id: null, candidates: r.id ? [r.id] : r.candidates }
+    }
+  }
   return { id: null, candidates }
 }
 

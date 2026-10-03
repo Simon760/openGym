@@ -42,8 +42,8 @@
 // eighteen invented numbers. The model is the same for every muscle, which is both simpler
 // and more honest than pretending otherwise.
 
-import { EXIDX } from './exercises.js'
-import { musclesOf } from './muscles.js'
+import { EXIDX, isMobility } from './exercises.js'
+import { musclesOf, muscleSlug } from './muscles.js'
 import { sportOf, sportLoad } from './sports.js'
 import { rirOf } from './effort.js'
 import { entryFor } from './nutrition.js'
@@ -91,7 +91,9 @@ export function sessionLoad(w) {
   let sum = 0, n = 0
   ;(w.entries || []).forEach(e => {
     // A sport is not sets: it is counted by its session load, on its own decay (sportParts).
-    if (sportOf(e.id)) return
+    // Mobility is not lifting either, and its easy sets must not dilute how hard the lifting
+    // was (mobilityPart).
+    if (sportOf(e.id) || isMobility(e.id)) return
     const done = (e.sets || []).filter(s => s.done)
     if (!done.length) return
     const m = musclesOf(EXIDX[e.id])
@@ -111,6 +113,31 @@ export function sessionLoad(w) {
  */
 export function sportParts(w) {
   return (w.entries || []).map(e => sportLoad(e.id, e.sets)).filter(Boolean)
+}
+
+/**
+ * The mobility and joint work in a session — the Mobilité category.
+ *
+ * Drills that move a joint through its range, or train balance, target no muscle and leave
+ * nothing here. The strengthening moves a joint routine also carries are not nothing: the
+ * Copenhagen plank is a real eccentric load on the adductors — eight weeks of it raise their
+ * eccentric strength markedly (Ishøi 2016, randomised trial) — and a loaded heel drop is the
+ * classic Achilles-loading exercise. But they are prescribed far from hard ("it should pull,
+ * never hurt", "about 50 % of your strength"), so each set counts at the lowest weight this
+ * model has, that of a set four or more reps from failure, on its target muscle only, on the
+ * decay of comfortable work.
+ */
+export const MOBILITY_SET_WEIGHT = RIR_WEIGHT[RIR_WEIGHT.length - 1]
+export function mobilityPart(w) {
+  const load = {}
+  ;(w.entries || []).forEach(e => {
+    const ex = EXIDX[e.id]
+    if (!isMobility(ex)) return
+    const slug = muscleSlug(ex.tg)
+    const n = (e.sets || []).filter(s => s.done).length
+    if (slug && n) load[slug] = (load[slug] || 0) + n * MOBILITY_SET_WEIGHT
+  })
+  return Object.keys(load).length ? { load, tau: TAU_EASY } : null
 }
 
 /** Fatigue one session left on a muscle, 0…1. Saturating: the tenth set adds less than the first. */
@@ -195,13 +222,16 @@ export function recoveryNow(S, now = Date.now()) {
   recent.forEach(w => {
     const { load, intensity, sets } = sessionLoad(w)
     const sports = sportParts(w)
-    if (!sets && !sports.length) return
+    const mobility = mobilityPart(w)
+    if (!sets && !sports.length && !mobility) return
     const cond = conditionsSince(S, startOf(w), now)
     // The most recent session's conditions are the ones reported, since it dominates what is
     // still decaying.
     sleepFactor = cond.sleepFactor; energyFactor = cond.energyFactor; known = known || cond.known
     const hours = (now - startOf(w)) / 3600000
-    ;(w.entries || []).forEach(e => (e.sets || []).forEach(s => {
+    // Mobility sets are never rated and never meant to be: counting them here would report a
+    // routine's worth of "unrated" sets as an assumption about lifting.
+    ;(w.entries || []).forEach(e => !isMobility(e.id) && (e.sets || []).forEach(s => {
       if (s.done) { total++; if (rirOf(s) != null || s.srpe > 0) rated++ }
     }))
 
@@ -210,6 +240,7 @@ export function recoveryNow(S, now = Date.now()) {
     const parts = sets ? [{ load, tau: tauFor(intensity, cond) }] : []
     const slow = Math.min(MAX_MULTIPLIER, cond.sleepFactor * cond.energyFactor)
     sports.forEach(p => parts.push({ load: p.load, tau: p.tau * slow }))
+    if (mobility) parts.push({ load: mobility.load, tau: mobility.tau * slow })
 
     parts.forEach(({ load, tau }) => {
       for (const slug in load) {

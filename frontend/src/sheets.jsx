@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
-import { EXIDX, CATEGORIES, inCategory, categoryOf, isCardio, isBodyweightEq, allExercises, equipmentOf, exName, exNameEn, exMatches, termLabel } from './lib/exercises.js'
+import { EXIDX, CATEGORIES, inCategory, categoryOf, isCardio, isMobility, isBodyweightEq, allExercises, equipmentOf, exName, exNameEn, exMatches, exCloseMatches, termLabel } from './lib/exercises.js'
 import { CategoryChips, EquipmentChips } from './components/ExerciseFilters.jsx'
 import { fmtDate, fmtNum, fmtNum2, fmtKg, fmtVol, fmtDur, durPart, todayISO, isoOf, uid, exCount, DAYN, MONTHS_LONG, ACCENTS } from './lib/format.js'
 import { lastEntryFor, bestWeightFor, buildSets, effectiveRoutineId, effectiveRoutine, weekDays, swapDays, workoutVolume, durMs, setFigures, asksDuration, setsDone, setsDoneActive, lastBW, usageOf, setLabel, defaultConfig, warmEntry, cleanupSg, modeOf, effortOf, isBw, isOnce, readoutOf, isPerSide, sideReps, isWorking, setTop, hasDist, activityWorkout } from './lib/history.js'
@@ -863,8 +863,8 @@ function ExerciseDetail({ ex, close }) {
           tags here too, which said "chest, chest, triceps, shoulders" — the body part and
           the target are usually the same word — and said nothing about proportion. The
           share bars below say all of it, with numbers. */}
-      <span className="tag acc">{t(ex.bp)}</span>
-      <span className="tag"><Icon name="dumbbell" />{t(ex.eq)}</span>
+      <span className="tag acc nocap">{termLabel(ex.bp)}</span>
+      <span className="tag nocap"><Icon name="dumbbell" />{termLabel(ex.eq)}</span>
     </div>
     {/* What one set of this is, muscle by muscle — the number the tags above cannot
         give: a target and two supports say which muscles, not in what proportion. */}
@@ -876,7 +876,8 @@ function ExerciseDetail({ ex, close }) {
       <Button icon="pencil" style={{ flex: 1 }} onClick={() => { close(); customExSheet(ex) }}>{t('Edit')}</Button>
       <Button variant="danger" icon="trash" style={{ flex: 1 }} onClick={() => deleteCustomEx(ex, close)}>{t('Delete')}</Button>
     </div>}
-    {!isCardio(ex) && <OneRM ex={ex} />}
+    {/* No one-rep max for a joint drill or a held plank. */}
+    {!isCardio(ex) && !isMobility(ex) && <OneRM ex={ex} />}
     {instrFor(ex).length > 0 &&<><h4 className="sec">{t('How to')}{!INSTR_LANGS.includes(getLang()) && <span className="dim" style={{ textTransform: 'none', letterSpacing: 0 }}> · {t('instructions in English')}</span>}</h4><ol className="steps-list">{instrFor(ex).map((s, i) => <li key={i}>{s}</li>)}</ol></>}
   </>
 }
@@ -999,8 +1000,13 @@ function ExercisePicker({ onPick, close, query }) {
   // the rest of the catalogue in its own order. In a category of a hundred and fifty curls,
   // the one done every week used to sit wherever the alphabet put it.
   const used = e => usage.get(e.id) || 0
-  const base = all.filter(e => (cat === '★' ? used(e) : inCategory(e, cat)) && exMatches(e, ql))
-    .sort((a, b) => used(b) - used(a))
+  const inCat = e => (cat === '★' ? used(e) : inCategory(e, cat))
+  const byUse = (a, b) => used(b) - used(a)
+  let base = all.filter(e => inCat(e) && exMatches(e, ql)).sort(byUse)
+  // Nothing with every word: the closest rather than a dead end. A programme's full name for
+  // a lift, searched from the import review, usually needs this.
+  const loose = searching && !base.length
+  if (loose) base = exCloseMatches(all.filter(inCat).sort(byUse), ql)
   const eqOpts = equipmentOf(base)
   // Drop the equipment filter if the search narrowed it away, so you never hit a dead end.
   const eqOn = eqOpts.includes(eq) ? eq : ''
@@ -1031,6 +1037,7 @@ function ExercisePicker({ onPick, close, query }) {
         chip: <><Icon name="starFill" style={{ fontSize: 12, display: 'inline-block', marginRight: 4, verticalAlign: '-1px' }} />{t('Chosen')} ({chosenCount})</> }] : []} />
     <EquipmentChips options={eqOpts} value={eqOn} onChange={x => { setEq(x); setShown(50) }} searching={searching} style={{ marginBottom: 10 }} />
     {!searching && cat !== '★' && <div className="list" style={{ marginBottom: 8 }}>{create}</div>}
+    {loose && f.length > 0 && <div className="small dim" style={{ margin: '0 2px 8px' }}>{t('Nothing has every word — the closest:')}</div>}
     {mine.length > 0 && <>
       <h4 className="sec">{t('Your exercises')}</h4>
       <div className="list">{mine.map(row)}</div>
@@ -1106,16 +1113,22 @@ function ExConfig({ ex, existing, onSave, onDelete, close, routine, cta }) {
     // What the machine displays, and the speed only when it displays one — see readoutOf.
     // A stored 0 would print as "0 km/h" everywhere the set is read back.
     const readout = readoutOf({ ...c, id: ex.id })
+    // The programme's rest for this exercise and its note — carried through every mode, or an
+    // edit to the sets would quietly drop what an import put there.
+    const extra = {
+      ...(c.rest != null && c.rest >= 0 && !cardio ? { rest: Math.round(c.rest) } : {}),
+      ...(String(c.note || '').trim() ? { note: String(c.note).trim() } : {}),
+    }
     if (cardio) onSave({ sets: isOnce({ ...c, id: ex.id }) ? 1 : sets, min: Math.max(1, Math.round(c.min) || 20),
       ...(readout === 'none' ? {} : { readout }),
-      ...(readout === 'speed' ? { speed: Math.max(0, c.speed || 8) } : {}) })
-    else if (mode === 'time') onSave({ sets, mode: 'time', sec: Math.max(1, Math.round(c.sec) || 45), weight: Math.max(0, c.weight || 0), ...flags, ...prog })
+      ...(readout === 'speed' ? { speed: Math.max(0, c.speed || 8) } : {}), ...extra })
+    else if (mode === 'time') onSave({ sets, mode: 'time', sec: Math.max(1, Math.round(c.sec) || 45), weight: Math.max(0, c.weight || 0), ...flags, ...prog, ...extra })
     else {
       // A unilateral target is stored even: the split has to divide, and a typed 15 would
       // otherwise plan seven reps on one side and eight on the other, every session.
       const typed = Math.max(1, Math.round(c.reps) || 10)
       const reps = perSide ? Math.ceil(typed / 2) * 2 : typed
-      const out = { sets, mode: 'reps', reps, weight: Math.max(0, c.weight || 0), ...flags, ...(perSide ? { side: true } : {}), ...prog }
+      const out = { sets, mode: 'reps', reps, weight: Math.max(0, c.weight || 0), ...flags, ...(perSide ? { side: true } : {}), ...prog, ...extra }
       if (policyFor({ ...c, id: ex.id }, routine, 'reps') === 'double') out.repsMin = Math.min(reps, Math.max(1, Math.round(c.repsMin) || Math.max(1, reps - 2)))
       // A ceiling below the working reps would tell you to add a set on day one.
       if (bw && !(out.weight > 0) && c.repsMax > 0) out.repsMax = Math.max(reps, Math.round(c.repsMax))
@@ -1129,7 +1142,7 @@ function ExConfig({ ex, existing, onSave, onDelete, close, routine, cta }) {
     <Media ex={ex} />
     <div className="row" style={{ gap: 6, flexWrap: 'wrap', margin: '10px 0 14px' }}>
       {cardio && <span className="tag acc"><Icon name="figureRun" />{t('Cardio')}</span>}
-      <span className="tag">{t(ex.tg || ex.bp)}</span><span className="tag">{t(ex.eq)}</span>
+      <span className="tag nocap">{termLabel(ex.tg || ex.bp)}</span><span className="tag nocap">{termLabel(ex.eq)}</span>
     </div>
     {ex.desc && <div className="exnote">{ex.desc}</div>}
     {!cardio && <div style={{ marginBottom: 14 }}>
@@ -1208,6 +1221,25 @@ function ExConfig({ ex, existing, onSave, onDelete, close, routine, cta }) {
         : t('Reps climb by one whenever every set was clean. Set a ceiling to add sets instead of reps forever.')}
     </div>}
     <ProgressionFields ex={ex} mode={mode} c={c} setC={setC} routine={routine} unit={st.unit} />
+    {/* The rest timer after each set of this exercise: its own, when a programme gives one, or
+        the one in Settings. Zero means none — the first half of a superset, a routine done
+        without pauses. */}
+    {!cardio && <>
+      <div className="row cfgrow" style={{ marginBottom: 6 }}>
+        <Stepper label={t('Rest after each set (s)')} value={c.rest != null ? c.rest : (st.restSec != null ? st.restSec : 90)} step={15} decimal={false}
+          onChange={v => setC(x => ({ ...x, rest: v }))} />
+      </div>
+      <div className="small dim row" style={{ margin: '0 2px 14px', gap: 8 }}>
+        {c.rest != null
+          ? <>{c.rest > 0 ? t('Its own rest.') : t('No rest timer after this one.')}
+            <button style={{ color: 'var(--acc)', background: 'none', border: 0, padding: 0, font: 'inherit' }} onClick={() => setC(x => { const y = { ...x }; delete y.rest; return y })}>{t('Use the default')}</button></>
+          : t('The default from Settings.')}
+      </div>
+    </>}
+    <h4 className="sec" style={{ marginTop: 4 }}>{t('Notes')}</h4>
+    <TextArea rows={3} maxLength={2000} placeholder={t('Setup, effort target, cues — shown during the session')}
+      value={c.note || ''} onChange={e => setC(x => ({ ...x, note: e.target.value }))} />
+    <div style={{ height: 12 }} />
     <Button variant="primary" onClick={save}>{existing ? t('Save') : cta || t('Add to routine')}</Button>
     {ex.custom && <><div style={{ height: 8 }} /><Button icon="pencil" onClick={() => { close(); customExSheet(ex) }}>{t('Edit or delete this exercise')}</Button></>}
     {onDelete && <><div style={{ height: 8 }} /><Button variant="danger" onClick={() => { close(); onDelete() }}>{t('Remove from routine')}</Button></>}
@@ -1323,7 +1355,13 @@ function PlanImport({ bundle, report, onApplied, close }) {
   // catalogue exercise chosen for it. Unpicked, the name stays your own exercise.
   const [picks, setPicks] = useState({})
   const [detail, setDetail] = useState(false)
-  const created = (report && report.created) || []
+  const [mobDetail, setMobDetail] = useState(false)
+  // Mobility is yours by the programme's own say-so and has nothing to check: one line for all
+  // of it, so the names to check are the lifts the import could not place.
+  const made = (report && report.created) || []
+  const created = made.filter(c => !c.mobility)
+  const mobility = made.filter(c => c.mobility)
+  const mobHave = mobility.filter(c => (st.customEx || []).some(x => x.bp === 'mobility' && (x.n || '').toLowerCase() === c.name.toLowerCase())).length
   const matched = (report && report.matched) || []
   const known = matched.filter(m => m.known).length
   const pick = (stand, id) => setPicks(p => ({ ...p, [stand]: id }))
@@ -1381,6 +1419,13 @@ function PlanImport({ bundle, report, onApplied, close }) {
             <span style={{ color: m.known ? 'var(--acc)' : 'var(--label-3)' }}> · {m.known ? t('history') : t('new')}</span></span>
         </div>)}
       </div>}
+      {mobility.length > 0 && <div className="small muted" style={{ marginTop: 6, lineHeight: 1.5 }}>
+        {t(mobility.length === 1 ? '{0} mobility exercise, filed under Mobility with its instructions' : '{0} mobility exercises, filed under Mobility with their instructions', mobility.length)}
+        {mobHave > 0 && <> · {t('{0} already in your library', mobHave)}</>}
+        <button className="btn plain xs dim" style={{ padding: '0 0 0 8px', display: 'inline' }}
+          onClick={() => setMobDetail(v => !v)}>{mobDetail ? t('Hide') : t('Show')}</button>
+      </div>}
+      {mobDetail && <div className="small dim" style={{ margin: '4px 0 0', lineHeight: 1.5 }}>{mobility.map(c => c.name).join(' · ')}</div>}
       {created.length > 0 && <div style={{ marginTop: 10 }}>
         <div className="small" style={{ color: 'var(--yellow)', lineHeight: 1.45, marginBottom: 6 }}>
           {t(created.length === 1 ? '{0} name to check — pick the exercise it means, or keep it as your own:' : '{0} names to check — pick the exercise each means, or keep it as your own:', created.length)}

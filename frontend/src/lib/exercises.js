@@ -80,13 +80,40 @@ export const exSearchText = ex => {
 // "developpe" found nothing in a catalogue that spells it "développé".
 const foldS = v => String(v).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
 
+const searchHay = ex => [exSearchText(ex), ex.tg, ex.eq, ex.desc].filter(v => typeof v === 'string').map(foldS).join(' ')
+
 export const exMatches = (ex, ql) => {
   if (!ql) return true
   if (!ex) return false
   // Every word, in any order: "incline developpe" is the same search as "développé incliné".
   const words = foldS(ql).split(/\s+/).filter(Boolean)
-  const hay = [exSearchText(ex), ex.tg, ex.eq, ex.desc].filter(v => typeof v === 'string').map(foldS).join(' ')
+  const hay = searchHay(ex)
   return words.every(w => hay.includes(w))
+}
+
+// What a search can do without: articles and prepositions, in French and English.
+const SEARCH_FILLER = new Set(['les', 'des', 'aux', 'une', 'avec', 'sans', 'pour', 'sur', 'the', 'and', 'with', 'for'])
+
+/**
+ * The exercises sharing the most with a search that nothing matches in full — a coach's whole
+ * name for a lift, "Abduction de hanche à la poulie", carries a word or two no entry does. Two
+ * of its words at least and half of them; a rare word counts for more than a common one, since
+ * "abduction" picks the lift where "poulie" picks two hundred. Ties keep the list's order.
+ */
+export function exCloseMatches(list, ql, limit = 30) {
+  const words = [...new Set(foldS(ql).split(/[^a-z0-9]+/).filter(w => w.length > 2 && !SEARCH_FILLER.has(w)))]
+  const need = Math.max(2, Math.ceil(words.length / 2))
+  if (words.length < need) return []
+  const items = (list || []).filter(Boolean)
+  const hays = items.map(searchHay)
+  const weight = words.map(w => Math.log(1 + hays.length / Math.max(1, hays.filter(h => h.includes(w)).length)))
+  const out = []
+  hays.forEach((hay, i) => {
+    let n = 0, score = 0
+    words.forEach((w, k) => { if (hay.includes(w)) { n++; score += weight[k] } })
+    if (n >= need) out.push({ ex: items[i], score, i })
+  })
+  return out.sort((a, b) => b.score - a.score || a.i - b.i).slice(0, limit).map(x => x.ex)
 }
 
 /**
@@ -111,6 +138,10 @@ export const CATEGORIES = [
   { key: 'upper legs', bp: 'upper legs', has: e => e.bp === 'upper legs' },
   { key: 'lower legs', bp: 'lower legs', has: e => e.bp === 'lower legs' },
   { key: 'waist', bp: 'waist', has: e => e.bp === 'waist' },
+  // Joint routines, mobility drills, the "prehab" a programme closes a session with: filed
+  // apart, so a session can carry them without their sets being counted as lifting — see
+  // musclesOf and recovery.js's mobilityPart for what they do count for.
+  { key: 'mobility', bp: 'mobility', has: e => e.bp === 'mobility' },
   // Football, padel, swimming… are cardio in the catalogue's terms — a duration and an effort —
   // but nobody looks for a padel match among the treadmills and burpees.
   { key: 'sports', bp: 'cardio', has: e => e.bp === 'cardio' && !!sportOf(e.id) },
@@ -169,6 +200,8 @@ export const gifSrc = ex => embedded(ex.gif) || GIF_BASE + ex.gif
 
 // Cardio exercises log time + speed instead of weight × reps.
 export const isCardio = idOrEx => (typeof idOrEx === 'string' ? EXIDX[idOrEx] : idOrEx)?.bp === 'cardio'
+/** Mobility or joint work — the Mobilité category (see CATEGORIES). */
+export const isMobility = idOrEx => (typeof idOrEx === 'string' ? EXIDX[idOrEx] : idOrEx)?.bp === 'mobility'
 
 /**
  * An activity that happens once, not in sets.

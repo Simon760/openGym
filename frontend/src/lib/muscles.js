@@ -133,6 +133,10 @@ export function musclesOf(ex) {
   // dataset's flat "primary 1, everything else 0.4" — which is not what a football match is.
   const sp = sportOf(ex.id)
   if (sp) return { ...sp.muscles }
+  // Mobility work is not lifting, and the map and the weekly volume count lifting: a programme
+  // that closes every session with a joint routine counts it on top of its sets, never in them.
+  // What its strengthening moves do to recovery is reckoned apart (recovery.js, mobilityPart).
+  if (ex.bp === 'mobility') return {}
   const out = {}
   const add = (name, w) => {
     const slug = ALIAS[key(name)]

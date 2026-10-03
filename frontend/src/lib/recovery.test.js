@@ -1,9 +1,11 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, afterAll } from 'vitest'
 import {
-  sessionLoad, fatigueFrom, tauFor, conditionsSince, recoveryNow, bandOf,
-  RIR_WEIGHT, UNRATED_WEIGHT, RECOVERED_AT
+  sessionLoad, fatigueFrom, tauFor, conditionsSince, recoveryNow, bandOf, mobilityPart,
+  RIR_WEIGHT, UNRATED_WEIGHT, RECOVERED_AT, MOBILITY_SET_WEIGHT
 } from './recovery.js'
 import { isoOf } from './format.js'
+import { registerCustom } from './exercises.js'
+import { loadOfWorkouts } from './muscles.js'
 
 const hoursAgo = h => Date.now() - h * 3600000
 const iso = h => isoOf(new Date(hoursAgo(h)))
@@ -208,5 +210,58 @@ describe('the constants match what was researched', () => {
 
   it('calls a muscle recovered at 95 %', () => {
     expect(RECOVERED_AT).toBe(0.05)
+  })
+})
+
+// A joint routine at the end of a session, as a programme writes it: drills with no muscle to
+// load, and strengthening moves that are real but easy.
+describe('mobility work', () => {
+  const COPENHAGEN = { id: 'mob-cop', n: 'Planche Copenhague', bp: 'mobility', tg: 'adducteurs', eq: 'custom', custom: true }
+  const DRILL = { id: 'mob-9090', n: 'Rotations 90/90', bp: 'mobility', tg: '', eq: 'custom', custom: true }
+  registerCustom([COPENHAGEN, DRILL])
+  afterAll(() => registerCustom([]))
+  const done = n => Array.from({ length: n }, () => ({ sec: 20, done: true }))
+  const session = (h, entries) => ({ id: 'm' + h, d: iso(h), start: hoursAgo(h), name: 'Mobilité', entries })
+
+  it('leaves nothing for a drill that moves a joint and loads no muscle', () => {
+    const w = session(1, [{ id: DRILL.id, sets: done(2) }])
+    expect(mobilityPart(w)).toBe(null)
+    expect(recoveryNow(S([w])).muscles).toEqual({})
+  })
+
+  it('counts a strengthening move on its muscle at the weight of an easy set, briefly', () => {
+    const w = session(1, [{ id: COPENHAGEN.id, sets: done(2) }])
+    expect(mobilityPart(w).load).toEqual({ adductors: 2 * MOBILITY_SET_WEIGHT })
+    const now = recoveryNow(S([w])).muscles.adductors
+    expect(now.pct).toBeGreaterThan(80)
+    expect(now.hoursLeft).toBeLessThan(18)
+    const later = recoveryNow(S([session(16, [{ id: COPENHAGEN.id, sets: done(2) }])])).muscles.adductors
+    expect(later.pct).toBeGreaterThanOrEqual(100 * (1 - RECOVERED_AT))
+    expect(later.hoursLeft).toBe(0)
+  })
+
+  it('weighs far less than lifting the same muscle', () => {
+    const lift = { ...bench(1, { n: 2, rir: 2 }), entries: [{ id: '0028', sets: [{ w: 40, r: 10, done: true, rir: 2 }, { w: 40, r: 10, done: true, rir: 2 }] }] }
+    const mob = session(1, [{ id: COPENHAGEN.id, sets: done(2) }])
+    const liftLoad = sessionLoad(lift).load
+    const top = Math.max(...Object.values(liftLoad))
+    expect(mobilityPart(mob).load.adductors).toBeLessThan(top)
+  })
+
+  it('does not dilute how hard the lifting was, nor count as unrated sets', () => {
+    const lift = bench(1, { n: 4, rir: 0 })
+    const both = { ...lift, entries: [...lift.entries, { id: DRILL.id, sets: done(3) }, { id: COPENHAGEN.id, sets: done(2) }] }
+    expect(sessionLoad(both)).toEqual(sessionLoad(lift))
+    const basis = recoveryNow(S([both])).basis
+    expect(basis.totalSets).toBe(4)
+    expect(basis.ratedSets).toBe(4)
+  })
+
+  it('stays off the weekly volume and the muscle map', () => {
+    expect(loadOfWorkouts([session(1, [{ id: COPENHAGEN.id, sets: done(2) }, { id: DRILL.id, sets: done(2) }])])).toEqual({})
+  })
+
+  it('counts only what was done', () => {
+    expect(mobilityPart(session(1, [{ id: COPENHAGEN.id, sets: [{ sec: 20, done: false }] }]))).toBe(null)
   })
 })

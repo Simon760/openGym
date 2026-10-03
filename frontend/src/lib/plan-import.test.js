@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { parseProgram, extractJSON, dayIndex, programFromCSV, guessBodyPart } from './plan-import.js'
 import { parsePlan, buildPlanBundle } from './plan-share.js'
 import { EXIDX } from './exercises.js'
+import { musclesOf } from './muscles.js'
 
 const prog = (routines, extra = {}) => ({ routines, ...extra })
 const one = ex => prog([{ name: 'Push', exercises: [ex] }])
@@ -303,7 +304,8 @@ describe('parseProgram — French names and what you already train', () => {
   })
 
   it('files an unrecognised name by what its own words say, not in the legs by default', () => {
-    const { bundle } = parseProgram(one({ name: 'Face pull corde', sets: 3, reps: 15 }))
+    // (A face pull used to be the example; the catalogue has one now, under its English name.)
+    const { bundle } = parseProgram(one({ name: 'Rotation externe épaule à la bande', sets: 3, reps: 15 }))
     expect(bundle.customEx[0]).toMatchObject({ bp: 'shoulders', tg: 'delts' })
   })
 })
@@ -415,5 +417,109 @@ describe('programFromCSV', () => {
 
   it('is null for a table without an exercise column', () => {
     expect(programFromCSV('Date,Poids\n2026-10-01,78')).toBe(null)
+  })
+})
+
+// A coach's programme as it comes: rests per exercise, "/jbe", holds given as ranges, notes,
+// and a joint routine at the end of every session.
+describe('a coach’s programme, mobility routine included', () => {
+  const CSV = [
+    'Séance;Jour;Ordre;Exercice;Catégorie;Séries;Reps;Poids;Repos;Muscle ciblé;Progression;Consignes',
+    'Legs A;Mardi;1;Leg curl;;4;8–12;;2–3 min;Ischios;;"RIR 1–2\nExcentrique freiné 3 s."',
+    'Legs A;Mardi;2;RDL en B-stance;;3;8–10/jbe;;2 min;Ischios, Fessiers;;Jamais à l’échec.',
+    'Legs A;Mardi;3;Kickback poulie;;3;12–15/jbe;;1–1,5 min;Fessiers;;Sangle à la cheville.',
+    'Legs A;Mardi;4;Isométrie mollet lourde;;2;20–30 s;;2 min;Mollets;;',
+    'Legs A;Mardi;;Genou au mur;Mobilité;2;10 par côté;PDC;0 s;;aucune;"Phase 1 : 2 × 10 par côté\nPhase 2 : 2 × 12"',
+    'Legs A;Mardi;;Planche Copenhague;Mobilité;2;15 s par côté;PDC;;Adducteurs;aucune;Levier court.',
+    'Push;Lundi;;Genou au mur;Mobilité;2;10 par côté;PDC;0 s;;aucune;"Phase 1 : 2 × 10 par côté\nPhase 2 : 2 × 12"',
+  ].join('\n')
+  const { bundle, report } = parseProgram(CSV)
+  const legs = bundle.routines.find(r => r.name === 'Legs A').ex
+
+  it('takes the rest the programme gives each exercise, at the low end of a range', () => {
+    expect(legs.map(e => e.rest)).toEqual([120, 120, 60, 120, 0, undefined])
+  })
+
+  it('reads "/jbe" as per side and counts it the way the app does, as a total', () => {
+    expect(legs[1]).toMatchObject({ side: true, repsMin: 16, reps: 20 })
+    expect(legs[2]).toMatchObject({ side: true, repsMin: 24, reps: 30 })
+  })
+
+  it('reads a hold given as a range from its low end', () => {
+    expect(legs[3]).toMatchObject({ mode: 'time', sec: 20 })
+  })
+
+  it('keeps the coach’s notes on the routine', () => {
+    expect(legs[0].note).toBe('RIR 1–2\nExcentrique freiné 3 s.')
+  })
+
+  it('will not take a glute kickback for the catalogue’s triceps one', () => {
+    expect(legs[2].id).not.toBe('0860')
+    const made = report.created.find(c => c.name === 'Kickback poulie')
+    expect(made.candidates[0]).toBe('0860')
+  })
+
+  it('files mobility as your own exercises, in Mobilité, with their instructions, once each', () => {
+    const mob = bundle.customEx.filter(c => c.bp === 'mobility')
+    expect(mob.map(c => c.n).sort()).toEqual(['Genou au mur', 'Planche Copenhague'])
+    expect(mob.find(c => c.n === 'Genou au mur').desc).toBe('Phase 1 : 2 × 10 par côté\nPhase 2 : 2 × 12')
+    expect(mob.find(c => c.n === 'Planche Copenhague').tg).toBe('adducteurs')
+    // reported apart, as nothing to check
+    expect(report.created.filter(c => c.mobility).map(c => c.name).sort()).toEqual(['Genou au mur', 'Planche Copenhague'])
+    expect(report.created.find(c => c.name === 'Kickback poulie').mobility).toBeUndefined()
+    // used in two sessions, created once
+    const knee = mob.find(c => c.n === 'Genou au mur').id
+    expect(bundle.routines.every(r => r.ex.some(e => e.id === knee))).toBe(true)
+  })
+
+  it('sets mobility up the way it is done: per side, bodyweight, no automatic progression', () => {
+    expect(legs[4]).toMatchObject({ side: true, reps: 20, bodyweight: true, prog: 'off', rest: 0 })
+    expect(legs[4].note).toBeUndefined()
+    expect(legs[5]).toMatchObject({ mode: 'time', sec: 15, prog: 'off' })
+  })
+})
+
+describe('reading names a programme writes', () => {
+  const idOf = name => parseProgram(one({ name, sets: 3, reps: 10 })).bundle.routines[0].ex[0].id
+  it('hears "unilatéral" as one arm, and allongé as allongée', () => {
+    expect(idOf('Élévations latérales poulie (unilatéral)')).toBe('0192')
+    expect(idOf('Extension triceps poulie unilatérale')).toBe('1723')
+    expect(idOf('Extension triceps allongé haltères')).toBe('0351')
+  })
+  it('does not settle on another movement or other equipment for a near name', () => {
+    // The catalogue's spider curls are reverse-grip ones: offered, not taken.
+    const { bundle, report } = parseProgram(one({ name: 'Spider curl haltères', sets: 3, reps: 10 }))
+    expect(bundle.customEx.map(c => c.id)).toContain(bundle.routines[0].ex[0].id)
+    expect(report.created[0].candidates.length).toBeGreaterThan(0)
+    expect(idOf('Développé incliné machine')).toBe('1299')
+  })
+  it('knows the cable work the catalogue only names in English', () => {
+    expect(idOf('Pull-through à la poulie')).toBe('0196')
+    expect(idOf('Face pull poulie haute')).toBe('0203')
+    expect(idOf('Oiseau poulie croisée')).toBe('0225')
+    expect(idOf('Pull-over poulie haute')).toBe('0238')
+  })
+  it('finds the exercise you already log under a name with a qualifier yours lacks', () => {
+    const name = 'Écarté bas poulie vers le haut'
+    expect(idOf(name)).not.toBe('0179')
+    const { bundle } = parseProgram(one({ name, sets: 3, reps: 12 }), { used: new Map([['0179', 5]]) })
+    expect(bundle.routines[0].ex[0].id).toBe('0179')
+  })
+  it('offers the gym’s own name for a lift found inside a longer one, without taking it', () => {
+    const { bundle, report } = parseProgram(one({ name: 'Tirage horizontal unilatéral à la poulie', sets: 3, reps: 12 }))
+    expect(bundle.routines[0].ex[0].id).not.toBe('0861')
+    expect(report.created[0].candidates.slice(0, 3)).toContain('0861')
+  })
+  it('offers nothing else that works another muscle than the programme says', () => {
+    const { report } = parseProgram(['Exercice;Séries;Reps;Muscle ciblé', 'Kickback poulie;3;12;Fessiers'].join('\n'))
+    const [vetoed, ...others] = report.created[0].candidates
+    expect(vetoed).toBe('0860')
+    expect(others.every(c => musclesOf(EXIDX[c]).gluteal > 0)).toBe(true)
+  })
+  it('offers what the name before a coach’s qualifier means, without taking it', () => {
+    const used = new Map([['0739', 12]])
+    const press = parseProgram(one({ name: 'Presse à cuisses, pieds bas', sets: 4, reps: 10 }), { used })
+    expect(press.bundle.routines[0].ex[0].id).not.toBe('0739')
+    expect(press.report.created[0].candidates[0]).toBe('0739')
   })
 })

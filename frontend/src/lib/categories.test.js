@@ -42,7 +42,7 @@ describe('exercise categories', () => {
   })
 
   it('lists them in the order a gym is walked, with what a new exercise is stored as', () => {
-    expect(CATEGORIES.map(c => c.key)).toEqual(['chest', 'back', 'shoulders', 'biceps', 'triceps', 'lower arms', 'upper legs', 'lower legs', 'waist', 'sports', 'cardio', 'neck'])
+    expect(CATEGORIES.map(c => c.key)).toEqual(['chest', 'back', 'shoulders', 'biceps', 'triceps', 'lower arms', 'upper legs', 'lower legs', 'waist', 'mobility', 'sports', 'cardio', 'neck'])
     expect(CATEGORIES.find(c => c.key === 'triceps')).toMatchObject({ bp: 'upper arms', tg: 'triceps' })
     expect(CATEGORIES.find(c => c.key === 'biceps')).toMatchObject({ bp: 'upper arms', tg: 'biceps' })
   })

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { exMatches, fillEx, exSearchText, allExercises } from './exercises.js'
+import { exMatches, exCloseMatches, exName, fillEx, exSearchText, allExercises } from './exercises.js'
 import { hydrate } from './hydrate.js'
 
 // The record an imported plan used to produce: a name, a body part, and nothing else.
@@ -87,5 +87,22 @@ describe('exMatches — accents and word order', () => {
     expect(exMatches(bench, 'couche developpe')).toBe(true)
     expect(exMatches(bench, 'DÉVELOPPÉ COUCHÉ')).toBe(true)
     expect(exMatches(bench, 'developpe incline')).toBe(false)
+  })
+})
+
+// A programme's full name for a lift, searched from the import review, found nothing at all.
+describe('a search nothing matches in full', () => {
+  const list = allExercises({ customEx: [] })
+  const q = 'Abduction de hanche à la poulie'
+  it('offers the exercises sharing the most of it, the rare words first', () => {
+    expect(list.filter(e => exMatches(e, q))).toEqual([])
+    const close = exCloseMatches(list, q)
+    expect(close.length).toBeGreaterThan(1)
+    // "abduction" outweighs "poulie": the hip abductions before the cable work
+    expect(exMatches(close[0], 'abduction hanche'), exName(close[0])).toBe(true)
+  })
+  it('wants two words at least, so one word in common is not a match', () => {
+    expect(exCloseMatches(list, 'Nordic curl')).toEqual([])
+    expect(exCloseMatches(list, 'curl')).toEqual([])
   })
 })

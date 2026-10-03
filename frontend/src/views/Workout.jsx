@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
-import { exOr, exName } from '../lib/exercises.js'
+import { exOr, exName, isMobility, termLabel } from '../lib/exercises.js'
 import { effectiveRoutine, lastEntryFor, bestWeightFor, buildSets, defaultConfig, warmEntry, swapEntry, setBodyweight, durMs, setsDone, setsDoneActive, supersetUnits, unitOf, nextSetAfter, carryForward, setLabel, modeOf, isBw, readoutOf, isOnce, cardioEffort, isPerSide, sideReps, repStep, EFFORT, effortOf, stepEffort, capEffort } from '../lib/history.js'
 import { fmtNum, fmtDate, fmtDur, durPart, fmtVol, todayISO, exCount, uid, DAYN } from '../lib/format.js'
 import { beep, vibrate } from '../lib/sound.js'
@@ -160,6 +160,18 @@ function Elapsed({ start }) {
 }
 
 /* ---------- one exercise block (reps: weight×reps · time: a held duration · cardio: duration+speed) ---------- */
+/**
+ * What the programme says about an exercise — the setup, the effort target, the cue — or the
+ * instructions an exercise of your own carries. Two lines until tapped: the first lines are the
+ * ones wanted mid-set, and a mobility drill's three phases are there when you need them.
+ */
+function CoachNote({ text }) {
+  const [open, setOpen] = useState(false)
+  return <div className={'coachnote' + (open ? ' open' : '')} onClick={() => setOpen(o => !o)}>
+    <Icon name="clipboard" /><span>{text}</span>
+  </div>
+}
+
 function ExerciseBlock({ entryIdx, compact, onToggle, onField, onAddSet, onRemoveSet, onStartTimed, onWarm, onDrop, onDropField, onSwap, onBodyweight }) {
   const S = useStore(s => s.S)
   const working = useUI(s => s.work)
@@ -206,7 +218,8 @@ function ExerciseBlock({ entryIdx, compact, onToggle, onField, onAddSet, onRemov
       : (bw && !added) ? null : repCol
   const col3 = cardio ? (readout === 'speed' ? effCol
     : readout === 'dist' ? { f: 'km', step: 0.5, dec: true, opt: true, hd: t('Distance (km)') } : null)
-    : mode === 'reps' && eff ? effCol : null
+    // Nobody rates a mobility drill's reps in reserve: the column would only sit there empty.
+    : mode === 'reps' && eff && !isMobility(ex) ? effCol : null
   // Does a set here carry a weight at all? True for an ordinary lift, and for bodyweight work
   // once there is something on the belt; false for a plain pull-up, where col1 is the reps and
   // there is no second column. Only such a set can carry a second load.
@@ -240,7 +253,7 @@ function ExerciseBlock({ entryIdx, compact, onToggle, onField, onAddSet, onRemov
   return <>
     <Media ex={ex} key={entry.id} compact={compact} minimizable />
     <div className="row between" style={{ marginBottom: 6 }}>
-      <div style={{ fontSize: compact ? 17 : 20, fontWeight: 600, letterSpacing: '-.02em', textTransform: 'none', lineHeight: 1.2 }}>{exName(ex)}</div>
+      <div className="exn" style={{ fontSize: compact ? 17 : 20, fontWeight: 600, letterSpacing: '-.02em', lineHeight: 1.2 }}>{exName(ex)}</div>
       <div className="row" style={{ gap: 2, flex: 'none' }}>
         {/* Next to the name, because that is the thing being changed, and because the moment
             you need it you are standing in front of an occupied machine. */}
@@ -254,17 +267,20 @@ function ExerciseBlock({ entryIdx, compact, onToggle, onField, onAddSet, onRemov
       {/* You log the total; this is the split, so the set in front of you is unambiguous
           without the rep count having to mean two different things (issue #31). */}
       {!cardio && !timed && isPerSide(cfg) && <span className="tag acc nocap"><Icon name="shuffle" />{t('{0} per side', fmtNum(sideReps(entry.sets.find(s => !s.done)?.r ?? entry.sets[0]?.r)))}</span>}
-      {(ex.tg || ex.bp) && <span className="tag">{t(ex.tg || ex.bp)}</span>}
+      {/* French terms take a capital on the first word only — "Machine à levier", not "Machine À Levier". */}
+      {(ex.tg || ex.bp) && <span className="tag nocap">{termLabel(ex.tg || ex.bp)}</span>}
       {/* The equipment tag doubles as the switch, because "which equipment" is exactly the
           question being answered: no plates today, just me. Tapping it drops the weight
           column and the load on every set still owed. Not offered on cardio, which has no
           load column to drop. */}
-      {!cardio ? <button className={'tag' + (bw ? ' acc nocap' : '')} style={{ cursor: 'pointer' }}
+      {!cardio ? <button className={'tag nocap' + (bw ? ' acc' : '')} style={{ cursor: 'pointer' }}
         aria-pressed={bw} onClick={onBodyweight}>
-        <Icon name={bw ? 'check' : 'dumbbell'} />{bw ? t('Bodyweight') : t(ex.eq || 'Bodyweight')}
-      </button> : ex.eq && <span className="tag">{t(ex.eq)}</span>}
+        <Icon name={bw ? 'check' : 'dumbbell'} />{bw ? t('Bodyweight') : termLabel(ex.eq || 'Bodyweight')}
+      </button> : ex.eq && <span className="tag nocap">{termLabel(ex.eq)}</span>}
       {best > 0 && <span className="tag nocap">{t('Best:')} {fmtNum(best)} {S.unit}</span>}
     </div>
+    {/* The programme's words for this exercise, or your own exercise's instructions. */}
+    {(cfg.note || (ex.custom && ex.desc)) && <CoachNote text={cfg.note || ex.desc} />}
     {last && <div className="small dim" style={{ marginBottom: 4 }}>{t('Last time')} ({fmtDate(last.d)}): {last.sets.map(s => setLabel(entry.id, s, last.target)).join(', ')}</div>}
     {plan && plan.why && plan.kind !== 'off' && <div className={'progline' + (plan.kind === 'deload' ? ' warn' : '')}>
       <Icon name={plan.kind === 'up' ? 'arrowUp' : plan.kind === 'deload' ? 'arrowDown' : 'lightbulb'} />
@@ -471,6 +487,11 @@ function ActiveWorkout() {
       beep(S.sound, 1040, 0.12); vibrate(30)
       const isLastExInUnit = idx === unit[unit.length - 1]
       const unitDone = unit.every(k => s.active.entries[k].sets.every(x => x.done))
+      // The rest the programme gives the exercise that closes this unit, else the app-wide one.
+      // Zero is a rest of its own: "enchaîne" — no timer at all.
+      const own = (s.active.entries[unit[unit.length - 1]].target || {}).rest
+      const restSec = own != null ? own : S.restSec
+      const rest = () => { if (restSec > 0) startRest(restSec); else stopRest() }
       exJustDone = e.sets.every(x => x.done)
       // What comes up next is the next exercise that still has a set to do — the one after
       // this, or, once the end is reached, one skipped on the way. None left is the session.
@@ -486,8 +507,8 @@ function ActiveWorkout() {
         next = ahead
         s.active.cur = next[0]
         // No rest timer on a session being typed up: the rest happened hours ago.
-        if (!A.log) startRest(S.restSec); else stopRest()
-      } else if (isLastExInUnit && !A.log) startRest(S.restSec)
+        if (!A.log) rest(); else stopRest()
+      } else if (isLastExInUnit && !A.log) rest()
     }, true)
     // A rest that was over and still on screen goes with the set that ended it — unless that
     // set started a new one, which has already taken its place.
