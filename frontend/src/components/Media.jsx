@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { imgSrc, gifSrc, exName } from '../lib/exercises.js'
+import { imgSrc, gifSrc, exName, isMobility } from '../lib/exercises.js'
 import { useStore } from '../store/useStore.js'
 import { t } from '../lib/i18n.js'
 import Icon from './Icon.jsx'
@@ -41,6 +41,8 @@ export default function Media({ ex, id, compact, minimizable }) {
 
 export function Thumb({ ex }) {
   const [failed, setFailed] = useState(false)
-  if (!ex.img || failed) return <div className="thumb thumb-x"><Icon name={(sportOf(ex.id) || {}).icon || 'dumbbell'} /></div>
+  // No picture: the sport's own glyph, a stretching figure for mobility, a dumbbell otherwise —
+  // so a joint routine reads as one in a list before a name is read.
+  if (!ex.img || failed) return <div className="thumb thumb-x"><Icon name={(sportOf(ex.id) || {}).icon || (isMobility(ex) ? 'stretch' : 'dumbbell')} /></div>
   return <img className="thumb" loading="lazy" decoding="async" src={imgSrc(ex)} alt="" onError={() => setFailed(true)} />
 }

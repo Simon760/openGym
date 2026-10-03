@@ -1205,4 +1205,11 @@ export default {
   '{0} mobility exercises, filed under Mobility with their instructions': '{0} exercices de mobilité, rangés dans Mobilité avec leurs consignes',
   '{0} already in your library': '{0} déjà dans ta bibliothèque',
   'Nothing has every word — the closest:': 'Aucun exercice n’a tous ces mots — les plus proches :',
+  '{0} exercise + {1} mobility': '{0} exercice + {1} mobilité',
+  '{0} exercises + {1} mobility': '{0} exercices + {1} mobilité',
+  '{0} mobility exercise': '{0} exercice de mobilité',
+  '{0} mobility exercises': '{0} exercices de mobilité',
+  'Mobility {0} / {1}': 'Mobilité {0} / {1}',
+  'mobility {0}': 'mobilité {0}',
+  'Finish workout early · {0} exercises · mobility {1}': 'Terminer plus tôt · {0} exercices · mobilité {1}',
 }

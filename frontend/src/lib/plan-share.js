@@ -8,9 +8,9 @@
 //  2. A clean, printable page (Save as PDF) where a single exercise never splits across
 //     a page break — each exercise, and each routine that fits, stays in one place.
 
-import { EXIDX, isBodyweightEq, fillEx } from './exercises.js'
+import { EXIDX, isBodyweightEq, fillEx, exCountOf } from './exercises.js'
 import { modeOf, fmtSec, isBw, isPerSide, sideReps } from './history.js'
-import { uid, todayISO, isoOf, fmtDate, DAYN, fmtNum, exCount } from './format.js'
+import { uid, todayISO, isoOf, fmtDate, DAYN, fmtNum } from './format.js'
 import { t } from './i18n.js'
 import { APP_NAME } from './brand.js'
 import { weekFor, blockAt, blocksOf, startBlock, routinesOf, sameNamed, WEEKDAYS } from './blocks.js'
@@ -286,7 +286,7 @@ function routineHTML(r, unit) {
       ? `<div class="ss"><div class="ss-tag">${esc(t('Superset'))}</div><div class="ss-items">${items}</div></div>`
       : items
   }).join('')
-  const count = exCount(r.ex.length)
+  const count = exCountOf(r.ex)
   return `<section class="routine">
     <div class="r-head"><h2>${esc(r.name)}</h2><span class="r-count">${esc(count)}</span></div>
     <div class="ex-list">${rows || `<div class="ex empty">${esc(t('No exercises yet.'))}</div>`}</div>

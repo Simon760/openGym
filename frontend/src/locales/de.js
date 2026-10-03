@@ -1230,4 +1230,11 @@ export default {
   '{0} mobility exercises, filed under Mobility with their instructions': '{0} mobility exercises, filed under Mobility with their instructions',
   '{0} already in your library': '{0} already in your library',
   'Nothing has every word — the closest:': 'Nothing has every word — the closest:',
+  '{0} exercise + {1} mobility': '{0} exercise + {1} mobility',
+  '{0} exercises + {1} mobility': '{0} exercises + {1} mobility',
+  '{0} mobility exercise': '{0} mobility exercise',
+  '{0} mobility exercises': '{0} mobility exercises',
+  'Mobility {0} / {1}': 'Mobility {0} / {1}',
+  'mobility {0}': 'mobility {0}',
+  'Finish workout early · {0} exercises · mobility {1}': 'Finish workout early · {0} exercises · mobility {1}',
 }

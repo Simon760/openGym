@@ -2,8 +2,9 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
-import { DAYN, uid, exCount } from '../lib/format.js'
+import { DAYN, uid } from '../lib/format.js'
 import { t } from '../lib/i18n.js'
+import { exCountOf } from '../lib/exercises.js'
 import { dayAssignSheet, loadStarterPlan, planToolsSheet, blocksSheet } from '../sheets.jsx'
 import { weekFor, weekOfBlock, activeBlock, blockById, upcoming, daysUntil, weekIndexAt, routineGroups } from '../lib/blocks.js'
 import { todayISO, fmtDate } from '../lib/format.js'
@@ -29,7 +30,7 @@ export default function Plan() {
   const [unfolded, setUnfolded] = useState({})
   const routineRow = r => <div key={r.id} className="item" onClick={() => nav('/plan/r/' + r.id)}>
     <span className="lrow-i"><Icon name={glyphOf(r.emoji)} /></span>
-    <div className="grow"><div className="tt">{r.name}</div><div className="ss">{exCount(r.ex.length)}</div></div>
+    <div className="grow"><div className="tt">{r.name}</div><div className="ss">{exCountOf(r.ex)}</div></div>
     <Icon name="chevronRight" className="chev" /></div>
 
   const running = activeBlock(S)

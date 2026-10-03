@@ -204,6 +204,20 @@ export const isCardio = idOrEx => (typeof idOrEx === 'string' ? EXIDX[idOrEx] : 
 export const isMobility = idOrEx => (typeof idOrEx === 'string' ? EXIDX[idOrEx] : idOrEx)?.bp === 'mobility'
 
 /**
+ * A routine's exercises counted the way a session is done: the lifting, then the joint work a
+ * programme closes it with — "6 exercices + 9 mobilité". One total of fifteen made a session
+ * of six lifts read like a long one, and said nothing about which part was which.
+ */
+export function exCountOf(list) {
+  const all = (list || []).filter(Boolean)
+  const mob = all.filter(e => isMobility(e.id)).length
+  const lift = all.length - mob
+  if (!mob) return t(lift === 1 ? '{0} exercise' : '{0} exercises', lift)
+  if (!lift) return t(mob === 1 ? '{0} mobility exercise' : '{0} mobility exercises', mob)
+  return t(lift === 1 ? '{0} exercise + {1} mobility' : '{0} exercises + {1} mobility', lift, mob)
+}
+
+/**
  * An activity that happens once, not in sets.
  *
  * A match is a match. The bike genuinely has intervals — five threes with a rest between them

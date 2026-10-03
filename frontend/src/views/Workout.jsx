@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
-import { exOr, exName, isMobility, termLabel } from '../lib/exercises.js'
+import { exOr, exName, isMobility, termLabel, exCountOf } from '../lib/exercises.js'
 import { effectiveRoutine, lastEntryFor, bestWeightFor, buildSets, defaultConfig, warmEntry, swapEntry, setBodyweight, durMs, setsDone, setsDoneActive, supersetUnits, unitOf, nextSetAfter, carryForward, setLabel, modeOf, isBw, readoutOf, isOnce, cardioEffort, isPerSide, sideReps, repStep, EFFORT, effortOf, stepEffort, capEffort } from '../lib/history.js'
-import { fmtNum, fmtDate, fmtDur, durPart, fmtVol, todayISO, exCount, uid, DAYN } from '../lib/format.js'
+import { fmtNum, fmtDate, fmtDur, durPart, fmtVol, todayISO, uid, DAYN } from '../lib/format.js'
 import { beep, vibrate } from '../lib/sound.js'
 import { t } from '../lib/i18n.js'
 import { api } from '../lib/api.js'
@@ -104,7 +104,7 @@ function StartChooser() {
     </> : todayR && <div className="card" style={{ borderColor: 'var(--acc)' }}>
       <h2 className="accent">{t("Today's plan")}{todayOvr ? ' · ' + t('rescheduled') : ''}</h2>
       <div className="row between" style={{ marginBottom: 12 }}>
-        <div><div className="big">{todayR.name}</div><div className="muted small">{exCount(todayR.ex.length)}</div></div>
+        <div><div className="big">{todayR.name}</div><div className="muted small">{exCountOf(todayR.ex)}</div></div>
         <span className="lrow-i" style={{ width: 38, height: 38, borderRadius: 9, fontSize: 22 }}><Icon name={glyphOf(todayR.emoji)} /></span>
       </div>
       {/* Said out loud, because the alternative is a screen that looks identical whether the
@@ -126,7 +126,7 @@ function StartChooser() {
       <div className="list">{[...others, ...(more ? elsewhere : [])].map(r => <div key={r.id} className="item" onClick={() => startFlow(r.id)}>
         <span className="lrow-i"><Icon name={glyphOf(r.emoji)} /></span>
         <div className="grow"><div className="tt">{r.name}</div>
-          <div className="ss">{[elsewhere.includes(r) ? (programmeOf(S, r) || {}).name : null, exCount(r.ex.length)].filter(Boolean).join(' · ')}</div></div>
+          <div className="ss">{[elsewhere.includes(r) ? (programmeOf(S, r) || {}).name : null, exCountOf(r.ex)].filter(Boolean).join(' · ')}</div></div>
         <button className="iconbtn" aria-label={t('Already did it — write it up')}
           onClick={e => { e.stopPropagation(); logPastSheet(r.id) }}><Icon name="history" /></button>
         <span className="tag acc">{t('Start')}</span></div>)}
@@ -383,26 +383,52 @@ function UnitList({ close }) {
   if (!A) return null
   const units = supersetUnits(A.entries)
   const cur = Math.min(A.cur, Math.max(0, A.entries.length - 1))
+  // The lifting and the mobility as two parts, each numbered on its own — the way the counter
+  // at the top of the session reads them.
+  const runs = unitRuns(A.entries, units)
+  const mixed = runs.some(r => r.mob) && runs.some(r => !r.mob)
   return <>
     <h3>{t('Exercises')}</h3>
-    <div className="list" style={{ marginBottom: 0 }}>
-      {units.map((u, k) => {
-        const sets = u.flatMap(i => A.entries[i].sets)
-        const done = sets.filter(x => x.done).length
-        const finished = sets.length > 0 && done === sets.length
-        return <div key={k} className="item" onClick={() => { update(s => { s.active.cur = u[0] }); close() }}>
-          <span className="lrow-i" style={{ width: 30, height: 30, borderRadius: 8, fontSize: 15,
-            background: finished ? 'var(--acc)' : 'var(--surface-3)', color: finished ? 'var(--on-acc)' : 'var(--label)' }}>
-            {finished ? <Icon name="check" /> : k + 1}</span>
-          <div className="grow">
-            <div className="tt exn">{u.map(i => exName(exOr(A.entries[i].id))).join(' + ')}</div>
-            <div className="ss">{t('{0} sets', done + '/' + sets.length)}</div>
+    {runs.map((run, j) => <div key={j}>
+      {/* The sheet's title already says Exercises: a heading for the lifting only after
+          mobility came first. */}
+      {mixed && (run.mob || j > 0) && <h4 className="sec">{run.mob ? termLabel('mobility') : t('Exercises')}</h4>}
+      <div className="list" style={{ marginBottom: 0 }}>
+        {run.units.map(({ u, n }) => {
+          const sets = u.flatMap(i => A.entries[i].sets)
+          const done = sets.filter(x => x.done).length
+          const finished = sets.length > 0 && done === sets.length
+          return <div key={u[0]} className="item" onClick={() => { update(s => { s.active.cur = u[0] }); close() }}>
+            <span className="lrow-i" style={{ width: 30, height: 30, borderRadius: 8, fontSize: 15,
+              background: finished ? 'var(--acc)' : 'var(--surface-3)', color: finished ? 'var(--on-acc)' : 'var(--label)' }}>
+              {finished ? <Icon name="check" /> : n}</span>
+            <div className="grow">
+              <div className="tt exn">{u.map(i => exName(exOr(A.entries[i].id))).join(' + ')}</div>
+              <div className="ss">{t('{0} sets', done + '/' + sets.length)}</div>
+            </div>
+            {u.includes(cur) ? <span className="tag acc nocap">{t('Now')}</span> : <Icon name="chevronRight" className="chev" />}
           </div>
-          {u.includes(cur) ? <span className="tag acc nocap">{t('Now')}</span> : <Icon name="chevronRight" className="chev" />}
-        </div>
-      })}
-    </div>
+        })}
+      </div>
+    </div>)}
   </>
+}
+
+/**
+ * A session's units in runs of one kind — lifting, then mobility, in the order they are done —
+ * each unit numbered within its kind. A superset is mobility only when all of it is.
+ */
+function unitRuns(entries, units) {
+  const runs = []
+  const seen = { true: 0, false: 0 }
+  units.forEach(u => {
+    const mob = u.length > 0 && u.every(i => isMobility(entries[i].id))
+    const last = runs[runs.length - 1]
+    const item = { u, n: ++seen[mob] }
+    if (last && last.mob === mob) last.units.push(item)
+    else runs.push({ mob, units: [item] })
+  })
+  return runs
 }
 
 /* ---------- active workout ---------- */
@@ -420,6 +446,14 @@ function ActiveWorkout() {
 
   const total = A.entries.reduce((n, e) => n + e.sets.length, 0)
   const done = setsDoneActive(A)
+  // The mobility counted apart from the lifting, as in every list of the session: "Exercice
+  // 3 / 6" then "Mobilité 2 / 9", the sets of each on their own.
+  const mobTotal = A.entries.reduce((n, e) => n + (isMobility(e.id) ? e.sets.length : 0), 0)
+  const mobDone = A.entries.reduce((n, e) => n + (isMobility(e.id) ? e.sets.filter(x => x.done).length : 0), 0)
+  const runs = unitRuns(A.entries, units)
+  const run = runs.find(r => r.units.some(x => x.u === unit))
+  const place = run ? run.units.find(x => x.u === unit).n : 0
+  const ofKind = run ? runs.filter(r => r.mob === run.mob).reduce((n, r) => n + r.units.length, 0) : 0
 
   const mutEntry = (idx, fn) => update(s => { fn(s.active.entries[idx]) }, true)
   // A new weight or rep count on a set still to do carries down to the sets after it that
@@ -584,7 +618,8 @@ function ActiveWorkout() {
             a game of padel is the sentence that made it read as sets in the first place. The
             finish line below still carries the progress, in exercises. */}
         <div className="sub">{A.log ? fmtDate(A.d, true) : <Elapsed start={A.start} />}
-          {!allOnce && <> · {t('{0} sets', done + '/' + total)}</>}</div></div>
+          {!allOnce && total > mobTotal && <> · {t('{0} sets', (done - mobDone) + '/' + (total - mobTotal))}</>}
+          {mobTotal > 0 && <> · {t('mobility {0}', mobDone + '/' + mobTotal)}</>}</div></div>
       <button className="iconbtn" style={{ color: 'var(--acc)' }} aria-label={t('Finish')} onClick={finishWorkout}><Icon name="check" /></button>
     </div>
     <div className="wprog"><i style={{ width: (total ? done / total * 100 : 0) + '%' }} /></div>
@@ -592,7 +627,8 @@ function ActiveWorkout() {
     {A.entries.length ? <>
       {/* Where you are in the session, and the way to anywhere else in it. */}
       <button className="exnav muted small" onClick={() => useUI.getState().openSheet(close => <UnitList close={close} />)}>
-        {isSuperset ? t('Superset {0} / {1}', unitIdx + 1, units.length) : t('Exercise {0} / {1}', unitIdx + 1, units.length)}
+        {run && run.mob ? t('Mobility {0} / {1}', place, ofKind)
+          : isSuperset ? t('Superset {0} / {1}', place, ofKind) : t('Exercise {0} / {1}', place, ofKind)}
         <Icon name="chevronDown" />
       </button>
       <div key={'u' + unitIdx + ':' + unit.map(k => A.entries[k].id).join('+')} className="exin" style={{ '--exin-dx': dir.current * 14 + 'px' }}>
@@ -662,10 +698,15 @@ function ActiveWorkout() {
       })}>{t('This was done earlier — drop the clock')}</Button></>}
     <div style={{ height: 10 }} />
     {(() => {
-      const exDone = A.entries.filter(e => e.sets.length && e.sets.every(s => s.done)).length
+      const finished = e => e.sets.length > 0 && e.sets.every(s => s.done)
+      const exDone = A.entries.filter(finished).length
       const allDone = A.entries.length > 0 && exDone === A.entries.length
+      const mob = A.entries.filter(e => isMobility(e.id)), lift = A.entries.filter(e => !isMobility(e.id))
       return <button className={allDone ? 'btn primary' : 'btn ghost dim'} onClick={finishWorkout}>
-        {allDone ? t('Finish workout') : t('Finish workout early · {0} exercises', exDone + '/' + A.entries.length)}
+        {allDone ? t('Finish workout')
+          : mob.length && lift.length ? t('Finish workout early · {0} exercises · mobility {1}',
+            lift.filter(finished).length + '/' + lift.length, mob.filter(finished).length + '/' + mob.length)
+            : t('Finish workout early · {0} exercises', exDone + '/' + A.entries.length)}
       </button>
     })()}
     <div style={{ height: 40 }} />

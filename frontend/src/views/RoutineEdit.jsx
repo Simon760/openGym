@@ -1,7 +1,7 @@
 import { useNavigate, useParams } from 'react-router-dom'
 import { useEffect } from 'react'
 import { useStore } from '../store/useStore.js'
-import { exOr, exName } from '../lib/exercises.js'
+import { exOr, exName, isMobility, termLabel } from '../lib/exercises.js'
 import { uid } from '../lib/format.js'
 import { t } from '../lib/i18n.js'
 import { supersetUnits, cleanupSg, exLine } from '../lib/history.js'
@@ -37,6 +37,16 @@ export default function RoutineEdit() {
   const units = supersetUnits(r.ex)
   const unitFirst = new Set(units.filter(u => u.length > 1).map(u => u[0]))
   const inSS = new Set(units.filter(u => u.length > 1).flat())
+  // The lifting and the joint work a programme closes a session with, each under its own
+  // heading: one list of fifteen read as fifteen lifts. Runs of one kind, in the routine's order.
+  const mobAt = r.ex.map(e => isMobility(e.id))
+  const mixed = mobAt.some(Boolean) && mobAt.some(m => !m)
+  const runs = []
+  r.ex.forEach((e, i) => {
+    const last = runs[runs.length - 1]
+    if (last && last.mob === mobAt[i]) last.idx.push(i)
+    else runs.push({ mob: mobAt[i], idx: [i] })
+  })
 
   return <div className="narrow">
     <div className="hdr">
@@ -57,28 +67,32 @@ export default function RoutineEdit() {
       {t('Applies to every exercise in this routine that does not set its own rule.')}
     </div>
 
-    {r.ex.length ? <div className="list">{r.ex.map((e, i) => {
-      // An unresolvable id is shown rather than skipped — hiding it left an entry you
-      // could neither see nor delete, but that still turned up in the workout.
-      const ex = exOr(e.id)
-      const linkedPrev = i > 0 && e.sg && r.ex[i - 1].sg === e.sg
-      return <div key={i}>
-        {unitFirst.has(i) && <div className="ss-label"><Icon name="link" />{t('Superset')}</div>}
-        <div className={'item' + (inSS.has(i) ? ' in-ss' : '')} onClick={() => {
-          exConfigSheet(ex, e, cfg => edit(x => { x[i] = { id: x[i].id, sg: x[i].sg, ...cfg } }), () => edit(x => { x.splice(i, 1); cleanupSg(x) }), r)
-        }}>
-          <Thumb ex={ex} />
-          <div className="grow"><div className="tt exn">{exName(ex)}</div><div className="ss">{exLine(e, S.unit)}</div></div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 'none', alignItems: 'center' }}>
-            {i > 0 && <button className={'iconbtn' + (linkedPrev ? ' on-ss' : '')} title={t('Superset with exercise above')} style={{ width: 32, height: 28, borderRadius: 8, fontSize: 15 }} onClick={ev => { ev.stopPropagation(); toggleLink(i) }}><Icon name="link" /></button>}
-            <div style={{ display: 'flex', gap: 2 }}>
-              <button className="iconbtn" aria-label="Move up" style={{ width: 28, height: 24, borderRadius: 7, fontSize: 12 }} onClick={ev => { ev.stopPropagation(); move(i, -1) }}><Icon name="chevronUp" /></button>
-              <button className="iconbtn" aria-label="Move down" style={{ width: 28, height: 24, borderRadius: 7, fontSize: 12 }} onClick={ev => { ev.stopPropagation(); move(i, 1) }}><Icon name="chevronDown" /></button>
+    {r.ex.length ? runs.map((run, k) => <div key={k}>
+      {mixed && <h4 className="sec">{run.mob ? termLabel('mobility') : t('Exercises')} · {run.idx.length}</h4>}
+      <div className="list">{run.idx.map(i => {
+        const e = r.ex[i]
+        // An unresolvable id is shown rather than skipped — hiding it left an entry you
+        // could neither see nor delete, but that still turned up in the workout.
+        const ex = exOr(e.id)
+        const linkedPrev = i > 0 && e.sg && r.ex[i - 1].sg === e.sg
+        return <div key={i}>
+          {unitFirst.has(i) && <div className="ss-label"><Icon name="link" />{t('Superset')}</div>}
+          <div className={'item' + (inSS.has(i) ? ' in-ss' : '')} onClick={() => {
+            exConfigSheet(ex, e, cfg => edit(x => { x[i] = { id: x[i].id, sg: x[i].sg, ...cfg } }), () => edit(x => { x.splice(i, 1); cleanupSg(x) }), r)
+          }}>
+            <Thumb ex={ex} />
+            <div className="grow"><div className="tt exn">{exName(ex)}</div><div className="ss">{exLine(e, S.unit)}</div></div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 'none', alignItems: 'center' }}>
+              {i > 0 && <button className={'iconbtn' + (linkedPrev ? ' on-ss' : '')} title={t('Superset with exercise above')} style={{ width: 32, height: 28, borderRadius: 8, fontSize: 15 }} onClick={ev => { ev.stopPropagation(); toggleLink(i) }}><Icon name="link" /></button>}
+              <div style={{ display: 'flex', gap: 2 }}>
+                <button className="iconbtn" aria-label="Move up" style={{ width: 28, height: 24, borderRadius: 7, fontSize: 12 }} onClick={ev => { ev.stopPropagation(); move(i, -1) }}><Icon name="chevronUp" /></button>
+                <button className="iconbtn" aria-label="Move down" style={{ width: 28, height: 24, borderRadius: 7, fontSize: 12 }} onClick={ev => { ev.stopPropagation(); move(i, 1) }}><Icon name="chevronDown" /></button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-    })}</div> : <div className="empty"><div className="ico"><Icon name="dumbbell" /></div>{t('No exercises yet — add your first one.')}</div>}
+      })}</div>
+    </div>) : <div className="empty"><div className="ico"><Icon name="dumbbell" /></div>{t('No exercises yet — add your first one.')}</div>}
 
     {/* Coverage of the routine as planned, so a gap shows up while you're building it
         rather than after a month of training around it. */}

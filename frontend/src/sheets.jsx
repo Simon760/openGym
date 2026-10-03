@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
-import { EXIDX, CATEGORIES, inCategory, categoryOf, isCardio, isMobility, isBodyweightEq, allExercises, equipmentOf, exName, exNameEn, exMatches, exCloseMatches, termLabel } from './lib/exercises.js'
+import { EXIDX, CATEGORIES, inCategory, categoryOf, isCardio, isMobility, isBodyweightEq, allExercises, equipmentOf, exName, exNameEn, exMatches, exCloseMatches, exCountOf, termLabel } from './lib/exercises.js'
 import { CategoryChips, EquipmentChips } from './components/ExerciseFilters.jsx'
 import { fmtDate, fmtNum, fmtNum2, fmtKg, fmtVol, fmtDur, durPart, todayISO, isoOf, uid, exCount, DAYN, MONTHS_LONG, ACCENTS } from './lib/format.js'
 import { lastEntryFor, bestWeightFor, buildSets, effectiveRoutineId, effectiveRoutine, weekDays, swapDays, workoutVolume, durMs, setFigures, asksDuration, setsDone, setsDoneActive, lastBW, usageOf, setLabel, defaultConfig, warmEntry, cleanupSg, modeOf, effortOf, isBw, isOnce, readoutOf, isPerSide, sideReps, isWorking, setTop, hasDist, activityWorkout } from './lib/history.js'
@@ -906,7 +906,7 @@ function AddToRoutine({ ex, close }) {
     <div className="list">
       {st.routines.map(r => <div key={r.id} className="item" onClick={() => pick(r.id)}>
         <span className="lrow-i"><Icon name={glyphOf(r.emoji)} /></span>
-        <div className="grow"><div className="tt">{r.name}</div><div className="ss">{exCount(r.ex.length)}</div></div>
+        <div className="grow"><div className="tt">{r.name}</div><div className="ss">{exCountOf(r.ex)}</div></div>
         {r.ex.some(e => e.id === ex.id) && <span className="tag">{t('already in')}</span>}<Icon name="plus" className="chev" />
       </div>)}
       <div className="item" onClick={() => pick('_new')}><span className="lrow-i" style={{ background: 'var(--surface-3)' }}><Icon name="sparkles" /></span>
@@ -2195,7 +2195,7 @@ function RoutineChoices({ mine, others, onPick, current, chevron }) {
   const row = (r, prog) => <div key={r.id} className="item" onClick={() => onPick(r.id)}>
     <span className="lrow-i"><Icon name={glyphOf(r.emoji)} /></span>
     <div className="grow"><div className="tt">{r.name}</div>
-      <div className="ss">{[prog, exCount(r.ex.length)].filter(Boolean).join(' · ')}</div></div>
+      <div className="ss">{[prog, exCountOf(r.ex)].filter(Boolean).join(' · ')}</div></div>
     {current === r.id ? <Icon name="check" className="accent" /> : chevron ? <Icon name="chevronRight" className="chev" /> : null}
   </div>
   return <>
@@ -2741,7 +2741,7 @@ function LogPastSheet({ close, routineId }) {
     <div className="list">
       {planned && <div className="item" onClick={() => go(planned.id)}>
         <span className="lrow-i" style={{ background: 'var(--acc)' }}><Icon name={glyphOf(planned.emoji)} /></span>
-        <div className="grow"><div className="tt">{planned.name}</div><div className="ss">{t('planned that day')} · {exCount(planned.ex.length)}</div></div>
+        <div className="grow"><div className="tt">{planned.name}</div><div className="ss">{t('planned that day')} · {exCountOf(planned.ex)}</div></div>
         <Icon name="chevronRight" className="chev" />
       </div>}
       <RoutineChoices key={d} mine={mine} others={otherRoutines} onPick={go} chevron />

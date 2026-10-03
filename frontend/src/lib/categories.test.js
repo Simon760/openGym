@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { EXDB, CATEGORIES, inCategory, categoryOf, termLabel } from './exercises.js'
+import { describe, it, expect, afterAll } from 'vitest'
+import { EXDB, CATEGORIES, inCategory, categoryOf, termLabel, exCountOf, registerCustom } from './exercises.js'
 
 const custom = (n, extra = {}) => ({ id: 'c' + n, n, bp: 'upper arms', eq: 'custom', custom: true, ...extra })
 
@@ -61,5 +61,24 @@ describe('exercise categories', () => {
     expect(termLabel('leverage machine')).toBe('Leverage machine')
     expect(termLabel('')).toBe('')
     expect(termLabel(undefined)).toBe('')
+  })
+})
+
+// "15 exercices" for six lifts and a joint routine read as a long session of lifting.
+describe('a routine counted', () => {
+  registerCustom([{ id: 'mob1', n: 'Genou au mur', bp: 'mobility', tg: '', eq: 'custom', custom: true }])
+  afterAll(() => registerCustom([]))
+  it('tells the lifting from the mobility', () => {
+    expect(exCountOf([{ id: '0025' }, { id: '0047' }])).toBe('2 exercises')
+    expect(exCountOf([{ id: '0025' }, { id: 'mob1' }, { id: 'mob1' }])).toBe('1 exercise + 2 mobility')
+    expect(exCountOf([{ id: '0025' }, { id: '0047' }, { id: 'mob1' }])).toBe('2 exercises + 1 mobility')
+  })
+  it('says a routine of mobility alone is that', () => {
+    expect(exCountOf([{ id: 'mob1' }])).toBe('1 mobility exercise')
+    expect(exCountOf([{ id: 'mob1' }, { id: 'mob1' }])).toBe('2 mobility exercises')
+  })
+  it('counts an empty or missing list as none', () => {
+    expect(exCountOf([])).toBe('0 exercises')
+    expect(exCountOf(undefined)).toBe('0 exercises')
   })
 })
