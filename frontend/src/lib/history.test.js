@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { modeOf, isTimed, fmtSec, setLabel, defaultConfig, buildSets, exLine, workoutVolume, durMs, setFigures, effortOf, stepEffort, capEffort, isBw, isPerSide, sideReps, repStep, nextSetAfter, carryForward } from './history.js'
+import { modeOf, isTimed, fmtSec, setLabel, defaultConfig, buildSets, exLine, workoutVolume, durMs, setFigures, effortOf, stepEffort, capEffort, isBw, isPerSide, sideReps, repStep, nextSetAfter, carryForward, planPending, activityWorkout } from './history.js'
 import { EXDB } from './exercises.js'
 
 // Real ids out of the shipped catalogue, so the body-part fallback is exercised for real.
@@ -585,5 +585,37 @@ describe('buildSets across programmes', () => {
 
   it('starts a lift with no weight anywhere at zero, not at nothing', () => {
     expect(buildSets({ exWeights: {}, workouts: [] }, { id: LIFT, sets: 1, reps: 10 })[0].w).toBe(0)
+  })
+})
+
+// Padel logged before the gym made Monday's Push vanish: Home read "Padel — done" and the
+// Start tab no longer offered Push at all.
+describe('a day still owing its planned session', () => {
+  const MON = '2026-10-05'
+  const plan = (workouts = [], over = {}) => ({
+    routines: [{ id: 'push', name: 'Push', ex: [] }, { id: 'legs', name: 'Legs', ex: [] }],
+    week: { 1: 'push' }, dayPlan: {}, blocks: [], workouts, ...over,
+  })
+  const padel = () => activityWorkout({ wid: 'a1', id: 'x003', name: 'Padel', d: MON, min: 60, srpe: 5, now: Date.UTC(2026, 9, 5, 9) })
+
+  it('is still owed after an activity logged first', () => {
+    expect(planPending(plan(), MON)).toBe(true)
+    expect(planPending(plan([padel()]), MON)).toBe(true)
+  })
+
+  it('counts an exercise logged as an activity as one', () => {
+    expect(planPending(plan([{ id: 'p', d: MON, routineId: null, name: 'Tractions', activity: true, entries: [] }]), MON)).toBe(true)
+  })
+
+  it('is settled by the session, or by any other session done that day', () => {
+    expect(planPending(plan([padel(), { id: 'w', d: MON, routineId: 'push', name: 'Push', entries: [] }]), MON)).toBe(false)
+    expect(planPending(plan([{ id: 'w', d: MON, routineId: 'legs', name: 'Legs', entries: [] }]), MON)).toBe(false)
+    expect(planPending(plan([{ id: 'f', d: MON, routineId: null, name: 'Séance libre', entries: [] }]), MON)).toBe(false)
+  })
+
+  it('owes nothing on a rest day or another day', () => {
+    expect(planPending(plan([padel()], { week: {} }), MON)).toBe(false)
+    expect(planPending(plan([padel()], { dayPlan: { [MON]: 'rest' } }), MON)).toBe(false)
+    expect(planPending(plan([padel()]), '2026-10-06')).toBe(false)
   })
 })

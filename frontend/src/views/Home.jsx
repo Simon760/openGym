@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
-import { effectiveRoutine, effectiveRoutineId, streakWeeks, lastBW, setsDoneActive } from '../lib/history.js'
+import { effectiveRoutine, effectiveRoutineId, streakWeeks, lastBW, setsDoneActive, planPending } from '../lib/history.js'
 import { fmtNum, fmtDate, todayISO, isoOf, weekKey, DAYS, fmtKg } from '../lib/format.js'
 import { t, dateLocale } from '../lib/i18n.js'
 import { bwSheet, goalSheet, dayOverrideSheet, workoutDetailSheet, dayWorkoutsSheet, calendarSheet, startFlow, loadStarterPlan, bwDeltaColor, nutriSheet, nutriGoalSheet, digestSheet, openPendingProgram, discardPendingProgram, sleepSheet, tdeeSheet, watchSheet, projectionSheet } from '../sheets.jsx'
@@ -35,7 +35,11 @@ export default function Home() {
   // Plural on purpose: a day can hold a second session, and reading only the first made the
   // other one invisible from here even though it was in the history all along.
   const dayWs = (S.workouts || []).filter(x => x.d === iso)
-  const dayW = dayWs[0] || null
+  // A padel match logged before the gym is done, and the planned session is still to do: the
+  // row stays the plan's, and what was done gets a row of its own under it.
+  const pending = planPending(S, iso)
+  const doneWs = pending ? [] : dayWs
+  const dayW = doneWs[0] || null
   // A workout open right now. It hides every other screen behind it — the Start tab renames
   // itself Resume and shows this instead — so it has to be the first thing this row says.
   const running = isToday && !!S.active
@@ -102,7 +106,7 @@ export default function Home() {
     // Today: start what is planned. Any other day: it is history, so the row leads to what was
   // done, or to changing what was planned for a day still ahead.
   const onToday = () => {
-    if (dayWs.length > 1) return dayWorkoutsSheet(dayWs)
+    if (doneWs.length > 1) return dayWorkoutsSheet(doneWs)
     if (dayW) return workoutDetailSheet(dayW)
     if (!isToday) return dayOverrideSheet(iso)
     if (S.active) return nav('/workout')
@@ -147,7 +151,7 @@ export default function Home() {
             {/* And said in words as well as in colour, because a colour can only be compared
                 against another colour you are not currently looking at. */}
             <div className="ttl">{running ? t('{0} — in progress', S.active.name)
-              : dayW ? t('{0} — done', dayWs.map(w => w.name).join(' · '))
+              : dayW ? t('{0} — done', doneWs.map(w => w.name).join(' · '))
                 : routine ? t('{0} — to do', routine.name) : t('Rest day')}{todayOvr && routine ? ' · ' + t('rescheduled') : ''}</div>
           </div>
         </div>
@@ -163,6 +167,18 @@ export default function Home() {
             : <Icon name="plus" className="chev" />}
         </div>
       </div>
+
+      {/* The activities of a day whose planned session is still to come. */}
+      {pending && dayWs.length > 0 && <div className="today-row" onClick={() => (dayWs.length > 1 ? dayWorkoutsSheet(dayWs) : workoutDetailSheet(dayWs[0]))}>
+        <div className="row" style={{ gap: 9, minWidth: 0 }}>
+          <span className="lrow-i" style={{ background: 'var(--acc)' }}><Icon name="checkCircle" /></span>
+          <div style={{ minWidth: 0 }}>
+            <div className="lbl2">{t('Also done')}</div>
+            <div className="ttl">{t('{0} — done', dayWs.map(w => w.name).join(' · '))}</div>
+          </div>
+        </div>
+        <Icon name="chevronRight" className="chev" />
+      </div>}
 
       {/* What the watch measured today. It sits here, under the day it belongs to, because
           it is a daily gesture — buried at the bottom of an import screen in Settings it was

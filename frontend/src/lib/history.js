@@ -417,6 +417,19 @@ export function effectiveRoutine(S, iso) {
   const id = effectiveRoutineId(S, iso)
   return id ? S.routines.find(r => r.id === id) || null : null
 }
+
+/**
+ * Whether a day still owes its planned session. An activity — a padel match, a run, the
+ * pull-ups done at home, logged from "add an activity" — is done that day too, but it is not
+ * the session the plan asked for: logged before the gym, it used to stand in for it, so Home
+ * read "Padel — done" and the Start tab no longer offered the planned routine at all. Any
+ * other session of the day settles it, as it always has.
+ */
+export const isActivity = w => !!(w && w.activity)
+export function planPending(S, iso) {
+  if (!effectiveRoutineId(S, iso)) return false
+  return !(S.workouts || []).some(w => w.d === iso && !isActivity(w))
+}
 export function buildSets(S, cfg) {
   const last = lastEntryFor(S, cfg.id)
   const n = isOnce(cfg) ? 1 : Math.max(1, cfg.sets || 1)

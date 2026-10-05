@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
 import { exOr, exName, isMobility, termLabel, exCountOf } from '../lib/exercises.js'
-import { effectiveRoutine, lastEntryFor, bestWeightFor, buildSets, defaultConfig, warmEntry, swapEntry, setBodyweight, durMs, setsDone, setsDoneActive, supersetUnits, unitOf, nextSetAfter, carryForward, setLabel, modeOf, isBw, readoutOf, isOnce, cardioEffort, isPerSide, sideReps, repStep, EFFORT, effortOf, stepEffort, capEffort } from '../lib/history.js'
+import { effectiveRoutine, planPending, lastEntryFor, bestWeightFor, buildSets, defaultConfig, warmEntry, swapEntry, setBodyweight, durMs, setsDone, setsDoneActive, supersetUnits, unitOf, nextSetAfter, carryForward, setLabel, modeOf, isBw, readoutOf, isOnce, cardioEffort, isPerSide, sideReps, repStep, EFFORT, effortOf, stepEffort, capEffort } from '../lib/history.js'
 import { fmtNum, fmtDate, fmtDur, durPart, fmtVol, todayISO, uid, DAYN } from '../lib/format.js'
 import { beep, vibrate } from '../lib/sound.js'
 import { t } from '../lib/i18n.js'
@@ -30,6 +30,11 @@ function StartChooser() {
   const elsewhere = offer.others.filter(r => r !== todayR)
   const [more, setMore] = useState(false)
   const doneToday = (S.workouts || []).filter(w => w.d === todayISO())
+  // An activity logged first — padel before the gym — leaves the planned session to do: its
+  // card stays, with what was already done listed under it. The recap takes over only once
+  // a session has been done.
+  const pending = planPending(S, todayISO())
+  const recapDay = doneToday.length > 0 && !pending
   // Summed over the day, and each figure absent rather than zero when nothing carried it —
   // a session typed up without a duration has none, and "0 min" would claim it did.
   const recap = doneToday.reduce((a, w) => ({
@@ -61,7 +66,7 @@ function StartChooser() {
     {/* Once the day is logged, offering to start it again is noise: what you came for is
         what it came to. The recap takes the card, and the only thing left to decide sits
         under it. Before that, the card is the two ways of doing it. */}
-    {doneToday.length > 0 ? <>
+    {recapDay ? <>
       <div className="card" style={{ borderColor: 'var(--acc)', ...(doneToday.length === 1 ? { cursor: 'pointer' } : null) }}
         {...(doneToday.length === 1 ? { onClick: () => workoutDetailSheet(doneToday[0]) } : null)}>
         <div className="row between" style={{ marginBottom: 12 }}>
@@ -111,10 +116,10 @@ function StartChooser() {
           day is untouched or its session was logged an hour ago — and Start, which always
           builds a new session and checks nothing, then reads as "it restarted my workout".
           The state was the answer all along; it was just never on screen. */}
-      <div className="small" style={{ color: 'var(--yellow)', margin: '-4px 2px 12px', lineHeight: 1.45 }}>
+      {!doneToday.length && <div className="small" style={{ color: 'var(--yellow)', margin: '-4px 2px 12px', lineHeight: 1.45 }}>
         <Icon name="info" style={{ fontSize: 13, marginRight: 5, verticalAlign: '-2px' }} />
         {t('Nothing logged today yet — Start builds a new session. Use “Already did it” for one you have done.')}
-      </div>
+      </div>}
       {/* Every way of starting a session is also a way of writing one up, because a session
           you did without the app in your hand is still that session — the planned one, out of
           the programme, not a freestyle stand-in for it. */}
@@ -122,6 +127,12 @@ function StartChooser() {
       <div style={{ height: 8 }} />
       <Button icon="history" onClick={() => logPastSheet(todayR.id)}>{t('Already did it — write it up')}</Button>
     </div>}
+    {!recapDay && doneToday.length > 0 && <><h4 className="sec">{t('Also done today')}</h4>
+      <div className="list">{doneToday.map(w => <div key={w.id} className="item" onClick={() => workoutDetailSheet(w)}>
+        <span className="lrow-i" style={{ background: 'var(--acc)' }}><Icon name="checkCircle" /></span>
+        <div className="grow"><div className="tt">{w.name}</div><div className="ss">{sessionLine(w)}</div></div>
+        <Icon name="chevronRight" className="chev" />
+      </div>)}</div></>}
     {(others.length > 0 || elsewhere.length > 0) && <><h4 className="sec">{t('Other routines')}</h4>
       <div className="list">{[...others, ...(more ? elsewhere : [])].map(r => <div key={r.id} className="item" onClick={() => startFlow(r.id)}>
         <span className="lrow-i"><Icon name={glyphOf(r.emoji)} /></span>
@@ -138,7 +149,7 @@ function StartChooser() {
         </div>}
       </div></>}
     <div style={{ height: 14 }} />
-    {!doneToday.length && <><Button icon="figureRun" onClick={() => activitySheet()}>{t('Add an activity (padel, football…)')}</Button>
+    {!recapDay && <><Button icon="figureRun" onClick={() => activitySheet()}>{t('Add an activity (padel, football…)')}</Button>
       <div style={{ height: 8 }} /></>}
     <Button icon="shuffle" onClick={() => startFlow(null)}>{t('Freestyle workout (pick as you go)')}</Button>
     <div style={{ height: 8 }} />

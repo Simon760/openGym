@@ -2632,7 +2632,7 @@ export function startFlow(routineId) {
  * `opts.warm` is a config for the movement the session opened with. It goes in front of the
  * routine, because that is the order it happened in and the order you will type it in.
  */
-export function beginWorkout(routineId, bw, { log = false, d = todayISO(), warm = null, first = null } = {}) {
+export function beginWorkout(routineId, bw, { log = false, d = todayISO(), warm = null, first = null, activity = false } = {}) {
   const st = S()
   const r = routineId ? st.routines.find(x => x.id === routineId) : null
   // `first` is one exercise and its config: a session of that alone, opened from "add an
@@ -2654,7 +2654,7 @@ export function beginWorkout(routineId, bw, { log = false, d = todayISO(), warm 
     const last = lastBW(st)
     s.active = { id: uid(), d: log ? d : todayISO(), start: Date.now(), routineId,
       name: r ? r.name : first && first.id ? capFirst(exName(EXIDX[first.id])) : t('Freestyle'), bw: bw ?? (last ? last.w : null), cur: 0, entries,
-      ...(log ? { log: true } : {}) }
+      ...(log ? { log: true } : {}), ...(activity ? { activity: true } : {}) }
   })
   useUI.getState().stopRest()
   nav('/workout')
@@ -2829,7 +2829,8 @@ function ActivitySheet({ close, d: given }) {
   const other = () => exercisePicker((x, done) => {
     if (sportOf(x.id)) { pick(x.id); done(); return }
     if (S().active) { toast(t('Finish your current workout first')); return }
-    exConfigSheet(x, null, cfg => { done(); close(); beginWorkout(null, undefined, { log: true, d, first: { ...cfg, id: x.id } }) }, null, null, { cta: t('Add to the session') })
+    // An activity like the sports above, so it does not stand in for the day's planned session.
+    exConfigSheet(x, null, cfg => { done(); close(); beginWorkout(null, undefined, { log: true, d, first: { ...cfg, id: x.id }, activity: true }) }, null, null, { cta: t('Add to the session') })
   })
 
   return <>
@@ -2943,6 +2944,7 @@ function doFinishWorkout() {
     // A session typed up afterwards has no duration anybody measured. Left absent rather than
     // filled with how long the typing took — a wrong number is worse than a missing one.
     id: A.id, d: A.d, ...(A.log ? {} : { start: A.start, end: Date.now() }), routineId: A.routineId, name: A.name, bw: A.bw,
+    ...(A.activity ? { activity: true } : {}),
     // `target` (what the session prescribed) is kept alongside the sets: without it a
     // finished workout cannot say whether it hit its reps, and a timed session reads back
     // as "0 reps". It is what the progression engine works from.

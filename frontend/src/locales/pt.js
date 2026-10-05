@@ -1220,4 +1220,6 @@ export default {
   'Mobility {0} / {1}': 'Mobility {0} / {1}',
   'mobility {0}': 'mobility {0}',
   'Finish workout early · {0} exercises · mobility {1}': 'Finish workout early · {0} exercises · mobility {1}',
+  'Also done': 'Also done',
+  'Also done today': 'Also done today',
 }

@@ -1212,4 +1212,6 @@ export default {
   'Mobility {0} / {1}': 'Mobilité {0} / {1}',
   'mobility {0}': 'mobilité {0}',
   'Finish workout early · {0} exercises · mobility {1}': 'Terminer plus tôt · {0} exercices · mobilité {1}',
+  'Also done': 'Aussi fait',
+  'Also done today': 'Aussi fait aujourd’hui',
 }
