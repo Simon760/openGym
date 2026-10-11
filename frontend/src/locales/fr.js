@@ -1214,4 +1214,5 @@ export default {
   'Finish workout early · {0} exercises · mobility {1}': 'Terminer plus tôt · {0} exercices · mobilité {1}',
   'Also done': 'Aussi fait',
   'Also done today': 'Aussi fait aujourd’hui',
+  'Edit intake': 'Modifier les apports',
 }

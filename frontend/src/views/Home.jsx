@@ -329,10 +329,12 @@ export default function Home() {
           <Button size="sm" icon="target" style={dayGoal ? { color: 'var(--yellow)' } : undefined} onClick={() => nutriGoalSheet()}>
             {dayGoal?.kcal ? fmtNum(dayGoal.kcal) : t('Goal')}
           </Button>
-          <Button size="sm" icon="plus" onClick={() => nutriSheet(iso)}>{t('Log')}</Button>
+          {/* Once the day is logged the same sheet edits it, and says so: "+ Log" over figures
+              already there read as adding a second entry, not changing the first. */}
+          <Button size="sm" icon={todayNutri ? 'pencil' : 'plus'} onClick={() => nutriSheet(iso)}>{todayNutri ? t('Edit') : t('Log')}</Button>
         </div>
       </div>
-      {todayNutri ? <>
+      {todayNutri ? <div style={{ cursor: 'pointer' }} onClick={() => nutriSheet(iso)}>
         <div className="row" style={{ gap: 8, alignItems: 'baseline' }}>
           <div className="big">{fmtNum(todayNutri.kcal || kcalFromMacros(todayNutri))} <span className="muted" style={{ fontSize: '1rem' }}>kcal</span></div>
           {/* The actionable half of the card: what is left decides tonight's meal, so it
@@ -354,7 +356,7 @@ export default function Home() {
             </span>)}
           </div>
         </>}
-      </> : <div className="muted small">{t('Nothing logged today — add your calories to keep the picture complete.')}</div>}
+      </div> : <div className="muted small">{t('Nothing logged today — add your calories to keep the picture complete.')}</div>}
 
       {/* The day's balance: (maintenance + training) − intake. It sits under the intake
           rather than in its own card because it is the same question — what today came to —

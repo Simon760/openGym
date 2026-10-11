@@ -23,7 +23,7 @@ import Icon from './Icon.jsx'
 // 0). Keeps a local string draft while focused so partial input like "33," survives.
 // `nullable` is for fields where "nothing entered" and 0 mean different things (RIR: a
 // logged 0 is a set taken to failure). Those clear back to null instead of snapping to 0.
-export function NumberField({ value, onChange, decimal = true, nullable = false, className = '', ...rest }) {
+export function NumberField({ value, onChange, decimal = true, nullable = false, className = '', placeholder, ...rest }) {
   const [draft, setDraft] = useState(null)
   const committed = useRef(null)
   // null and undefined are the same "empty" here — a nullable field's key is dropped once cleared.
@@ -43,8 +43,16 @@ export function NumberField({ value, onChange, decimal = true, nullable = false,
       inputMode={decimal ? 'decimal' : 'numeric'}
       className={'num ' + className}
       value={draft ?? (value ?? '')}
-      onFocus={e => e.target.select()}
+      // What is typed replaces the figure. Selecting it on focus was meant to do that, but
+      // Safari on an iPhone does not reliably keep a selection made as the field is tapped:
+      // the caret lands at the end, typing 2500 over 2200 gave 22002500, and a figure already
+      // logged could not be changed. So the field empties as it takes focus, showing what it
+      // held as a hint, and leaving it untouched puts that figure back.
+      placeholder={draft === '' && value != null && value !== '' ? String(value) : placeholder}
+      onFocus={() => { committed.current = value ?? null; setDraft('') }}
       onChange={e => commit(e.target.value)}
+      // Backspace on the emptied field clears the figure instead of replacing it.
+      onKeyDown={e => { if (e.key === 'Backspace' && draft === '') commit('') }}
       onBlur={() => { setDraft(null); committed.current = null }}
       {...rest}
     />

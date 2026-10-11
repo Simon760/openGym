@@ -18,7 +18,7 @@ import {
   hasEffort, displayScale, scaleName, toScale, avgRir, effortSummary, effortWeeks,
   effortHistogram, isHardSet, HARD_RIR
 } from '../lib/effort.js'
-import { avgOver, seriesOf, weekOf, dayStack, hasMacros, kcalFromMacros, MACROS, MACRO_NAME, MACRO_COLOR } from '../lib/nutrition.js'
+import { avgOver, seriesOf, weekOf, dayStack, hasMacros, kcalFromMacros, entryFor, MACROS, MACRO_NAME, MACRO_COLOR } from '../lib/nutrition.js'
 import { bodyFatSeries, compositionTrend, sleepSeries, sleepAverage, sleepDebt, lastComposition, whenOf } from '../lib/body.js'
 import { deficitTotals, deficitSeries, impliedTDEE, predictedVsActual, projectedWeight, cutRate, tdeeParts, KCAL_PER_KG_FAT, LOSS_CEILING_PCT } from '../lib/energy.js'
 import { Button, Segmented, SelectRow } from '../components/ui.jsx'
@@ -236,6 +236,7 @@ function NutritionCard({ S }) {
   const avg = avgOver(S, win)
   const pts = seriesOf(S, win)
   const goal = S.nutriGoal
+  const loggedToday = !!entryFor(S, todayISO())
 
   return <div className="card">
     <div className="row between" style={{ marginBottom: 8 }}>
@@ -244,7 +245,7 @@ function NutritionCard({ S }) {
         <Button size="sm" icon="target" style={goal ? { color: 'var(--yellow)' } : undefined} onClick={() => nutriGoalSheet()}>
           {goal?.kcal ? fmtNum(goal.kcal) : t('Goal')}
         </Button>
-        <Button size="sm" icon="plus" onClick={() => nutriSheet()}>{t('Log')}</Button>
+        <Button size="sm" icon={loggedToday ? 'pencil' : 'plus'} onClick={() => nutriSheet()}>{loggedToday ? t('Edit') : t('Log')}</Button>
       </div>
     </div>
     <WeekBars S={S} goal={goal} />

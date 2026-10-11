@@ -100,8 +100,10 @@ function WeightInput({ value, setValue, unit }) {
     <div className="bwstep">
       <button className="bw-pm" onClick={() => onSlide(value - 0.1)} aria-label="minus 0.1"><Icon name="minus" /></button>
       <div className="bw-read">
-        <input inputMode="decimal" value={raw ?? fmtKg(value)}
-          onFocus={e => { setRaw(String(value)); e.target.select() }}
+        {/* Emptied as it is tapped, the reading kept as a hint: what is typed replaces it,
+            where a selection on focus left Safari on an iPhone typing after it. */}
+        <input inputMode="decimal" value={raw ?? fmtKg(value)} placeholder={fmtKg(value)}
+          onFocus={() => setRaw('')}
           onChange={e => { const x = e.target.value.replace(',', '.'); setRaw(e.target.value); const n = parseFloat(x); if (isFinite(n)) setValue(clamp(n)) }}
           onBlur={() => setRaw(null)}
           style={{ font: 'inherit', color: 'inherit', background: 'none', border: 0, width: '3.4em',
@@ -358,7 +360,7 @@ function NutriSheet({ close, iso = todayISO() }) {
   const delEntry = d => update(s => { s.nutrition = (s.nutrition || []).filter(e => e.d !== d) })
 
   return <>
-    <h3>{t('Log intake')}</h3>
+    <h3>{entryFor(st, iso) ? t('Edit intake') : t('Log intake')}</h3>
     <div className="muted small">{t('Today') + ', ' + fmtDate(iso, true)}</div>
     <div style={{ height: 12 }} />
     <Stepper label={t('Calories')} unit="kcal" value={v.kcal} step={50} decimal={false} onChange={n => set('kcal', n)} />

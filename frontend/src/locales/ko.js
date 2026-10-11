@@ -1222,4 +1222,5 @@ export default {
   'Finish workout early · {0} exercises · mobility {1}': 'Finish workout early · {0} exercises · mobility {1}',
   'Also done': 'Also done',
   'Also done today': 'Also done today',
+  'Edit intake': 'Edit intake',
 }
