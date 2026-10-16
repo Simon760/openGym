@@ -182,7 +182,7 @@ describe('sportExportCSV', () => {
     const S = base({ workouts: [workout({ name: 'Push, heavy', entries: [{ id: LIFT, target: {}, sets: [liftedSet(60, 10)] }] })] })
     const { csv } = sportExportCSV(S, D2, D2)
     const lines = csv.split('\r\n')
-    expect(lines[0]).toBe('Date,Séance,Durée (min),Énergie (kcal),Volume (kg),Poids du jour (kg)')
+    expect(lines[0]).toBe('Date,Séance,Durée (min),Énergie (kcal),Volume (kg),Poids du jour (kg),Contexte')
     expect(lines[1]).toContain('"Push, heavy"')
   })
 

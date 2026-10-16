@@ -14,6 +14,7 @@
 import { EXIDX, exName } from './exercises.js'
 import { setLabel, durMs, isWorking } from './history.js'
 import { activeBlock } from './blocks.js'
+import { periodsOn, periodText } from './periods.js'
 import { fmtDate } from './format.js'
 import { t } from './i18n.js'
 
@@ -43,7 +44,9 @@ export function earliestLoggedDay(S) {
 
 // Describes the outer, session-level shape — what every block in the file opens with. The
 // exercise and set lines underneath are sub-rows of it, not columns of their own.
-const HEADER = ['Date', 'Séance', 'Durée (min)', 'Énergie (kcal)', 'Volume (kg)', 'Poids du jour (kg)']
+// The last column is the note of a period the day falls in — another gym, an injury — so a
+// session whose loads dropped carries its reason on its own line. See lib/periods.js.
+const HEADER = ['Date', 'Séance', 'Durée (min)', 'Énergie (kcal)', 'Volume (kg)', 'Poids du jour (kg)', 'Contexte']
 
 // RFC 4182-ish: only quote a cell that needs it, so an ordinary CSV stays easy to eyeball.
 const cell = v => {
@@ -55,7 +58,7 @@ const round1 = n => (n == null ? null : Math.round(n * 10) / 10)
 /** One session, as its own block: the header line, then every exercise with its sets under
  *  it. `[]` when there is truly nothing to say — no set was ticked off and no watch figure
  *  was ever attached, which is what a session started and abandoned looks like. */
-function workoutBlock(w) {
+function workoutBlock(w, ctx = '') {
   const mins = round1(durMs(w) / 60000) || ''
   const kcal = (w.watch && w.watch.kcal) || ''
   const vol = w.vol > 0 ? w.vol : ''
@@ -68,12 +71,14 @@ function workoutBlock(w) {
     sets.forEach((s, i) => body.push(['', '', t('Set {0}', i + 1), setLabel(e.id, s, e.target)]))
   })
   if (!body.length && !mins && !kcal) return []
-  return [[w.d, w.name, mins, kcal, vol, bw], ...body]
+  // The context cell only when there is one: rows are not all one width anyway (see above),
+  // and a trailing empty column on every session would be noise in a file most often without.
+  return [[w.d, w.name, mins, kcal, vol, bw, ...(ctx ? [ctx] : [])], ...body]
 }
 
 /** A day the watch measured training on with nothing logged here for it to attach to — see
  *  lib/health.js: a watch measuring a session is evidence it happened either way. */
-const strayBlock = h => [[h.d, t('training, no session logged'), h.sportMin || '', h.sport || '']]
+const strayBlock = (h, ctx = '') => [[h.d, t('training, no session logged'), h.sportMin || '', h.sport || '', ...(ctx ? ['', '', ctx] : [])]]
 
 /**
  * Every session between two days inclusive, each as its own block, in the order they were
@@ -87,9 +92,10 @@ export function sportExportRows(S, fromISO, toISO) {
   const strayDays = (S.health || []).filter(h => inRange(h.d) &&
     (h.sport != null || h.sportMin != null) && !workouts.some(w => w.d === h.d))
 
+  const ctxOf = d => periodsOn(S, d).map(periodText).join(' ; ')
   const units = [
-    ...workouts.map(w => ({ d: w.d, at: w.start || 0, block: () => workoutBlock(w) })),
-    ...strayDays.map(h => ({ d: h.d, at: 0, block: () => strayBlock(h) }))
+    ...workouts.map(w => ({ d: w.d, at: w.start || 0, block: () => workoutBlock(w, ctxOf(w.d)) })),
+    ...strayDays.map(h => ({ d: h.d, at: 0, block: () => strayBlock(h, ctxOf(h.d)) }))
   ].sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : a.at - b.at))
 
   const rows = []

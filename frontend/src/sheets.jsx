@@ -12,7 +12,7 @@ import { starterRoutines } from './lib/starter.js'
 import Media, { Thumb } from './components/Media.jsx'
 import Stepper from './components/Stepper.jsx'
 import Icon from './components/Icon.jsx'
-import { Button, Slider, Switch, Segmented, SelectRow, Row, TextArea, NumberField } from './components/ui.jsx'
+import { Button, Slider, Switch, Segmented, SelectRow, Row, TextArea, TextField, NumberField } from './components/ui.jsx'
 import { useSaveOnDismiss } from './components/Modals.jsx'
 import { glyphOf, GLYPH_GROUPS, DEFAULT_GLYPH } from './lib/glyphs.js'
 import BodyMap from './components/BodyMap.jsx'
@@ -31,6 +31,7 @@ import { entryFor, hasMacros, kcalFromMacros, derivedMismatch, remainingOf, putE
 import { validBodyFat, composition, sleepFor, putSleep, validSleep, sleepHours, hoursBetween, validTime, BF_MIN, BF_MAX, SLEEP_MIN, SLEEP_MAX } from './lib/body.js'
 import { parseHealth, applyHealth, parseHealthCSV, applyHealthDays, shortcutRecipe, shortcutLink, historySpec, watchTarget, healthFor } from './lib/health.js'
 import { currentProgrammeStart, earliestLoggedDay, sportExportCSV, sportExportSummary } from './lib/sport-export.js'
+import { periodsBetween, periodsOn, periodText, putPeriod, removePeriod } from './lib/periods.js'
 import { suppOn, suppName, tookOn, setTook, suppStreak, suppRate } from './lib/supp.js'
 import { weekFor, weekOfBlock, setWeekDay, duplicateBlock, emptyBlock, blocksOf, activeBlock, blockFromCurrent, startBlock, cancelSwitch, upcoming, daysUntil, removeBlock, sessionsIn, weekIndexAt, MAX_WEEKS, WEEKDAYS, sameNamed, nextMonday, routinesFor, routinesForBlock, programmeOf } from './lib/blocks.js'
 import { impliedTDEE, tdeeParts, trimOf, stepBaseOf, restStrictOf, countsToday, projectedWeight, recordCalibration, calibration, dayBalance, KCAL_PER_KG_FAT, BIG_EFFORT, TDEE_PARTS, TDEE_MIN, TDEE_MAX, TRIM_MAX, IMPLIED_MIN_SPAN, IMPLIED_MIN_DAYS, IMPLIED_MIN_WEIGHINS } from './lib/energy.js'
@@ -1964,14 +1965,14 @@ function SportExport({ close }) {
       <div className="dim small" style={{ margin: '6px 2px 16px' }}>{fmtDate(start, true)} → {t('today')}</div>
     </>}
     <div className="row" style={{ gap: 10, alignItems: 'flex-end' }}>
-      <div style={{ flex: 1 }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
         <div className="dim small" style={{ margin: '0 2px 6px' }}>{t('From')}</div>
-        <input className="field tm" type="date" value={from} max={to}
+        <input className="field tm" type="date" style={{ width: '100%', minWidth: 0 }} value={from} max={to}
           onChange={e => e.target.value && changeFrom(e.target.value)} />
       </div>
-      <div style={{ flex: 1 }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
         <div className="dim small" style={{ margin: '0 2px 6px' }}>{t('To')}</div>
-        <input className="field tm" type="date" value={to} min={from} max={todayISO()}
+        <input className="field tm" type="date" style={{ width: '100%', minWidth: 0 }} value={to} min={from} max={todayISO()}
           onChange={e => e.target.value && changeTo(e.target.value)} />
       </div>
     </div>
@@ -1981,6 +1982,10 @@ function SportExport({ close }) {
         t(sets === 1 ? '{0} set' : '{0} sets', sets)
       ].join(' · ') : t('Nothing logged in this range')}
     </div>
+    {periodsBetween(st, from, to).map(p => <div key={p.id} className="small" style={{ margin: '-6px 2px 12px', lineHeight: 1.45 }}>
+      <Icon name="calendar" style={{ fontSize: 13, marginRight: 5, verticalAlign: '-2px', color: 'var(--yellow)' }} />
+      {t('Sessions from {0} to {1} marked: {2}', fmtDate(p.from), fmtDate(p.to), periodText(p))}
+    </div>)}
     <Button variant="primary" icon="download" disabled={!sessions} onClick={run}>{t('Export CSV')}</Button>
     <div style={{ height: 8 }} />
     <Button variant="ghost" className="dim" onClick={close}>{t('Cancel')}</Button>
@@ -2055,6 +2060,76 @@ function SleepSheet({ close, iso = todayISO() }) {
 }
 export const sleepSheet = iso => ui().openSheet(close => <SleepSheet close={close} {...dayProp(iso)} />)
 
+/* ============================ period notes ============================ */
+// A stretch of days every reader of the log needs to know about — another gym, an injury.
+// Noted once against the dates and carried into the digests, the CSV export and what the
+// assistant reads; see lib/periods.js.
+const PERIOD_PRESETS = [
+  { label: 'Another gym', note: 'Different machines and resistance: loads not comparable' },
+  { label: 'Injury', note: '' },
+  { label: 'Holiday', note: '' },
+]
+function PeriodEdit({ p, close }) {
+  const [f, setF] = useState(() => p || { id: uid(), from: isoOf(new Date(Date.now() - 13 * 86400000)), to: todayISO(), label: '', note: '' })
+  const set = (k, v) => setF(x => ({ ...x, [k]: v }))
+  const save = () => {
+    if (!String(f.label || '').trim()) { toast(t('Give it a name — “Another gym”, for instance.')); return false }
+    update(s => { s.periods = putPeriod(s.periods, f) })
+    close()
+    toast(t('Period saved'))
+  }
+  useSaveOnDismiss(f, save)
+  const del = () => { update(s => { s.periods = removePeriod(s.periods, f.id) }); close(); toast(t('Period deleted')) }
+  return <>
+    <h3>{p ? t('Edit period') : t('Add a period')}</h3>
+    <div className="row" style={{ gap: 10, alignItems: 'flex-end' }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="dim small" style={{ margin: '0 2px 6px' }}>{t('From')}</div>
+        <input className="field tm" type="date" style={{ width: '100%', minWidth: 0 }} value={f.from} onChange={e => e.target.value && set('from', e.target.value)} />
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="dim small" style={{ margin: '0 2px 6px' }}>{t('To')}</div>
+        <input className="field tm" type="date" style={{ width: '100%', minWidth: 0 }} value={f.to} onChange={e => e.target.value && set('to', e.target.value)} />
+      </div>
+    </div>
+    <h4 className="sec">{t('What it was')}</h4>
+    <div className="chips" style={{ flexWrap: 'wrap', overflow: 'visible', marginBottom: 10 }}>
+      {PERIOD_PRESETS.map(x => <button key={x.label} className={'chip nocap' + (f.label === t(x.label) ? ' on' : '')}
+        onClick={() => setF(o => ({ ...o, label: t(x.label), note: x.note ? t(x.note) : o.note }))}>{t(x.label)}</button>)}
+    </div>
+    <TextField placeholder={t('Name')} value={f.label} maxLength={40} onChange={e => set('label', e.target.value)} />
+    <div style={{ height: 8 }} />
+    <TextArea rows={3} maxLength={300} placeholder={t('What the reader should know')} value={f.note || ''}
+      onChange={e => set('note', e.target.value)} />
+    <div className="dim small" style={{ margin: '8px 2px 14px', lineHeight: 1.45 }}>
+      {t('Every session between these dates carries it — in the summary to copy, the CSV export and what the assistant reads.')}
+    </div>
+    <Button variant="primary" onClick={save}>{t('Save')}</Button>
+    {p && <><div style={{ height: 8 }} /><Button variant="danger" onClick={del}>{t('Delete')}</Button></>}
+  </>
+}
+export const periodSheet = p => ui().openSheet(close => <PeriodEdit p={p} close={close} />)
+
+function Periods() {
+  const st = useStore(s => s.S)
+  const list = [...(st.periods || [])].reverse()
+  return <>
+    <h3>{t('Period notes')}</h3>
+    <div className="muted small" style={{ marginBottom: 12, lineHeight: 1.45 }}>
+      {t('Another gym, an injury, a holiday — noted once against the dates, so a drop in the loads is read for what it was.')}
+    </div>
+    {list.length ? <div className="list">{list.map(p => <div key={p.id} className="item" onClick={() => periodSheet(p)}>
+      <span className="lrow-i" style={{ background: 'var(--yellow)' }}><Icon name="calendar" /></span>
+      <div className="grow"><div className="tt nocap">{p.label}</div>
+        <div className="ss">{fmtDate(p.from) + ' → ' + fmtDate(p.to)}{p.note ? ' · ' + p.note : ''}</div></div>
+      <Icon name="chevronRight" className="chev" />
+    </div>)}</div> : <div className="dim small" style={{ margin: '0 2px 4px' }}>{t('Nothing noted yet.')}</div>}
+    <div style={{ height: 12 }} />
+    <Button variant="primary" icon="plus" onClick={() => periodSheet()}>{t('Add a period')}</Button>
+  </>
+}
+export const periodsSheet = () => ui().openSheet(() => <Periods />)
+
 /* ============================ digest ============================ */
 // Everything the log knows about a period, as text to hand to something that coaches you.
 // Two shapes because two conversations want different things — see lib/digest.js.
@@ -2088,6 +2163,10 @@ function Digest({ close }) {
     {kind === 'training' && <Segmented className="seg-range" value={days} onChange={setDays}
       options={[{ value: 7, label: '7d' }, { value: 14, label: '14d' }, { value: 30, label: '30d' }]} />}
     <TextArea readOnly rows={12} value={text} style={{ marginTop: 10, fontVariantNumeric: 'tabular-nums' }} />
+    {/* Another gym, an injury: said once against the dates, and in every summary that covers them. */}
+    <Button variant="ghost" size="sm" icon="calendar" style={{ marginTop: 6 }} onClick={() => periodsSheet()}>
+      {(st.periods || []).length ? t('Period notes ({0})', st.periods.length) : t('Add a period note — another gym, an injury…')}
+    </Button>
     <div style={{ height: 12 }} />
     <Button variant="primary" icon="clipboard" onClick={copy}>{t('Copy')}</Button>
     {canShareText() && <><div style={{ height: 8 }} />
@@ -2523,6 +2602,9 @@ function WorkoutDetail({ w: given, close }) {
       t(setsDone(w) === 1 ? '{0} set' : '{0} sets', setsDone(w)),
       ...(w.bw ? [fmtNum(w.bw) + ' ' + st.unit] : [])
     ].join(' · ')}</div>
+    {periodsOn(st, w.d).map(p => <div key={p.id} className="small" style={{ margin: '-6px 0 12px', color: 'var(--yellow)', lineHeight: 1.45 }}>
+      <Icon name="calendar" style={{ fontSize: 13, marginRight: 5, verticalAlign: '-2px' }} />{periodText(p)}
+    </div>)}
     {w.entries.map((e, i) => {
       const ex = EXIDX[e.id]
       return <div key={i} className="row" style={{ marginBottom: 12, alignItems: 'flex-start' }}>

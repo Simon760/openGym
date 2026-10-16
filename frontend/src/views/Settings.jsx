@@ -12,7 +12,7 @@ import { t, LANGS, INSTR_LANGS, ONLY_LANG } from '../lib/i18n.js'
 import { DEMO, SOLO, REPO } from '../lib/demo.js'
 import { FIREBASE } from '../lib/firebase.js'
 import { MOBILE, shareExport, syncReminder } from '../lib/mobile.js'
-import { loadStarterPlan, confirmSheet, importFromApp, healthImportSheet, sportExportSheet } from '../sheets.jsx'
+import { loadStarterPlan, confirmSheet, importFromApp, healthImportSheet, sportExportSheet, periodsSheet } from '../sheets.jsx'
 import Icon from '../components/Icon.jsx'
 import { Section, Row, SelectRow, Switch, Segmented, Button, TextField } from '../components/ui.jsx'
 import { APP_NAME, FILE_PREFIX, UPSTREAM, UPSTREAM_REPO, BUILD } from '../lib/brand.js'
@@ -242,6 +242,9 @@ export default function Settings() {
       <Row icon="download" iconTint="var(--orange)" title={t('Export training (CSV)')}
         subtitle={t('Sets, reps, weight and energy — a date range, or since your current routine started.')}
         accessory="chevron" onClick={() => sportExportSheet()} />
+      <Row icon="calendar" iconTint="var(--yellow)" title={t('Period notes')}
+        subtitle={t('Another gym, an injury — carried into the export and the summary to copy.')}
+        accessory="chevron" onClick={() => periodsSheet()} />
       <Row icon="trash" iconTint="var(--red)" title={user ? t('Delete all my data') : t('Reset everything')}
         subtitle={user ? t('This phone and your account — every device.') : undefined} danger onClick={wipe} />
     </Section>

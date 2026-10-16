@@ -42,7 +42,11 @@ export const DEF = {
   // Daily figures a watch measured and BodyEvolve cannot: { d, steps, kcal, rhr, exerciseMin }.
   // A watch's reading of a *session* is not here — it annotates the workout already logged
   // that day (w.watch), because two records of one session must stay one session.
-  health: []
+  health: [],
+  // Notes on a stretch of days every reader of the log needs — { id, from, to, label, note }:
+  // another gym, an injury. Carried into the digests, the CSV export and what the assistant
+  // reads; see lib/periods.js.
+  periods: []
 }
 const clone = o => JSON.parse(JSON.stringify(o))
 

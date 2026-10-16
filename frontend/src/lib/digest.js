@@ -26,6 +26,7 @@ import { fmtNum, fmtDate, todayISO, isoOf } from './format.js'
 import { t } from './i18n.js'
 import { APP_NAME } from './brand.js'
 import { weekFor } from './blocks.js'
+import { periodsBetween, periodsOn, periodText, periodTag } from './periods.js'
 
 // A period listing more sessions than this is summarised rather than printed in full: the
 // digest has to survive being pasted into a message box, and the tail of a long history is
@@ -59,9 +60,11 @@ const setsLine = e => (e.sets || []).filter(s => s.done).map(s => setLabel(e.id,
  * the progression engine will act on, or the coach reading it is working from a different
  * session than the app is.
  */
-function sessionBlock(w, { targets = true } = {}) {
+function sessionBlock(w, { targets = true, tag = '' } = {}) {
   const mins = w.end && w.start ? Math.round((w.end - w.start) / 60000) : null
-  const head = [fmtDate(w.d, true), w.name, mins ? mins + ' min' : null].filter(Boolean).join(' · ')
+  // A session inside a noted period says so on its own line too — "[Autre salle]" — so a
+  // lighter load is never read without the reason beside it.
+  const head = [fmtDate(w.d, true), w.name, mins ? mins + ' min' : null].filter(Boolean).join(' · ') + (tag ? '  [' + tag + ']' : '')
   const lines = [head]
   ;(w.entries || []).forEach(e => {
     const done = setsLine(e)
@@ -114,6 +117,10 @@ const hasAnyMacro = e => MACROS.some(m => e[m])
  */
 export function dailyDigest(S, iso = todayISO(), now = Date.now()) {
   const out = [APP_NAME + ' — ' + t('Today') + ' — ' + fmtDate(iso, true)]
+  // A day inside a noted period — another gym — opens with the note: it is the first thing
+  // the reader needs before reading anything below it.
+  const ctx = periodsOn(S, iso)
+  if (ctx.length) out.push(t('Context') + ' ' + ctx.map(periodText).join(' ; '))
   out.push('')
 
   // What was done. One line per activity, because a day can hold more than one.
@@ -222,9 +229,18 @@ export function trainingDigest(S, days = 7, now = Date.now()) {
       ' ' + t('over {0} of {1} sets', eff.rated, eff.done))
   }
 
+  // What the dates themselves need saying — another gym, an injury — before the sessions they
+  // explain, each session in one of them tagged below.
+  const ctx = periodsBetween(S, days ? isoOf(new Date(now - days * 86400000)) : '0000-00-00', isoOf(new Date(now)))
+  if (ctx.length) {
+    out.push('')
+    out.push(t('Context'))
+    ctx.forEach(p => out.push('  ' + fmtDate(p.from) + ' → ' + fmtDate(p.to) + ' : ' + periodText(p)))
+  }
+
   if (shown.length) {
     out.push('')
-    shown.forEach(w => { out.push(sessionBlock(w)); out.push('') })
+    shown.forEach(w => { out.push(sessionBlock(w, { tag: periodTag(S, w.d) })); out.push('') })
     if (hidden > 0) out.push(t('({0} earlier sessions in this period are not listed)', hidden), '')
   }
 

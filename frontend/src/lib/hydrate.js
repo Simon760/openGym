@@ -64,7 +64,7 @@ export function hydrate(state) {
   delete S.v
   delete S.json
 
-  for (const k of ['bodyweight', 'routines', 'workouts', 'customEx', 'nutrition', 'sleep', 'health', 'blocks', 'blockLog', 'calib']) S[k] = list(S[k])
+  for (const k of ['bodyweight', 'routines', 'workouts', 'customEx', 'nutrition', 'sleep', 'health', 'blocks', 'blockLog', 'calib', 'periods']) S[k] = list(S[k])
   for (const k of ['week', 'dayPlan', 'exWeights', 'supp']) S[k] = dict(S[k])
 
   // An exercise that arrived from an imported plan carried a name and a body part and

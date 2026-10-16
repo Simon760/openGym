@@ -79,10 +79,19 @@ function setOut(s) {
  * other end can say whether the session hit what it was asked for, which is the whole
  * signal a program gets adjusted on.
  */
-function sessionOut(w, customEx) {
+// The notes the user put on a stretch of days — another gym, an injury — as one line each.
+// See frontend/src/lib/periods.js.
+const periodLine = p => [p.label, p.note].map(x => String(x || '').trim()).filter(Boolean).join(' — ');
+const periodsIn = (S, from, to) => (S.periods || []).filter(p => p && p.from <= to && p.to >= from);
+
+function sessionOut(w, customEx, periods = []) {
+  // A session inside a noted period carries the note: a lighter load at another gym is not a
+  // regression, and the reader has to see why beside the sets.
+  const context = periods.filter(p => p.from <= w.d && w.d <= p.to).map(periodLine).join(' ; ');
   return {
     date: w.d,
     routine: w.name,
+    ...(context ? { context } : {}),
     minutes: w.start && w.end ? Math.round((w.end - w.start) / 60000) : null,
     bodyweight: w.bw || null,
     volume: w.vol || null,
@@ -160,7 +169,9 @@ export const TOOLS = [
       'share of the watch\'s active-energy reading the user does not trust (wrist devices ' +
       'read energy 20-40% high); `activity.kcal_raw` is what the watch actually said. Both ' +
       'tdee and a day with no intake logged can be null, and null means no balance rather ' +
-      'than a balance of zero.',
+      'than a balance of zero. `context` lists periods the user noted against their dates ' +
+      '(another gym with different machines, an injury), and a session inside one carries the ' +
+      'note in its own `context`: read its loads against that, not as progress or regression.',
     inputSchema: {
       type: 'object',
       properties: { days: { type: 'integer', description: 'Days back from today. 0 for everything. Default 30.' } }
@@ -264,7 +275,9 @@ function callTool(name, args, S) {
         body_weight: (S.bodyweight || []).filter(b => inWindow(b.d, days, now)).map(b => ({ date: b.d, kg: b.w })),
         intake: (S.nutrition || []).filter(e => inWindow(e.d, days, now))
           .map(e => ({ date: e.d, kcal: e.kcal, protein: e.p, carbs: e.c, fat: e.f })),
-        workouts: (S.workouts || []).filter(w => inWindow(w.d, days, now)).map(w => sessionOut(w, S.customEx))
+        workouts: (S.workouts || []).filter(w => inWindow(w.d, days, now)).map(w => sessionOut(w, S.customEx, S.periods || [])),
+        context: periodsIn(S, days ? iso(now - days * 86400000) : '0000-00-00', today())
+          .map(p => ({ from: p.from, to: p.to, note: periodLine(p) }))
       };
     }
     case 'get_plan':
