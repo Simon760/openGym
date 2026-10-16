@@ -122,7 +122,9 @@ export default function Home() {
       <div><h1>{user ? t('Hi {0}', user.name) : APP_NAME}</h1><div className="sub">{selDate.toLocaleDateString(dateLocale(), { weekday: 'long', day: 'numeric', month: 'long' })}
         {!isToday && <button className="tag acc" style={{ marginLeft: 8, border: 0 }} onClick={() => setSel(todayISO())}>{t('Today')}</button>}</div></div>
       <div className="row" style={{ gap: 8 }}>
-        <button className="iconbtn" onClick={() => digestSheet()} aria-label={t('Send to your coach')}><Icon name="clipboard" /></button>
+        {/* The day picked in the week strip, when it is one of the last seven: the recap of the
+            day being looked at. */}
+        <button className="iconbtn" onClick={() => digestSheet(isToday ? undefined : sel)} aria-label={t('Send to your coach')}><Icon name="clipboard" /></button>
         <button className="iconbtn" onClick={() => nav('/settings')} aria-label={t('Settings')}><Icon name="gear" /></button>
       </div>
     </div>

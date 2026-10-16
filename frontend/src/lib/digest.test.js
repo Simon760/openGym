@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { dailyDigest, trainingDigest, MAX_SESSIONS } from './digest.js'
+import { dailyDigest, trainingDigest, digestDay, MAX_SESSIONS } from './digest.js'
 import { isoOf } from './format.js'
 
 const daysAgo = n => { const d = new Date(); d.setDate(d.getDate() - n); return d }
@@ -202,5 +202,28 @@ describe('trainingDigest', () => {
 
   it('reads a profile with no training at all without throwing', () => {
     expect(() => trainingDigest(base(), 7)).not.toThrow()
+  })
+})
+
+// At one in the morning the evening being written up is yesterday's, and the check-in came out
+// empty with no way back to it.
+describe('the day a check-in is about', () => {
+  const at = h => +new Date(2026, 9, 16, h, 0)
+  it('is today during the day', () => {
+    expect(digestDay(base(), at(21))).toBe('2026-10-16')
+    expect(digestDay(base(), at(5))).toBe('2026-10-16')
+  })
+  it('is yesterday in the small hours, with nothing logged since midnight', () => {
+    expect(digestDay(base(), at(1))).toBe('2026-10-15')
+    expect(digestDay(base(), at(0))).toBe('2026-10-15')
+  })
+  it('stays today once something was logged after midnight', () => {
+    expect(digestDay(base({ nutrition: [{ d: '2026-10-16', kcal: 300 }] }), at(1))).toBe('2026-10-16')
+    expect(digestDay(base({ workouts: [{ id: 'n', d: '2026-10-16', name: 'Run', entries: [] }] }), at(1))).toBe('2026-10-16')
+  })
+  it('says its date rather than "Today" for a day gone by', () => {
+    expect(dailyDigest(base(), '2026-10-15', at(1)).split('\n')[0]).not.toContain('Today')
+    expect(dailyDigest(base(), '2026-10-15', at(1)).split('\n')[0]).toContain('15')
+    expect(dailyDigest(base(), '2026-10-16', at(21)).split('\n')[0]).toContain('Today')
   })
 })

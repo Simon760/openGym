@@ -116,7 +116,8 @@ const hasAnyMacro = e => MACROS.some(m => e[m])
  * conversation, and trainingDigest below is where it lives.
  */
 export function dailyDigest(S, iso = todayISO(), now = Date.now()) {
-  const out = [APP_NAME + ' — ' + t('Today') + ' — ' + fmtDate(iso, true)]
+  // "Today" only when it is: a check-in for yesterday, sent at one in the morning, says its date.
+  const out = [APP_NAME + ' — ' + (iso === isoOf(new Date(now)) ? t('Today') + ' — ' : '') + fmtDate(iso, true)]
   // A day inside a noted period — another gym — opens with the note: it is the first thing
   // the reader needs before reading anything below it.
   const ctx = periodsOn(S, iso)
@@ -271,6 +272,23 @@ export function trainingDigest(S, days = 7, now = Date.now()) {
     out.push(...lines)
   }
   return out.join('\n')
+}
+
+/**
+ * The day the evening check-in is about when nobody picked one. Today — except in the small
+ * hours with nothing logged since midnight: at one in the morning the evening being reported
+ * is yesterday's, and the check-in used to come out empty with no way back to the day it was
+ * meant for.
+ */
+export const LATE_UNTIL = 5
+export function digestDay(S, now = Date.now()) {
+  const d = new Date(now)
+  const today = isoOf(d)
+  if (d.getHours() >= LATE_UNTIL) return today
+  const logged = (S.workouts || []).some(w => w.d === today) || !!entryFor(S, today)
+  if (logged) return today
+  d.setDate(d.getDate() - 1)
+  return isoOf(d)
 }
 
 export const DIGESTS = ['daily', 'training']

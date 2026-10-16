@@ -1243,4 +1243,5 @@ export default {
   'Nothing noted yet.': 'Nothing noted yet.',
   'Context': 'Context',
   'Another gym, an injury — carried into the export and the summary to copy.': 'Another gym, an injury — carried into the export and the summary to copy.',
+  'Yesterday': 'Yesterday',
 }

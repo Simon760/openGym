@@ -23,7 +23,7 @@ import MuscleShare from './components/MuscleShare.jsx'
 import { parseImport, mergeImport } from './lib/import-csv.js'
 import { buildPlanBundle, parsePlan, mergePlan, printPlan, importProgramme } from './lib/plan-share.js'
 import { parseProgram, applyPicks, PROGRAM_SPEC, programCsvSpec } from './lib/plan-import.js'
-import { dailyDigest, trainingDigest } from './lib/digest.js'
+import { dailyDigest, trainingDigest, digestDay } from './lib/digest.js'
 import { estimate1RM, best1RM, is1RMRecord, REP_CAP } from './lib/onerm.js'
 import { nextPrescription, applyPrescription, policyFor, defaultIncrement, POLICIES_FOR, POLICY_NAME, POLICY_DESC, MAX_BW_SETS } from './lib/progression.js'
 import { MOBILE, shareExport, shareText, canShareText } from './lib/mobile.js'
@@ -2137,11 +2137,18 @@ export const periodsSheet = () => ui().openSheet(() => <Periods />)
 // The text is on screen before any button is pressed. It is about to be pasted into a
 // conversation, which makes it worth reading first, and a copy button that hands over
 // something unseen is one you stop trusting.
-function Digest({ close }) {
+function Digest({ close, iso }) {
   const st = useStore(s => s.S)
   const [kind, setKind] = useState('daily')
   const [days, setDays] = useState(7)
-  const text = kind === 'training' ? trainingDigest(st, days) : dailyDigest(st)
+  // Any of the last seven days, not only today: the evening is often written up after
+  // midnight, and a check-in missed on Tuesday is still worth sending on Wednesday. Before
+  // dawn with nothing logged yet, it opens on yesterday — see digestDay.
+  const recent = Array.from({ length: 7 }, (_, i) => { const d = new Date(); d.setDate(d.getDate() - i); return isoOf(d) })
+  // An older day opened from Home's week strip joins the list rather than being dropped.
+  if (iso && iso < recent[recent.length - 1]) recent.push(iso)
+  const [day, setDay] = useState(() => (iso && iso <= recent[0] ? iso : digestDay(st)))
+  const text = kind === 'training' ? trainingDigest(st, days) : dailyDigest(st, day)
 
   const copy = async () => {
     try { await navigator.clipboard.writeText(text); toast(t('Copied — paste it into your conversation')) }
@@ -2157,9 +2164,13 @@ function Digest({ close }) {
       {t('A plain-text summary built from your log, to paste into whichever conversation follows you.')}
     </div>
     <Segmented value={kind} onChange={setKind} options={[
-      { value: 'daily', label: t('Today') },
+      { value: 'daily', label: t('Day') },
       { value: 'training', label: t('Training') }
     ]} />
+    {kind === 'daily' && <div className="chips" style={{ marginTop: 8 }}>
+      {recent.map((x, i) => <button key={x} className={'chip nocap' + (x === day ? ' on' : '')} onClick={() => setDay(x)}>
+        {i === 0 ? t('Today') : i === 1 ? t('Yesterday') : fmtDate(x, true)}</button>)}
+    </div>}
     {kind === 'training' && <Segmented className="seg-range" value={days} onChange={setDays}
       options={[{ value: 7, label: '7d' }, { value: 14, label: '14d' }, { value: 30, label: '30d' }]} />}
     <TextArea readOnly rows={12} value={text} style={{ marginTop: 10, fontVariantNumeric: 'tabular-nums' }} />
@@ -2176,7 +2187,7 @@ function Digest({ close }) {
       </div></>}
   </>
 }
-export const digestSheet = () => ui().openSheet(close => <Digest close={close} />)
+export const digestSheet = iso => ui().openSheet(close => <Digest close={close} {...dayProp(iso)} />)
 
 /* ============================ import a written program ============================ */
 // A program that came from outside BodyEvolve — a conversation, a coach, another app — speaks

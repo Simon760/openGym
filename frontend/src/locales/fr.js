@@ -1235,4 +1235,5 @@ export default {
   'Nothing noted yet.': 'Aucune période notée.',
   'Context': 'Contexte',
   'Another gym, an injury — carried into the export and the summary to copy.': 'Autre salle, blessure — reprises dans l’export et le résumé à copier.',
+  'Yesterday': 'Hier',
 }
