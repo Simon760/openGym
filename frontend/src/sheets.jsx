@@ -2141,13 +2141,14 @@ function Digest({ close, iso }) {
   const st = useStore(s => s.S)
   const [kind, setKind] = useState('daily')
   const [days, setDays] = useState(7)
-  // Any of the last seven days, not only today: the evening is often written up after
-  // midnight, and a check-in missed on Tuesday is still worth sending on Wednesday. Before
-  // dawn with nothing logged yet, it opens on yesterday — see digestDay.
-  const recent = Array.from({ length: 7 }, (_, i) => { const d = new Date(); d.setDate(d.getDate() - i); return isoOf(d) })
-  // An older day opened from Home's week strip joins the list rather than being dropped.
-  if (iso && iso < recent[recent.length - 1]) recent.push(iso)
-  const [day, setDay] = useState(() => (iso && iso <= recent[0] ? iso : digestDay(st)))
+  // Any day, not only today: the evening is often written up after midnight, and a check-in
+  // missed on Tuesday is still worth sending on Wednesday — or a month later, for a coach
+  // going back over the block. Before dawn with nothing logged yet, it opens on yesterday —
+  // see digestDay.
+  const today = todayISO()
+  const [day, setDay] = useState(() => (iso && iso <= today ? iso : digestDay(st)))
+  const goTo = v => setDay(v && v < today ? v : today)
+  const step = n => { const d = new Date(day + 'T12:00:00'); d.setDate(d.getDate() + n); goTo(isoOf(d)) }
   const text = kind === 'training' ? trainingDigest(st, days) : dailyDigest(st, day)
 
   const copy = async () => {
@@ -2167,16 +2168,26 @@ function Digest({ close, iso }) {
       { value: 'daily', label: t('Day') },
       { value: 'training', label: t('Training') }
     ]} />
-    {kind === 'daily' && <div className="chips" style={{ marginTop: 8 }}>
-      {recent.map((x, i) => <button key={x} className={'chip nocap' + (x === day ? ' on' : '')} onClick={() => setDay(x)}>
-        {i === 0 ? t('Today') : i === 1 ? t('Yesterday') : fmtDate(x, true)}</button>)}
-    </div>}
+    {/* A day back at a time, or straight to any date — there is no oldest day it will not build. */}
+    {kind === 'daily' && <>
+      <div className="row" style={{ gap: 8, marginTop: 8, alignItems: 'center' }}>
+        <button className="iconbtn" aria-label={t('Previous day')} onClick={() => step(-1)}><Icon name="chevronLeft" /></button>
+        <input className="field tm" type="date" value={day} max={today} style={{ flex: 1, minWidth: 0, width: '100%' }}
+          onChange={e => e.target.value && goTo(e.target.value)} />
+        <button className="iconbtn" aria-label={t('Next day')} disabled={day >= today} style={day >= today ? { opacity: 0.3 } : undefined}
+          onClick={() => step(1)}><Icon name="chevronRight" /></button>
+      </div>
+      <div className="dim small row" style={{ margin: '6px 2px 0', gap: 8 }}>
+        <span>{day === today ? t('Today') : fmtDate(day, true)}</span>
+        {day !== today && <button className="btn plain xs" style={{ padding: 0, color: 'var(--acc)' }} onClick={() => setDay(today)}>{t('Back to today')}</button>}
+      </div>
+    </>}
     {kind === 'training' && <Segmented className="seg-range" value={days} onChange={setDays}
       options={[{ value: 7, label: '7d' }, { value: 14, label: '14d' }, { value: 30, label: '30d' }]} />}
     <TextArea readOnly rows={12} value={text} style={{ marginTop: 10, fontVariantNumeric: 'tabular-nums' }} />
     {/* Another gym, an injury: said once against the dates, and in every summary that covers them. */}
     <Button variant="ghost" size="sm" icon="calendar" style={{ marginTop: 6 }} onClick={() => periodsSheet()}>
-      {(st.periods || []).length ? t('Period notes ({0})', st.periods.length) : t('Add a period note — another gym, an injury…')}
+      {(st.periods || []).length ? t('Period notes ({0})', st.periods.length) : t('Add a period note')}
     </Button>
     <div style={{ height: 12 }} />
     <Button variant="primary" icon="clipboard" onClick={copy}>{t('Copy')}</Button>

@@ -1217,7 +1217,6 @@ export default {
   'Edit intake': 'Modifier les apports',
   'Period notes': 'Notes de période',
   'Period notes ({0})': 'Notes de période ({0})',
-  'Add a period note — another gym, an injury…': 'Ajouter une note de période — autre salle, blessure…',
   'Sessions from {0} to {1} marked: {2}': 'Séances du {0} au {1} marquées : {2}',
   'Another gym': 'Autre salle',
   'Different machines and resistance: loads not comparable': 'Machines et résistances différentes : charges non comparables',
@@ -1235,5 +1234,8 @@ export default {
   'Nothing noted yet.': 'Aucune période notée.',
   'Context': 'Contexte',
   'Another gym, an injury — carried into the export and the summary to copy.': 'Autre salle, blessure — reprises dans l’export et le résumé à copier.',
-  'Yesterday': 'Hier',
+  'Previous day': 'Jour précédent',
+  'Next day': 'Jour suivant',
+  'Back to today': 'Revenir à aujourd’hui',
+  'Add a period note': 'Ajouter une note de période',
 }

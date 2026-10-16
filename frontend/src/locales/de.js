@@ -1242,7 +1242,6 @@ export default {
   'Edit intake': 'Edit intake',
   'Period notes': 'Period notes',
   'Period notes ({0})': 'Period notes ({0})',
-  'Add a period note — another gym, an injury…': 'Add a period note — another gym, an injury…',
   'Sessions from {0} to {1} marked: {2}': 'Sessions from {0} to {1} marked: {2}',
   'Another gym': 'Another gym',
   'Different machines and resistance: loads not comparable': 'Different machines and resistance: loads not comparable',
@@ -1260,5 +1259,8 @@ export default {
   'Nothing noted yet.': 'Nothing noted yet.',
   'Context': 'Context',
   'Another gym, an injury — carried into the export and the summary to copy.': 'Another gym, an injury — carried into the export and the summary to copy.',
-  'Yesterday': 'Yesterday',
+  'Previous day': 'Previous day',
+  'Next day': 'Next day',
+  'Back to today': 'Back to today',
+  'Add a period note': 'Add a period note',
 }
