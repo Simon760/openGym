@@ -1263,4 +1263,11 @@ export default {
   'Next day': 'Next day',
   'Back to today': 'Back to today',
   'Add a period note': 'Add a period note',
+  'Set your maintenance to see what this session leaves to eat': 'Set your maintenance to see what this session leaves to eat',
+  '{0} kcal measured → {1} counted ({2} % off)': '{0} kcal measured → {1} counted ({2} % off)',
+  '{0} kcal logged by hand': '{0} kcal logged by hand',
+  '+{0} kcal to eat today, thanks to training': '+{0} kcal to eat today, thanks to training',
+  'Training exactly as your maintenance plans': 'Training exactly as your maintenance plans',
+  '{0} kcal less training than your maintenance plans': '{0} kcal less training than your maintenance plans',
+  '{0} already in your maintenance': '{0} already in your maintenance',
 }

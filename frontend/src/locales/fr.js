@@ -1238,4 +1238,11 @@ export default {
   'Next day': 'Jour suivant',
   'Back to today': 'Revenir à aujourd’hui',
   'Add a period note': 'Ajouter une note de période',
+  'Set your maintenance to see what this session leaves to eat': 'Renseigne ta maintenance pour voir ce que cette séance te laisse à manger',
+  '{0} kcal measured → {1} counted ({2} % off)': '{0} kcal mesurées → {1} comptées ({2} % retirés)',
+  '{0} kcal logged by hand': '{0} kcal notées à la main',
+  '+{0} kcal to eat today, thanks to training': '+{0} kcal à manger en plus aujourd’hui grâce au sport',
+  'Training exactly as your maintenance plans': 'Sport pile comme prévu dans ta maintenance',
+  '{0} kcal less training than your maintenance plans': '{0} kcal de sport en moins que prévu dans ta maintenance',
+  '{0} already in your maintenance': '{0} déjà comptées dans ta maintenance',
 }

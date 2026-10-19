@@ -14,6 +14,7 @@ import Stepper from './components/Stepper.jsx'
 import Icon from './components/Icon.jsx'
 import { Button, Slider, Switch, Segmented, SelectRow, Row, TextArea, TextField, NumberField } from './components/ui.jsx'
 import { useSaveOnDismiss } from './components/Modals.jsx'
+import SportMargin from './components/SportMargin.jsx'
 import { glyphOf, GLYPH_GROUPS, DEFAULT_GLYPH } from './lib/glyphs.js'
 import BodyMap from './components/BodyMap.jsx'
 import { loadOfWorkouts, musclesOf, MUSCLE_NAME, sharesOf } from './lib/muscles.js'
@@ -2600,6 +2601,8 @@ function WatchFigures({ w, hint }) {
     {/* Said out loud, because a form that saves itself gives no other sign that it did. */}
     {has && <div className="small accent row" style={{ gap: 5, margin: '2px 2px 0' }}>
       <Icon name="checkCircle" style={{ fontSize: 13 }} />{t('Recorded on this session')}</div>}
+    {/* And what it leaves to eat: the session against the training maintenance already counts on. */}
+    {kcal > 0 && <SportMargin iso={w.d} onSetMaintenance={() => tdeeSheet()} style={{ margin: '10px 2px 0' }} />}
     {hint && <div className="dim small" style={{ margin: '6px 2px 10px', lineHeight: 1.45 }}>{hint}</div>}
   </div>
 }
@@ -2967,6 +2970,7 @@ function ActivitySheet({ close, d: given }) {
     {dist && <Stepper label={t('Distance (km)')} unit="km" value={f.km} step={0.5} onChange={n => setF(x => ({ ...x, km: n || 0 }))} />}
     <Stepper label={t('Session energy')} unit="kcal" value={f.kcal} step={10} decimal={false} onChange={n => setF(x => ({ ...x, kcal: n || 0 }))} />
     <div className="dim small" style={{ margin: '6px 2px 14px', lineHeight: 1.45 }}>{t('Only if your watch measured it — leave it at 0 otherwise.')}</div>
+    {f.kcal > 0 && <SportMargin iso={d} extra={f.kcal} onSetMaintenance={() => tdeeSheet()} style={{ margin: '-4px 2px 14px' }} />}
     {rec && rec.hours > 0 && <div className="card" style={{ padding: '10px 12px', marginBottom: 12 }}>
       <div className="small" style={{ lineHeight: 1.45 }}>
         <Icon name="heart" style={{ fontSize: 13, marginRight: 6, verticalAlign: '-2px', color: 'var(--acc)' }} />

@@ -427,6 +427,25 @@ export function dayBalance(S, iso, tdee = S.tdee, trim, now = Date.now()) {
 }
 
 /**
+ * What the day's training leaves to eat beyond what maintenance already budgets for it: the
+ * training as counted — the watch's figure less its discount, plus effort logged by hand —
+ * minus the training the maintenance figure already includes. The `delta` of dayBalance, on
+ * its own, because it is the one figure a person plans a meal around: a 500 kcal session
+ * against 230 already budgeted is room for the difference without touching the planned
+ * deficit, and working that out by hand, discount included, is exactly the sum nobody does.
+ *
+ * `extra` is a session's energy not saved yet — an activity being typed in — counted as one
+ * more measured session that day, so the figure is on screen before the session is stored.
+ * Null without a maintenance figure, and on a day nothing measured the training of.
+ */
+export function sportMargin(S, iso, extra = 0) {
+  const T = extra > 0 ? { ...S, workouts: [...(S.workouts || []), { id: '_margin', d: iso, entries: [], watch: { kcal: extra } }] } : S
+  const b = dayBalance(T, iso)
+  if (!b || !b.measured) return null
+  return { margin: Math.round(b.delta), counted: b.sport, raw: b.sportRaw, trim: b.trim, planned: b.planned, free: b.free }
+}
+
+/**
  * The deficit since the beginning, split the two ways this model can honestly split it:
  *
  *   nutrition   Σ (maintenance − intake)        eating against the budget

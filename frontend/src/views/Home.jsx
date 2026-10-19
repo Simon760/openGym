@@ -13,6 +13,7 @@ import LineChart from '../components/LineChart.jsx'
 import Icon from '../components/Icon.jsx'
 import { Button } from '../components/ui.jsx'
 import { glyphOf } from '../lib/glyphs.js'
+import SportMargin from '../components/SportMargin.jsx'
 import { APP_NAME } from '../lib/brand.js'
 
 // Home = what to do now + a quick glance. Deep charts & history live in Stats.
@@ -359,6 +360,9 @@ export default function Home() {
           </div>
         </>}
       </div> : <div className="muted small">{t('Nothing logged today — add your calories to keep the picture complete.')}</div>}
+      {/* What the day's training leaves to eat beyond the target, before anything is eaten as
+          much as after: it is what a bigger meal gets planned against. */}
+      <SportMargin iso={iso} style={{ marginTop: 10 }} />
 
       {/* The day's balance: (maintenance + training) − intake. It sits under the intake
           rather than in its own card because it is the same question — what today came to —

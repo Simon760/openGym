@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   validTDEE, tdeeParts, sportKcal, dayBalance, deficitTotals, impliedTDEE, predictedVsActual,
-  deficitSeries, trimOf, KCAL_PER_KG_FAT, TDEE_MIN, TDEE_MAX, WATCH_TRIM, projectedWeight, recordCalibration, calibration, CALIB_MIN_PAIRS } from './energy.js'
+  deficitSeries, trimOf, sportMargin, KCAL_PER_KG_FAT, TDEE_MIN, TDEE_MAX, WATCH_TRIM, projectedWeight, recordCalibration, calibration, CALIB_MIN_PAIRS } from './energy.js'
 import { isoOf } from './format.js'
 
 const S = (over = {}) => ({ nutrition: [], health: [], workouts: [], bodyweight: [], watchTrim: 0, ...over })
@@ -793,5 +793,45 @@ describe('a day that trained twice', () => {
   it('is unbothered by a session that carries no figure', () => {
     const partial = S({ ...twice, workouts: [twice.workouts[0], { id: 'b', d: day(0), name: 'Push' }] })
     expect(sportKcal(partial, day(0), 0, P).kcal).toBe(300)
+  })
+})
+
+// "I'm at 500 on the watch, my maintenance has 230 of training in it — how much is that to eat?"
+describe('sportMargin — what the session leaves to eat', () => {
+  const TDEE = { bmr: 1700, neat: 400, other: 170, sport: 230 }
+  const D = day(10)
+  const lift = kcal => ({ id: 'w' + kcal, d: D, entries: [], watch: { kcal } })
+
+  it('is the session counted, less the training maintenance already budgets', () => {
+    const m = sportMargin(S({ tdee: TDEE, workouts: [lift(500)] }), D)
+    expect(m).toMatchObject({ margin: 270, counted: 500, raw: 500, planned: 230 })
+  })
+
+  it('takes the watch discount off first, and says what it took', () => {
+    const m = sportMargin(S({ tdee: TDEE, watchTrim: 0.3, workouts: [lift(500)] }), D)
+    expect(m).toMatchObject({ raw: 500, counted: 350, trim: 0.3, margin: 120 })
+  })
+
+  it('adds up every session of the day against the one budget', () => {
+    expect(sportMargin(S({ tdee: TDEE, workouts: [lift(300), lift(250)] }), D).margin).toBe(320)
+  })
+
+  it('is negative when the day trained less than the budget assumed', () => {
+    expect(sportMargin(S({ tdee: TDEE, workouts: [lift(150)] }), D).margin).toBe(-80)
+  })
+
+  it('counts a session not saved yet', () => {
+    expect(sportMargin(S({ tdee: TDEE }), D, 500).margin).toBe(270)
+    expect(sportMargin(S({ tdee: TDEE, workouts: [lift(300)] }), D, 200).margin).toBe(270)
+  })
+
+  it('is absent without maintenance, or with nothing measured', () => {
+    expect(sportMargin(S({ workouts: [lift(500)] }), D)).toBe(null)
+    expect(sportMargin(S({ tdee: TDEE }), D)).toBe(null)
+  })
+
+  it('agrees with the day balance it is part of', () => {
+    const st = S({ tdee: TDEE, watchTrim: 0.25, workouts: [lift(480)] })
+    expect(sportMargin(st, D).margin).toBe(dayBalance(st, D).delta)
   })
 })
