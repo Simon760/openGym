@@ -596,7 +596,6 @@ export default {
   'Sessions': 'Séances',
   'training, last {0} days': 'entraînement, {0} derniers jours',
   'over {0} of {1} sets': 'sur {0} séries notées sur {1}',
-  '({0} earlier sessions in this period are not listed)': '({0} séances plus anciennes de cette période ne sont pas listées)',
   'Next targets': 'Prochaines cibles',
   'Send to your coach': 'Envoyer à ton coach',
   'A plain-text summary built from your log, to paste into whichever conversation follows you.': 'Un résumé en texte brut construit à partir de ton journal, à coller dans la conversation qui te suit.',

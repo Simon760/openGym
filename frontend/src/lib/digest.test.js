@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { dailyDigest, trainingDigest, digestDay, MAX_SESSIONS } from './digest.js'
-import { isoOf } from './format.js'
+import { dailyDigest, trainingDigest, digestDay } from './digest.js'
+import { isoOf, fmtDate } from './format.js'
 
 const daysAgo = n => { const d = new Date(); d.setDate(d.getDate() - n); return d }
 const iso = n => isoOf(daysAgo(n))
@@ -193,11 +193,12 @@ describe('trainingDigest', () => {
     expect(out).not.toContain('Old Day')
   })
 
-  it('says how many sessions it left out rather than truncating silently', () => {
-    const many = Array.from({ length: MAX_SESSIONS + 3 }, (_, i) => session(i + 1))
-    const out = trainingDigest(S(...many), 90)
-    expect(out).toMatch(/3/)
-    expect(out.split('Push Day').length - 1).toBeLessThanOrEqual(MAX_SESSIONS + 1)
+  // Thirty days of near-daily training printed the last twelve sessions and left three weeks out.
+  it('lists every session of the period, the oldest included', () => {
+    const many = Array.from({ length: 27 }, (_, i) => session(i + 1))
+    const out = trainingDigest(S(...many), 30)
+    expect(out.split('Push Day').length - 1).toBe(27)
+    expect(out).toContain(fmtDate(iso(27), true))
   })
 
   it('reads a profile with no training at all without throwing', () => {

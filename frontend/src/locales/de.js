@@ -617,7 +617,6 @@ export default {
   'Sessions': 'Sessions',
   'training, last {0} days': 'training, last {0} days',
   'over {0} of {1} sets': 'over {0} of {1} sets',
-  '({0} earlier sessions in this period are not listed)': '({0} earlier sessions in this period are not listed)',
   'Next targets': 'Next targets',
   'Send to your coach': 'Send to your coach',
   'A plain-text summary built from your log, to paste into whichever conversation follows you.': 'A plain-text summary built from your log, to paste into whichever conversation follows you.',

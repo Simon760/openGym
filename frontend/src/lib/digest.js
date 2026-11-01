@@ -28,11 +28,9 @@ import { APP_NAME } from './brand.js'
 import { weekFor } from './blocks.js'
 import { periodsBetween, periodsOn, periodText, periodTag } from './periods.js'
 
-// A period listing more sessions than this is summarised rather than printed in full: the
-// digest has to survive being pasted into a message box, and the tail of a long history is
-// the part a coach reads least. What was dropped is always stated — a silent cap reads as
-// "that is everything".
-export const MAX_SESSIONS = 12
+// Every session of the period is listed. There used to be a cap of twelve, to keep the text
+// short enough to paste: on thirty days of near-daily training it printed the last twelve and
+// left the first three weeks out, which is exactly the history a coach asked for 30 days wants.
 
 const exName = id => (EXIDX[id] && EXIDX[id].n) || id
 const sign = n => (n > 0 ? '+' : '') + fmtNum(n)
@@ -213,8 +211,6 @@ export function trainingDigest(S, days = 7, now = Date.now()) {
   const out = [APP_NAME + ' — ' + t('training, last {0} days', days)]
 
   const sessions = (S.workouts || []).filter(w => inWindow(w.d, days, now))
-  const shown = sessions.slice(-MAX_SESSIONS)
-  const hidden = sessions.length - shown.length
 
   const bw = bwAt(S, todayISO())
   const tr = bwTrend(S, days, now)
@@ -239,10 +235,9 @@ export function trainingDigest(S, days = 7, now = Date.now()) {
     ctx.forEach(p => out.push('  ' + fmtDate(p.from) + ' → ' + fmtDate(p.to) + ' : ' + periodText(p)))
   }
 
-  if (shown.length) {
+  if (sessions.length) {
     out.push('')
-    shown.forEach(w => { out.push(sessionBlock(w, { tag: periodTag(S, w.d) })); out.push('') })
-    if (hidden > 0) out.push(t('({0} earlier sessions in this period are not listed)', hidden), '')
+    sessions.forEach(w => { out.push(sessionBlock(w, { tag: periodTag(S, w.d) })); out.push('') })
   }
 
   // What opens next time, per exercise of the weekly plan, with the reason. Reading the plan
