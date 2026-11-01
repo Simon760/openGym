@@ -163,6 +163,27 @@ export function setGoal(s, goal, from, today = from) {
   s.nutriGoal = goalOn(s, today)
 }
 
+/**
+ * Say what the targets were before a day: every day before `until` gets `goal`, and the day
+ * itself keeps the targets it reads as now. This is the repair for a change made before
+ * changes were dated, which rewrote the past and left nothing to rebuild it from.
+ */
+export function setGoalBefore(s, goal, until, today) {
+  const kept = goalOn(s, until)
+  const log = (s.goalLog || []).filter(x => x.from >= until)
+  if (!log.some(x => x.from === until)) log.push({ from: until, goal: kept || null })
+  log.push({ from: EARLIEST, goal: goal || null })
+  log.sort((a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : 0))
+  s.goalLog = log
+  s.nutriGoal = goalOn(s, today)
+}
+
+/** The dated changes as periods to read back: [{ from, to, goal }], `to` null for the current. */
+export function goalHistory(S) {
+  const log = (S && S.goalLog) || []
+  return log.map((x, i) => ({ from: x.from, to: log[i + 1] ? log[i + 1].from : null, goal: x.goal || null }))
+}
+
 export function goalFor(goal, entry, maintenance) {
   if (!isRefeed(entry)) return goal || null
   const m = Math.round(num(maintenance))

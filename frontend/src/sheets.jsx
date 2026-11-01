@@ -28,7 +28,7 @@ import { dailyDigest, trainingDigest, digestDay } from './lib/digest.js'
 import { estimate1RM, best1RM, is1RMRecord, REP_CAP } from './lib/onerm.js'
 import { nextPrescription, applyPrescription, policyFor, defaultIncrement, POLICIES_FOR, POLICY_NAME, POLICY_DESC, MAX_BW_SETS } from './lib/progression.js'
 import { MOBILE, shareExport, shareText, canShareText } from './lib/mobile.js'
-import { entryFor, hasMacros, kcalFromMacros, derivedMismatch, remainingOf, putEntry, isRefeed, goalFor, goalOn, setGoal, MACROS, MACRO_NAME } from './lib/nutrition.js'
+import { entryFor, hasMacros, kcalFromMacros, derivedMismatch, remainingOf, putEntry, isRefeed, goalFor, goalOn, setGoal, setGoalBefore, goalHistory, EARLIEST, MACROS, MACRO_NAME } from './lib/nutrition.js'
 import { validBodyFat, composition, sleepFor, putSleep, validSleep, sleepHours, hoursBetween, validTime, BF_MIN, BF_MAX, SLEEP_MIN, SLEEP_MAX } from './lib/body.js'
 import { parseHealth, applyHealth, parseHealthCSV, applyHealthDays, shortcutRecipe, shortcutLink, historySpec, watchTarget, healthFor } from './lib/health.js'
 import { currentProgrammeStart, earliestLoggedDay, sportExportCSV, sportExportSummary } from './lib/sport-export.js'
@@ -497,8 +497,59 @@ function NutriGoalSheet({ close, iso }) {
     <Button variant="primary" onClick={save}>{t('Save targets')}</Button>
     {cur && <><div style={{ height: 8 }} />
       <Button variant="danger" onClick={() => { update(s => { setGoal(s, null, from, today) }); close(); toast(t('Targets removed')) }}>{t('Remove targets')}</Button></>}
+    <GoalHistory />
   </>
 }
+
+const goalText = g => (g ? [g.kcal ? fmtNum(g.kcal) + ' kcal' : null, ...MACROS.filter(m => g[m]).map(m => t(MACRO_NAME[m]) + ' ' + g[m] + ' g')].filter(Boolean).join(' · ') : t('no targets'))
+
+// What the targets were, period by period, and the way to say what they were before a day —
+// for a change made before changes were dated, which left the past on the new figure.
+function GoalHistory() {
+  const st = useStore(s => s.S)
+  const hist = goalHistory(st)
+  return <>
+    <h4 className="sec">{t('Target history')}</h4>
+    {hist.length ? <div className="small" style={{ lineHeight: 1.6, margin: '0 2px 10px' }}>
+      {hist.slice().reverse().map(h => <div key={h.from} className="row between" style={{ gap: 10 }}>
+        <span className="dim">{h.from === EARLIEST ? t('Before {0}', fmtDate(h.to, true))
+          : h.to ? fmtDate(h.from, true) + ' → ' + fmtDate(isoOf(new Date(new Date(h.to + 'T12:00:00').getTime() - 86400000)), true)
+            : t('Since {0}', fmtDate(h.from, true))}</span>
+        <b style={{ textAlign: 'right' }}>{goalText(h.goal)}</b>
+      </div>)}
+    </div> : <div className="dim small" style={{ margin: '0 2px 10px' }}>{t('The same targets for every day so far.')}</div>}
+    <Button variant="ghost" size="sm" icon="history" onClick={() => goalBeforeSheet()}>{t('The target was different before a date')}</Button>
+  </>
+}
+
+function GoalBefore({ close }) {
+  const st = S()
+  const today = todayISO()
+  const [until, setUntil] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 7); return isoOf(d) })
+  const g0 = goalOn(st, today) || {}
+  const [v, setV] = useState({ kcal: g0.kcal || 0, p: g0.p || 0, c: g0.c || 0, f: g0.f || 0 })
+  const set = (k, n) => setV(o => ({ ...o, [k]: n || 0 }))
+  const save = () => {
+    const goal = {}
+    for (const k of ['kcal', ...MACROS]) if (v[k] > 0) goal[k] = v[k]
+    update(s => { setGoalBefore(s, Object.keys(goal).length ? goal : null, until, today) })
+    close(); toast(t('Past targets saved'))
+  }
+  useSaveOnDismiss({ until, v }, save)
+  return <>
+    <h3>{t('Targets before a date')}</h3>
+    <div className="muted small" style={{ lineHeight: 1.45 }}>{t('The day you changed your target, and what it was until then. Every day before it is judged against these; that day and after keep the current ones.')}</div>
+    <div className="dim small" style={{ margin: '12px 2px 6px' }}>{t('Changed on')}</div>
+    <input className="field tm" type="date" value={until} max={today} style={{ width: '100%', minWidth: 0 }}
+      onChange={e => e.target.value && setUntil(e.target.value)} />
+    <div style={{ height: 8 }} />
+    <Stepper label={t('Calories')} unit="kcal" value={v.kcal} step={50} decimal={false} onChange={n => set('kcal', n)} />
+    {MACROS.map(m => <Stepper key={m} label={t(MACRO_NAME[m])} unit="g" value={v[m]} step={5} decimal={false} onChange={n => set(m, n)} />)}
+    <div style={{ height: 14 }} />
+    <Button variant="primary" onClick={save}>{t('Save')}</Button>
+  </>
+}
+export const goalBeforeSheet = () => ui().openSheet(close => <GoalBefore close={close} />)
 export const nutriGoalSheet = iso => ui().openSheet(close => <NutriGoalSheet close={close} {...dayProp(iso)} />)
 
 /* ============================ maintenance (TDEE) ============================ */

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   entryFor, lastEntry, hasMacros, kcalFromMacros, derivedMismatch, macroSplit,
-  remainingOf, avgOver, seriesOf, weekOf, dayStack, putEntry, goalOn, setGoal, KCAL_PER_G, MISMATCH_TOL
+  remainingOf, avgOver, seriesOf, weekOf, dayStack, putEntry, goalOn, setGoal, setGoalBefore, goalHistory, KCAL_PER_G, MISMATCH_TOL
 } from './nutrition.js'
 import { isoOf } from './format.js'
 
@@ -324,5 +324,31 @@ describe('targets changed on a day', () => {
     setGoal(s, { kcal: 2000 }, '2026-10-20'); setGoal(s, { kcal: 2100 }, '2026-10-20')
     expect(s.goalLog).toHaveLength(2)
     expect(goalOn(s, '2026-10-20')).toEqual({ kcal: 2100 })
+  })
+})
+
+// A target changed before changes were dated left the past on the new figure; this puts the
+// old one back on the days before the change.
+describe('saying what the targets were before a day', () => {
+  it('puts the old target on every day before, and keeps the current one from that day', () => {
+    const s = { nutriGoal: { kcal: 1800 }, goalLog: [] }
+    setGoalBefore(s, { kcal: 2200 }, '2026-10-20', '2026-11-01')
+    expect(goalOn(s, '2026-10-01')).toEqual({ kcal: 2200 })
+    expect(goalOn(s, '2026-10-19')).toEqual({ kcal: 2200 })
+    expect(goalOn(s, '2026-10-20')).toEqual({ kcal: 1800 })
+    expect(s.nutriGoal).toEqual({ kcal: 1800 })
+    expect(goalHistory(s)).toEqual([
+      { from: '0000-00-00', to: '2026-10-20', goal: { kcal: 2200 } },
+      { from: '2026-10-20', to: null, goal: { kcal: 1800 } },
+    ])
+  })
+  it('replaces whatever was said about the days before, and keeps later changes', () => {
+    const s = { nutriGoal: { kcal: 2200 }, goalLog: [] }
+    setGoal(s, { kcal: 2000 }, '2026-10-10', '2026-11-01')
+    setGoal(s, { kcal: 1800 }, '2026-10-25', '2026-11-01')
+    setGoalBefore(s, { kcal: 2500 }, '2026-10-15', '2026-11-01')
+    expect(goalOn(s, '2026-10-12')).toEqual({ kcal: 2500 })
+    expect(goalOn(s, '2026-10-15')).toEqual({ kcal: 2000 })
+    expect(goalOn(s, '2026-10-26')).toEqual({ kcal: 1800 })
   })
 })
