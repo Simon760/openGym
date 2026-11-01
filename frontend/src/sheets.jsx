@@ -28,7 +28,7 @@ import { dailyDigest, trainingDigest, digestDay } from './lib/digest.js'
 import { estimate1RM, best1RM, is1RMRecord, REP_CAP } from './lib/onerm.js'
 import { nextPrescription, applyPrescription, policyFor, defaultIncrement, POLICIES_FOR, POLICY_NAME, POLICY_DESC, MAX_BW_SETS } from './lib/progression.js'
 import { MOBILE, shareExport, shareText, canShareText } from './lib/mobile.js'
-import { entryFor, hasMacros, kcalFromMacros, derivedMismatch, remainingOf, putEntry, isRefeed, goalFor, MACROS, MACRO_NAME } from './lib/nutrition.js'
+import { entryFor, hasMacros, kcalFromMacros, derivedMismatch, remainingOf, putEntry, isRefeed, goalFor, goalOn, setGoal, MACROS, MACRO_NAME } from './lib/nutrition.js'
 import { validBodyFat, composition, sleepFor, putSleep, validSleep, sleepHours, hoursBetween, validTime, BF_MIN, BF_MAX, SLEEP_MIN, SLEEP_MAX } from './lib/body.js'
 import { parseHealth, applyHealth, parseHealthCSV, applyHealthDays, shortcutRecipe, shortcutLink, historySpec, watchTarget, healthFor } from './lib/health.js'
 import { currentProgrammeStart, earliestLoggedDay, sportExportCSV, sportExportSummary } from './lib/sport-export.js'
@@ -345,7 +345,7 @@ function NutriSheet({ close, iso = todayISO() }) {
   const rate = suppRate(st, 30)
   const derived = kcalFromMacros(v)
   const mismatch = derivedMismatch(v)
-  const dayGoal = goalFor(st.nutriGoal, { refeed }, dayOut)
+  const dayGoal = goalFor(goalOn(st, iso), { refeed }, dayOut)
   const left = remainingOf(v, dayGoal)
   const save = () => {
     update(s => {
@@ -458,10 +458,15 @@ function NutriSheet({ close, iso = todayISO() }) {
 }
 export const nutriSheet = iso => ui().openSheet(close => <NutriSheet close={close} {...dayProp(iso)} />)
 
-function NutriGoalSheet({ close }) {
+function NutriGoalSheet({ close, iso }) {
   const st = S()
+  const today = todayISO()
+  // From the day being looked at — today, or a past day picked on Home — and onward. The
+  // days before it keep the targets they had: see goalOn.
+  const from = iso && iso < today ? iso : today
+  const cur = goalOn(st, from)
   const [v, setV] = useState(() => ({
-    kcal: st.nutriGoal?.kcal || 0, p: st.nutriGoal?.p || 0, c: st.nutriGoal?.c || 0, f: st.nutriGoal?.f || 0
+    kcal: cur?.kcal || 0, p: cur?.p || 0, c: cur?.c || 0, f: cur?.f || 0
   }))
   const set = (k, n) => setV(o => ({ ...o, [k]: n || 0 }))
   const derived = kcalFromMacros(v)
@@ -469,12 +474,16 @@ function NutriGoalSheet({ close }) {
     const goal = {}
     for (const k of ['kcal', ...MACROS]) if (v[k] > 0) goal[k] = v[k]
     if (!Object.keys(goal).length) { toast(t('Set at least one target')); return false }
-    update(s => { s.nutriGoal = goal }); close(); toast(t('Targets set'))
+    update(s => { setGoal(s, goal, from, today) }); close(); toast(t('Targets set'))
   }
   useSaveOnDismiss({ v }, save)
   return <>
     <h3>{t('Daily targets')}</h3>
     <div className="muted small">{t('Only the targets you set are counted down — calories alone is a complete setup.')}</div>
+    <div className="small" style={{ marginTop: 6, color: 'var(--yellow)', lineHeight: 1.45 }}>
+      {from === today ? t('From today on — the days before keep the targets they had.')
+        : t('From {0} on — the days before keep the targets they had.', fmtDate(from, true))}
+    </div>
     <div style={{ height: 12 }} />
     <Stepper label={t('Calories')} unit="kcal" value={v.kcal} step={50} decimal={false} onChange={n => set('kcal', n)} />
     {MACROS.map(m => <Stepper key={m} label={t(MACRO_NAME[m])} unit="g" value={v[m]} step={5} decimal={false} onChange={n => set(m, n)} />)}
@@ -486,11 +495,11 @@ function NutriGoalSheet({ close }) {
     </>}
     <div style={{ height: 14 }} />
     <Button variant="primary" onClick={save}>{t('Save targets')}</Button>
-    {st.nutriGoal && <><div style={{ height: 8 }} />
-      <Button variant="danger" onClick={() => { update(s => { s.nutriGoal = null }); close(); toast(t('Targets removed')) }}>{t('Remove targets')}</Button></>}
+    {cur && <><div style={{ height: 8 }} />
+      <Button variant="danger" onClick={() => { update(s => { setGoal(s, null, from, today) }); close(); toast(t('Targets removed')) }}>{t('Remove targets')}</Button></>}
   </>
 }
-export const nutriGoalSheet = () => ui().openSheet(close => <NutriGoalSheet close={close} />)
+export const nutriGoalSheet = iso => ui().openSheet(close => <NutriGoalSheet close={close} {...dayProp(iso)} />)
 
 /* ============================ maintenance (TDEE) ============================ */
 // The one figure in the app nothing can measure for you — and the one every deficit reading

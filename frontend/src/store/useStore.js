@@ -24,6 +24,8 @@ export const DEF = {
   // a half-finished one. Both absent on every profile written before they existed, and
   // absent reads as "never logged", so nothing needs migrating.
   nutrition: [], nutriGoal: null,
+  // goalLog: when the targets changed — [{ from, goal }], see goalOn in lib/nutrition.js.
+  goalLog: [],
   // tdee: maintenance as its parts — { bmr, neat, other, sport } — entered by hand, the one
   // figure in the app nothing can measure for you. `sport` is the training the figure already
   // budgets for, so only the difference between it and what was actually done moves a day's

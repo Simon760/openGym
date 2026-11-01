@@ -18,7 +18,7 @@ import { EXIDX } from './exercises.js'
 import { setLabel, modeOf, effectiveRoutineId, workoutVolume } from './history.js'
 import { readSession, nextPrescription, policyFor } from './progression.js'
 import { effortSummary, displayScale, scaleName, toScale } from './effort.js'
-import { entryFor, goalFor, isRefeed, MACROS, MACRO_NAME } from './nutrition.js'
+import { entryFor, goalFor, goalOn, isRefeed, MACROS, MACRO_NAME } from './nutrition.js'
 import { sleepFor, sleepHours } from './body.js'
 import { healthFor } from './health.js'
 import { dayBalance, sportKcal, trimOf } from './energy.js'
@@ -174,7 +174,7 @@ export function dailyDigest(S, iso = todayISO(), now = Date.now()) {
     DIGEST_MACROS.forEach(m => { if (e[m]) bits.push(t(MACRO_NAME[m]) + ' ' + fmtNum(e[m]) + ' g') })
     // A day eaten at maintenance on purpose is judged against maintenance, and says so —
     // otherwise the coach reads a deliberate refeed as a day that got away.
-    const dayGoal = goalFor(S.nutriGoal, e, (bal || {}).out)
+    const dayGoal = goalFor(goalOn(S, iso), e, (bal || {}).out)
     const goal = dayGoal && dayGoal.kcal
     if (goal) bits.push(t('target {0}', fmtNum(goal)) + ' (' + sign((e.kcal || 0) - goal) + ')')
     if (isRefeed(e)) bits.push('(' + t('maintenance day') + ')')

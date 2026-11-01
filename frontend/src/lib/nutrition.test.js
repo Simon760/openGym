@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   entryFor, lastEntry, hasMacros, kcalFromMacros, derivedMismatch, macroSplit,
-  remainingOf, avgOver, seriesOf, weekOf, dayStack, putEntry, KCAL_PER_G, MISMATCH_TOL
+  remainingOf, avgOver, seriesOf, weekOf, dayStack, putEntry, goalOn, setGoal, KCAL_PER_G, MISMATCH_TOL
 } from './nutrition.js'
 import { isoOf } from './format.js'
 
@@ -289,5 +289,40 @@ describe('dayStack', () => {
   it('a single macro is just its grams — and nothing for a day that never logged it', () => {
     expect(dayStack({ kcal: 2000, p: 140 }, 'p')).toEqual({ total: 140, segments: [{ key: 'p', v: 140 }] })
     expect(dayStack({ kcal: 2000 }, 'p')).toBe(null)
+  })
+})
+
+// Lowering the target on the 20th made every day before it read as over target.
+describe('targets changed on a day', () => {
+  it('apply from that day on, and the days before keep theirs', () => {
+    const s = { nutriGoal: { kcal: 2200 }, goalLog: [] }
+    expect(goalOn(s, '2026-10-01')).toEqual({ kcal: 2200 })
+    setGoal(s, { kcal: 2000 }, '2026-10-20')
+    expect(goalOn(s, '2026-10-19')).toEqual({ kcal: 2200 })
+    expect(goalOn(s, '2026-10-20')).toEqual({ kcal: 2000 })
+    expect(goalOn(s, '2026-11-01')).toEqual({ kcal: 2000 })
+    expect(s.nutriGoal).toEqual({ kcal: 2000 })
+  })
+  it('a change dated in the past stops where a later one starts', () => {
+    const s = { nutriGoal: { kcal: 2200 }, goalLog: [] }
+    setGoal(s, { kcal: 2000 }, '2026-10-20', '2026-10-25')
+    setGoal(s, { kcal: 2400 }, '2026-10-10', '2026-10-25')
+    expect(goalOn(s, '2026-10-09')).toEqual({ kcal: 2200 })
+    expect(goalOn(s, '2026-10-15')).toEqual({ kcal: 2400 })
+    expect(goalOn(s, '2026-10-22')).toEqual({ kcal: 2000 })
+    expect(s.nutriGoal).toEqual({ kcal: 2000 })
+  })
+  it('removing the targets is a change like any other', () => {
+    const s = { nutriGoal: { kcal: 2200 }, goalLog: [] }
+    setGoal(s, null, '2026-10-20')
+    expect(goalOn(s, '2026-10-19')).toEqual({ kcal: 2200 })
+    expect(goalOn(s, '2026-10-21')).toBe(null)
+    expect(s.nutriGoal).toBe(null)
+  })
+  it('changing it twice on one day keeps the last', () => {
+    const s = { nutriGoal: { kcal: 2200 }, goalLog: [] }
+    setGoal(s, { kcal: 2000 }, '2026-10-20'); setGoal(s, { kcal: 2100 }, '2026-10-20')
+    expect(s.goalLog).toHaveLength(2)
+    expect(goalOn(s, '2026-10-20')).toEqual({ kcal: 2100 })
   })
 })

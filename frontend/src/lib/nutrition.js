@@ -129,6 +129,40 @@ export const isRefeed = e => !!(e && e.refeed)
  * one is exactly what the flag exists to stop. The macro targets are untouched either way —
  * a refeed says something about calories, not about how much protein you owe.
  */
+/**
+ * The daily targets in force on a day.
+ *
+ * A change of target is dated, not retroactive: moving the goal from 2 200 to 2 000 on the
+ * 20th says nothing about the 12th, and rewriting it made every day before look over target.
+ * `goalLog` holds each change as { from, goal } — the goal from that day until the next
+ * change, null for "no targets". A profile that never changed its targets since this existed
+ * has no log, and its one goal stands for every day, as it always did.
+ */
+export const EARLIEST = '0000-00-00'
+export function goalOn(S, iso) {
+  const log = (S && S.goalLog) || []
+  let hit = null
+  for (const x of log) if (x && x.from <= iso && (!hit || x.from >= hit.from)) hit = x
+  if (hit) return hit.goal || null
+  return log.length ? null : (S && S.nutriGoal) || null
+}
+
+/**
+ * Set the targets from a day onward, leaving every day before it on the targets it had.
+ * The first change records what was in force until then, so the past keeps it. A change
+ * dated before a later one stops where that later one starts. `nutriGoal` stays the targets
+ * in force today, for everything that only ever asks about today.
+ */
+export function setGoal(s, goal, from, today = from) {
+  let log = (s.goalLog || []).slice()
+  if (!log.length) log.push({ from: EARLIEST, goal: s.nutriGoal || null })
+  log = log.filter(x => x.from !== from)
+  log.push({ from, goal: goal || null })
+  log.sort((a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : 0))
+  s.goalLog = log
+  s.nutriGoal = goalOn(s, today)
+}
+
 export function goalFor(goal, entry, maintenance) {
   if (!isRefeed(entry)) return goal || null
   const m = Math.round(num(maintenance))

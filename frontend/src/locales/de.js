@@ -1270,4 +1270,6 @@ export default {
   'Training exactly as your maintenance plans': 'Training exactly as your maintenance plans',
   '{0} kcal less training than your maintenance plans': '{0} kcal less training than your maintenance plans',
   '{0} already in your maintenance': '{0} already in your maintenance',
+  'From today on — the days before keep the targets they had.': 'From today on — the days before keep the targets they had.',
+  'From {0} on — the days before keep the targets they had.': 'From {0} on — the days before keep the targets they had.',
 }

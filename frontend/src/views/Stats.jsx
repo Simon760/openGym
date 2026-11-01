@@ -18,7 +18,7 @@ import {
   hasEffort, displayScale, scaleName, toScale, avgRir, effortSummary, effortWeeks,
   effortHistogram, isHardSet, HARD_RIR
 } from '../lib/effort.js'
-import { avgOver, seriesOf, weekOf, dayStack, hasMacros, kcalFromMacros, entryFor, MACROS, MACRO_NAME, MACRO_COLOR } from '../lib/nutrition.js'
+import { avgOver, seriesOf, weekOf, dayStack, hasMacros, kcalFromMacros, entryFor, goalOn, MACROS, MACRO_NAME, MACRO_COLOR } from '../lib/nutrition.js'
 import { bodyFatSeries, compositionTrend, sleepSeries, sleepAverage, sleepDebt, lastComposition, whenOf } from '../lib/body.js'
 import { deficitTotals, deficitSeries, impliedTDEE, predictedVsActual, projectedWeight, cutRate, tdeeParts, KCAL_PER_KG_FAT, LOSS_CEILING_PCT } from '../lib/energy.js'
 import { Button, Segmented, SelectRow } from '../components/ui.jsx'
@@ -173,7 +173,7 @@ const METRIC = { kcal: { unit: 'kcal' }, p: { unit: 'g' }, c: { unit: 'g' }, f: 
  * time, this one is always a specific, nameable week, with its own arrows to page through
  * the weeks before it.
  */
-function WeekBars({ S, goal }) {
+function WeekBars({ S }) {
   const [offset, setOffset] = useState(0)
   const [metric, setMetric] = useState('kcal')
   const today = new Date()
@@ -182,6 +182,9 @@ function WeekBars({ S, goal }) {
   const mondayISO = isoOf(monday)
   const wk = weekOf(S, mondayISO)
   const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6)
+  // The line is the target that week ended on (or today, for this week): a week from before
+  // a change of target is drawn against the target it actually had.
+  const wkGoal = goalOn(S, isoOf(sunday) < todayISO() ? isoOf(sunday) : todayISO())
 
   const bars = wk.days.map(({ iso, entry }) => {
     const st = dayStack(entry, metric)
@@ -211,7 +214,7 @@ function WeekBars({ S, goal }) {
       {/* Keyed on the week so a day tapped in one week does not stay selected, tooltip and
           all, on whatever day sits in its column the week before. */}
       <BarChart key={mondayISO} bars={bars} h={150} unit={METRIC[metric].unit} todayISO={todayISO()}
-        goal={metric === 'kcal' ? goal?.kcal : goal?.[metric]} />
+        goal={metric === 'kcal' ? wkGoal?.kcal : wkGoal?.[metric]} />
     </div>
     {metric === 'kcal' && <div className="row small muted" style={{ gap: 12, flexWrap: 'wrap', justifyContent: 'center', margin: '2px 0 4px' }}>
       {MACROS.map(m => <span key={m} className="row" style={{ gap: 5 }}>{swatch(MACRO_COLOR[m])}{t(MACRO_NAME[m])}</span>)}
@@ -248,7 +251,7 @@ function NutritionCard({ S }) {
         <Button size="sm" icon={loggedToday ? 'pencil' : 'plus'} onClick={() => nutriSheet()}>{loggedToday ? t('Edit') : t('Log')}</Button>
       </div>
     </div>
-    <WeekBars S={S} goal={goal} />
+    <WeekBars S={S} />
     <div style={{ borderTop: '1px solid var(--sep)', margin: '4px 0 14px' }} />
     <Segmented className="seg-range" value={win} onChange={setWin}
       options={[{ value: 7, label: '7d' }, { value: 30, label: '30d' }, { value: 90, label: '90d' }, { value: 0, label: t('All') }]} />

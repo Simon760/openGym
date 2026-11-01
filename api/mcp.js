@@ -84,6 +84,15 @@ function setOut(s) {
 const periodLine = p => [p.label, p.note].map(x => String(x || '').trim()).filter(Boolean).join(' — ');
 const periodsIn = (S, from, to) => (S.periods || []).filter(p => p && p.from <= to && p.to >= from);
 
+// The targets in force on a day: the latest dated change at or before it, else the one goal.
+function goalOn(S, d) {
+  const log = S.goalLog || [];
+  let hit = null;
+  for (const x of log) if (x && x.from <= d && (!hit || x.from >= hit.from)) hit = x;
+  if (hit) return hit.goal || null;
+  return log.length ? null : S.nutriGoal || null;
+}
+
 function sessionOut(w, customEx, periods = []) {
   // A session inside a noted period carries the note: a lighter load at another gym is not a
   // regression, and the reader has to see why beside the sets.
@@ -273,8 +282,11 @@ function callTool(name, args, S) {
         sleep: (S.sleep || []).filter(e => inWindow(e.d, days, now))
           .map(e => compact({ date: e.d, bed: e.bed, wake: e.wake, awake_min: e.awake, hours: e.h, felt: e.q })),
         body_weight: (S.bodyweight || []).filter(b => inWindow(b.d, days, now)).map(b => ({ date: b.d, kg: b.w })),
+        // Each day with the calorie target it had — a target changed later does not apply
+        // backwards (frontend/src/lib/nutrition.js, goalOn).
         intake: (S.nutrition || []).filter(e => inWindow(e.d, days, now))
-          .map(e => ({ date: e.d, kcal: e.kcal, protein: e.p, carbs: e.c, fat: e.f })),
+          .map(e => compact({ date: e.d, kcal: e.kcal, protein: e.p, carbs: e.c, fat: e.f,
+            target_kcal: (goalOn(S, e.d) || {}).kcal })),
         workouts: (S.workouts || []).filter(w => inWindow(w.d, days, now)).map(w => sessionOut(w, S.customEx, S.periods || [])),
         context: periodsIn(S, days ? iso(now - days * 86400000) : '0000-00-00', today())
           .map(p => ({ from: p.from, to: p.to, note: periodLine(p) }))

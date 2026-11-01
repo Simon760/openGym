@@ -46,7 +46,7 @@ import { EXIDX, isMobility } from './exercises.js'
 import { musclesOf, muscleSlug } from './muscles.js'
 import { sportOf, sportLoad } from './sports.js'
 import { rirOf } from './effort.js'
-import { entryFor } from './nutrition.js'
+import { entryFor, goalOn } from './nutrition.js'
 import { sleepFor, sleepHours } from './body.js'
 import { isoOf } from './format.js'
 
@@ -191,11 +191,14 @@ export function conditionsSince(S, fromMs, now = Date.now()) {
   // half-filled reads as a deficit that has not happened. Counting it made a profile eating
   // 5 % under target report as 28 % under, every single day, purely because it was afternoon.
   // Sleep has no such problem — last night is finished — so it keeps today.
-  const goal = S.nutriGoal && S.nutriGoal.kcal
+  // Each day against the target it had, not today's: a target lowered this morning does not
+  // turn last week's eating into a shortfall it never was.
   const todayIso = isoOf(new Date(now))
-  const eaten = goal ? uniq.filter(d => d < todayIso).map(d => entryFor(S, d)).filter(e => e && e.kcal) : []
+  const eaten = uniq.filter(d => d < todayIso)
+    .map(d => ({ e: entryFor(S, d), g: (goalOn(S, d) || {}).kcal }))
+    .filter(x => x.e && x.e.kcal && x.g)
   const energyFactor = eaten.length
-    ? 1 + ENERGY_PENALTY * clamp01((goal - eaten.reduce((a, e) => a + e.kcal, 0) / eaten.length) / goal)
+    ? 1 + ENERGY_PENALTY * clamp01(eaten.reduce((a, x) => a + (x.g - x.e.kcal) / x.g, 0) / eaten.length)
     : 1
 
   return {

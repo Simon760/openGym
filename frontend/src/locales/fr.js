@@ -1245,4 +1245,6 @@ export default {
   'Training exactly as your maintenance plans': 'Sport pile comme prévu dans ta maintenance',
   '{0} kcal less training than your maintenance plans': '{0} kcal de sport en moins que prévu dans ta maintenance',
   '{0} already in your maintenance': '{0} déjà comptées dans ta maintenance',
+  'From today on — the days before keep the targets they had.': 'À partir d’aujourd’hui — les jours d’avant gardent leur objectif.',
+  'From {0} on — the days before keep the targets they had.': 'À partir du {0} — les jours d’avant gardent leur objectif.',
 }
